@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
@@ -10,37 +9,69 @@ import { useToast } from '@/hooks/use-toast';
 import { BarChart3 } from 'lucide-react';
 
 export default function Login() {
-  const { isAuthenticated, login } = useAuth();
+  const { isAuthenticated, login, loading } = useAuth();
   const { toast } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLogging, setIsLogging] = useState(false);
 
+  // Aguardar carregamento inicial da autenticação
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-slate-600">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Redirecionar se já estiver autenticado
   if (isAuthenticated) {
     return <Navigate to="/" replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    
+    if (!email || !password) {
+      toast({
+        title: "Campos obrigatórios",
+        description: "Por favor, preencha email e senha",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLogging(true);
 
     try {
+      console.log('Iniciando processo de login...');
       const result = await login(email, password);
+      
       if (!result.success) {
         toast({
           title: "Erro de autenticação",
           description: result.error || "Email ou senha incorretos",
           variant: "destructive",
         });
+      } else {
+        console.log('Login realizado com sucesso');
+        toast({
+          title: "Login realizado",
+          description: "Bem-vindo ao sistema!",
+        });
       }
     } catch (error) {
+      console.error('Erro durante login:', error);
       toast({
         title: "Erro",
         description: "Ocorreu um erro ao fazer login",
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setIsLogging(false);
     }
   };
 
@@ -80,6 +111,7 @@ export default function Login() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   className="h-11"
+                  disabled={isLogging}
                 />
               </div>
               <div className="space-y-2">
@@ -92,14 +124,15 @@ export default function Login() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   className="h-11"
+                  disabled={isLogging}
                 />
               </div>
               <Button 
                 type="submit" 
                 className="w-full h-11 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium"
-                disabled={isLoading}
+                disabled={isLogging}
               >
-                {isLoading ? 'Entrando...' : 'Entrar'}
+                {isLogging ? 'Entrando...' : 'Entrar'}
               </Button>
             </form>
 
