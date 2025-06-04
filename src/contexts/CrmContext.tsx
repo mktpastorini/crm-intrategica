@@ -96,13 +96,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const { user } = useAuth();
   
-  // Carregar leads do localStorage com fallback
-  const [leads, setLeads] = useState<Lead[]>(() => {
-    const saved = localStorage.getItem('leads');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Carregar estágios do pipeline do localStorage (mantido local por enquanto)
+  // Estágios do pipeline (mantido local por enquanto)
   const [pipelineStages] = useState<PipelineStage[]>([
     { id: 'aguardando-inicio', name: 'Aguardando Início', order: 1, color: '#e11d48' },
     { id: 'primeiro-contato', name: 'Primeiro Contato', order: 2, color: '#f59e0b' },
@@ -111,20 +111,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     { id: 'negociacao', name: 'Negociação', order: 5, color: '#06b6d4' },
     { id: 'contrato-assinado', name: 'Contrato Assinado', order: 6, color: '#10b981' }
   ]);
-
-  // Carregar eventos do localStorage com fallback
-  const [events, setEvents] = useState<Event[]>(() => {
-    const saved = localStorage.getItem('events');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  // Carregar ações pendentes do localStorage (mantido local por enquanto)
-  const [pendingActions, setPendingActions] = useState<PendingAction[]>(() => {
-    const saved = localStorage.getItem('pendingActions');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (user) {

@@ -12,7 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Phone, Mail, Calendar, User, Building, Archive } from 'lucide-react';
 
 export default function Pipeline() {
-  const { leads, pipelineStages, moveLead, addEvent } = useCrm();
+  const { leads, pipelineStages, moveLead, addEvent, profiles } = useCrm();
   const { toast } = useToast();
   const [showEventDialog, setShowEventDialog] = useState(false);
   const [selectedLead, setSelectedLead] = useState<string | null>(null);
@@ -20,7 +20,7 @@ export default function Pipeline() {
     type: 'reunion' as 'reunion' | 'call' | 'whatsapp' | 'email',
     date: '',
     time: '',
-    responsible: ''
+    responsible_id: ''
   });
 
   const handleDragStart = (e: React.DragEvent, leadId: string) => {
@@ -37,7 +37,6 @@ export default function Pipeline() {
     const lead = leads.find(l => l.id === leadId);
     
     if (lead && lead.pipelineStage !== newStage) {
-      // Se movendo para estágio "reunião", abrir modal de agendamento
       if (newStage === 'reuniao') {
         setSelectedLead(leadId);
         setShowEventDialog(true);
@@ -53,7 +52,7 @@ export default function Pipeline() {
   };
 
   const handleScheduleEvent = () => {
-    if (!selectedLead || !eventData.date || !eventData.time || !eventData.responsible) {
+    if (!selectedLead || !eventData.date || !eventData.time || !eventData.responsible_id) {
       toast({
         title: "Campos obrigatórios",
         description: "Preencha todos os campos para agendar o evento",
@@ -65,7 +64,6 @@ export default function Pipeline() {
     const lead = leads.find(l => l.id === selectedLead);
     if (!lead) return;
 
-    // Criar evento
     addEvent({
       title: `${eventData.type === 'reunion' ? 'Reunião' : 
               eventData.type === 'call' ? 'Telefonema' :
@@ -74,19 +72,18 @@ export default function Pipeline() {
       company: lead.company,
       date: eventData.date,
       time: eventData.time,
-      responsible: eventData.responsible,
-      type: eventData.type
+      responsible_id: eventData.responsible_id,
+      type: eventData.type,
+      leadId: selectedLead
     });
 
-    // Mover lead para estágio reunião
     moveLead(selectedLead, 'reuniao');
 
-    // Reset form
     setEventData({
       type: 'reunion',
       date: '',
       time: '',
-      responsible: ''
+      responsible_id: ''
     });
     setSelectedLead(null);
     setShowEventDialog(false);
@@ -192,7 +189,7 @@ export default function Pipeline() {
                         </Badge>
                         <div className="flex items-center text-xs text-slate-500">
                           <User className="w-3 h-3 mr-1" />
-                          {lead.responsible.split('@')[0]}
+                          {lead.responsible?.name || 'Não atribuído'}
                         </div>
                       </div>
                       <div className="flex justify-end pt-2">
@@ -260,12 +257,18 @@ export default function Pipeline() {
             </div>
             <div>
               <Label htmlFor="event-responsible">Responsável</Label>
-              <Input
-                id="event-responsible"
-                value={eventData.responsible}
-                onChange={(e) => setEventData(prev => ({ ...prev, responsible: e.target.value }))}
-                placeholder="Nome do responsável"
-              />
+              <Select value={eventData.responsible_id} onValueChange={(value) => setEventData(prev => ({ ...prev, responsible_id: value }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um responsável" />
+                </SelectTrigger>
+                <SelectContent>
+                  {profiles.map(profile => (
+                    <SelectItem key={profile.id} value={profile.id}>
+                      {profile.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex gap-2 pt-4">
               <Button variant="outline" onClick={() => setShowEventDialog(false)} className="flex-1">

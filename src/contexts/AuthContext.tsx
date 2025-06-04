@@ -46,7 +46,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return null;
       }
 
-      return data;
+      // Garantir que os tipos estão corretos
+      const profileData: Profile = {
+        id: data.id,
+        name: data.name,
+        email: data.email,
+        role: data.role as 'admin' | 'supervisor' | 'comercial',
+        status: data.status as 'active' | 'inactive'
+      };
+
+      return profileData;
     } catch (error) {
       console.error('Erro ao buscar perfil:', error);
       return null;
