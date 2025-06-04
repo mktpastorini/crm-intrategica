@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Plus, Upload, Search, Edit, Trash2, Phone, Mail } from 'lucide-react';
 
 export default function Leads() {
-  const { leads, addLead, updateLead, deleteLead, requestLeadEdit, requestLeadDelete } = useCrm();
+  const { leads, addLead, updateLead, deleteLead, requestLeadEdit, requestLeadDelete, users } = useCrm();
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
@@ -30,7 +30,8 @@ export default function Leads() {
     email: '',
     niche: '',
     status: 'Pendente',
-    responsible: user?.email || ''
+    responsible: user?.name || '',
+    responsible_id: user?.id || ''
   });
 
   const niches = ['Tecnologia', 'Marketing', 'Saúde', 'Educação', 'E-commerce', 'Varejo'];
@@ -53,7 +54,17 @@ export default function Leads() {
       return;
     }
 
-    addLead(newLead);
+    addLead({
+      name: newLead.name,
+      company: newLead.company,
+      phone: newLead.phone,
+      email: newLead.email,
+      niche: newLead.niche,
+      status: newLead.status,
+      responsible: newLead.responsible,
+      responsible_id: newLead.responsible_id
+    });
+    
     setNewLead({
       name: '',
       company: '',
@@ -61,7 +72,8 @@ export default function Leads() {
       email: '',
       niche: '',
       status: 'Pendente',
-      responsible: user?.email || ''
+      responsible: user?.name || '',
+      responsible_id: user?.id || ''
     });
     setShowAddDialog(false);
   };
@@ -110,7 +122,8 @@ export default function Leads() {
             email,
             niche: 'Tecnologia',
             status: 'Pendente',
-            responsible: user?.email || ''
+            responsible: user?.name || '',
+            responsible_id: user?.id || ''
           });
           addedCount++;
         }

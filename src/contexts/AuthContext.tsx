@@ -43,7 +43,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .single();
         
         if (profile) {
-          setUser(profile);
+          setUser({
+            ...profile,
+            role: profile.role as 'admin' | 'supervisor' | 'comercial',
+            status: profile.status as 'active' | 'inactive'
+          });
         }
       } else {
         setUser(null);
@@ -64,7 +68,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .single()
           .then(({ data: profile }) => {
             if (profile) {
-              setUser(profile);
+              setUser({
+                ...profile,
+                role: profile.role as 'admin' | 'supervisor' | 'comercial',
+                status: profile.status as 'active' | 'inactive'
+              });
             }
             setLoading(false);
           });

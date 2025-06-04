@@ -1,6 +1,7 @@
 
 import { useState } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,7 +13,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Phone, Mail, Calendar, User, Building, Archive } from 'lucide-react';
 
 export default function Pipeline() {
-  const { leads, pipelineStages, moveLead, addEvent } = useCrm();
+  const { leads, pipelineStages, moveLead, addEvent, users } = useCrm();
+  const { user } = useAuth();
   const { toast } = useToast();
   const [showEventDialog, setShowEventDialog] = useState(false);
   const [selectedLead, setSelectedLead] = useState<string | null>(null);
@@ -20,7 +22,8 @@ export default function Pipeline() {
     type: 'reunion' as 'reunion' | 'call' | 'whatsapp' | 'email',
     date: '',
     time: '',
-    responsible: ''
+    responsible: user?.name || '',
+    responsible_id: user?.id || ''
   });
 
   const handleDragStart = (e: React.DragEvent, leadId: string) => {
@@ -53,7 +56,7 @@ export default function Pipeline() {
   };
 
   const handleScheduleEvent = () => {
-    if (!selectedLead || !eventData.date || !eventData.time || !eventData.responsible) {
+    if (!selectedLead || !eventData.date || !eventData.time || !eventData.responsible_id) {
       toast({
         title: "Campos obrigatórios",
         description: "Preencha todos os campos para agendar o evento",
@@ -75,7 +78,9 @@ export default function Pipeline() {
       date: eventData.date,
       time: eventData.time,
       responsible: eventData.responsible,
-      type: eventData.type
+      responsible_id: eventData.responsible_id,
+      type: eventData.type,
+      leadId: selectedLead
     });
 
     // Mover lead para estágio reunião
@@ -86,7 +91,8 @@ export default function Pipeline() {
       type: 'reunion',
       date: '',
       time: '',
-      responsible: ''
+      responsible: user?.name || '',
+      responsible_id: user?.id || ''
     });
     setSelectedLead(null);
     setShowEventDialog(false);
@@ -260,12 +266,25 @@ export default function Pipeline() {
             </div>
             <div>
               <Label htmlFor="event-responsible">Responsável</Label>
-              <Input
-                id="event-responsible"
-                value={eventData.responsible}
-                onChange={(e) => setEventData(prev => ({ ...prev, responsible: e.target.value }))}
-                placeholder="Nome do responsável"
-              />
+              <Select value={eventData.responsible_id} onValueChange={(value) => {
+                const selectedUser = users.find(u => u.id === value);
+                setEventData(prev => ({ 
+                  ...prev, 
+                  responsible_id: value,
+                  responsible: selectedUser?.name || ''
+                }));
+              }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o responsável" />
+                </SelectTrigger>
+                <SelectContent>
+                  {users.map(user => (
+                    <SelectItem key={user.id} value={user.id}>
+                      {user.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex gap-2 pt-4">
               <Button variant="outline" onClick={() => setShowEventDialog(false)} className="flex-1">

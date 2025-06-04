@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -153,7 +152,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       
       if (error) throw error;
       
-      setUsers(data || []);
+      const typedUsers = (data || []).map(user => ({
+        ...user,
+        role: user.role as 'admin' | 'supervisor' | 'comercial'
+      }));
+      
+      setUsers(typedUsers);
     } catch (error) {
       console.error('Erro ao carregar usuários:', error);
     }

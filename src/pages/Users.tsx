@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -44,7 +43,12 @@ export default function Users() {
     try {
       setLoading(true);
       const data = await usersService.getAll();
-      setUsers(data);
+      const typedUsers = data.map(user => ({
+        ...user,
+        role: user.role as 'admin' | 'supervisor' | 'comercial',
+        status: user.status as 'active' | 'inactive'
+      }));
+      setUsers(typedUsers);
     } catch (error) {
       console.error('Erro ao carregar usuários:', error);
       toast({
