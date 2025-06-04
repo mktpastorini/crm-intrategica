@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
+
+import { useState } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
@@ -38,7 +40,7 @@ const eventTypeIcons = {
 };
 
 export default function Calendar() {
-  const { leads, events, profiles, addEvent, updateEvent, deleteEvent, loading } = useCrm();
+  const { leads, events, addEvent, updateEvent, deleteEvent } = useCrm();
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -52,15 +54,8 @@ export default function Calendar() {
     date: '',
     time: '',
     type: 'reunion' as 'reunion' | 'call' | 'whatsapp' | 'email',
-    leadId: '',
-    responsible_id: ''
+    leadId: ''
   });
-
-  useEffect(() => {
-    if (user) {
-      setNewEvent(prev => ({ ...prev, responsible_id: user.id }));
-    }
-  }, [user]);
 
   // Corrigir o problema de timezone - usar data local sem conversão
   const formatDateForInput = (date: Date) => {
@@ -121,16 +116,15 @@ export default function Calendar() {
       date: event.date,
       time: event.time,
       type: event.type,
-      leadId: event.leadId || '',
-      responsible_id: event.responsible_id
+      leadId: event.leadId || ''
     });
   };
 
-  const handleUpdateEvent = async () => {
-    if (!editingEvent || !newEvent.title || !newEvent.date || !newEvent.time || !newEvent.responsible_id) {
+  const handleUpdateEvent = () => {
+    if (!editingEvent || !newEvent.title || !newEvent.date || !newEvent.time) {
       toast({
         title: "Campos obrigatórios",
-        description: "Preencha título, data, hora e responsável",
+        description: "Preencha título, data e hora",
         variant: "destructive",
       });
       return;
@@ -138,14 +132,13 @@ export default function Calendar() {
 
     const selectedLead = newEvent.leadId && newEvent.leadId !== 'none' ? leads.find(lead => lead.id === newEvent.leadId) : null;
 
-    await updateEvent(editingEvent.id, {
+    updateEvent(editingEvent.id, {
       title: newEvent.title,
       leadName: selectedLead?.name || newEvent.leadName,
       company: selectedLead?.company || newEvent.company,
       date: newEvent.date,
       time: newEvent.time,
       type: newEvent.type,
-      responsible_id: newEvent.responsible_id,
       leadId: selectedLead ? newEvent.leadId : undefined
     });
 
@@ -157,21 +150,20 @@ export default function Calendar() {
       date: '',
       time: '',
       type: 'reunion',
-      leadId: '',
-      responsible_id: user?.id || ''
+      leadId: ''
     });
     setShowAddDialog(false);
   };
 
-  const handleDeleteEvent = async (eventId: string) => {
-    await deleteEvent(eventId);
+  const handleDeleteEvent = (eventId: string) => {
+    deleteEvent(eventId);
   };
 
-  const handleAddEvent = async () => {
-    if (!newEvent.title || !newEvent.date || !newEvent.time || !newEvent.responsible_id) {
+  const handleAddEvent = () => {
+    if (!newEvent.title || !newEvent.date || !newEvent.time) {
       toast({
         title: "Campos obrigatórios",
-        description: "Preencha título, data, hora e responsável",
+        description: "Preencha título, data e hora",
         variant: "destructive",
       });
       return;
@@ -179,13 +171,13 @@ export default function Calendar() {
 
     const selectedLead = newEvent.leadId && newEvent.leadId !== 'none' ? leads.find(lead => lead.id === newEvent.leadId) : null;
     
-    await addEvent({
+    addEvent({
       title: newEvent.title,
       leadName: selectedLead?.name || newEvent.leadName,
       company: selectedLead?.company || newEvent.company,
       date: newEvent.date,
       time: newEvent.time,
-      responsible_id: newEvent.responsible_id,
+      responsible: user?.email || 'admin@crm.com',
       type: newEvent.type,
       leadId: selectedLead ? newEvent.leadId : undefined
     });
@@ -197,15 +189,10 @@ export default function Calendar() {
       date: '',
       time: '',
       type: 'reunion',
-      leadId: '',
-      responsible_id: user?.id || ''
+      leadId: ''
     });
     setShowAddDialog(false);
   };
-
-  if (loading) {
-    return <div className="flex justify-center items-center h-64">Carregando...</div>;
-  }
 
   return (
     <div className="space-y-6">
@@ -226,8 +213,7 @@ export default function Calendar() {
               date: '',
               time: '',
               type: 'reunion',
-              leadId: '',
-              responsible_id: user?.id || ''
+              leadId: ''
             });
           }
         }}>
@@ -258,22 +244,6 @@ export default function Calendar() {
                   onChange={(e) => setNewEvent(prev => ({ ...prev, title: e.target.value }))}
                   placeholder="Ex: Reunião de negócios"
                 />
-              </div>
-
-              <div>
-                <Label htmlFor="responsible">Responsável *</Label>
-                <Select value={newEvent.responsible_id} onValueChange={(value) => setNewEvent(prev => ({ ...prev, responsible_id: value }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecionar responsável" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {profiles.map(profile => (
-                      <SelectItem key={profile.id} value={profile.id}>
-                        {profile.name} - {profile.email}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
 
               <div>
@@ -393,8 +363,7 @@ export default function Calendar() {
                       date: '',
                       time: '',
                       type: 'reunion',
-                      leadId: '',
-                      responsible_id: user?.id || ''
+                      leadId: ''
                     });
                   }}
                   className="flex-1"
@@ -527,12 +496,6 @@ export default function Calendar() {
                             <span className="flex items-center gap-1">
                               <Building2 className="w-4 h-4" />
                               {event.company}
-                            </span>
-                          )}
-                          {event.responsible && (
-                            <span className="flex items-center gap-1">
-                              <User className="w-4 h-4" />
-                              {event.responsible.name}
                             </span>
                           )}
                         </div>

@@ -1,193 +1,243 @@
 
-import { useState } from 'react';
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { 
-  BarChart3, 
+  LayoutDashboard, 
   Users, 
   Calendar, 
-  MessageCircle, 
-  GitBranch,
-  UserCheck,
-  UserPlus,
+  MessageSquare, 
   Settings,
   LogOut,
+  UserCheck,
+  Target,
   Menu,
   X
 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { SystemSettings } from '@/types/settings';
 
 export default function Layout() {
-  const { user, logout, profile } = useAuth();
-  const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const location = useLocation();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const navigate = useNavigate();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [settings, setSettings] = useState<SystemSettings | null>(null);
 
-  const menuItems = [
-    { path: '/', icon: BarChart3, label: 'Dashboard', roles: ['admin', 'supervisor', 'comercial'] },
-    { path: '/leads', icon: Users, label: 'Leads', roles: ['admin', 'supervisor', 'comercial'] },
-    { path: '/pipeline', icon: GitBranch, label: 'Pipeline', roles: ['admin', 'supervisor', 'comercial'] },
-    { path: '/messages', icon: MessageCircle, label: 'Mensagens', roles: ['admin', 'supervisor', 'comercial'] },
-    { path: '/calendar', icon: Calendar, label: 'Agenda', roles: ['admin', 'supervisor', 'comercial'] },
-    { path: '/supervision', icon: UserCheck, label: 'Supervisão', roles: ['admin', 'supervisor'] },
-    { path: '/users', icon: UserPlus, label: 'Usuários', roles: ['admin'] },
-    { path: '/settings', icon: Settings, label: 'Configurações', roles: ['admin'] },
-  ];
-
-  const filteredMenuItems = menuItems.filter(item => 
-    !profile || item.roles.includes(profile.role)
-  );
+  // Carregar configurações do sistema
+  useEffect(() => {
+    const savedSettings = localStorage.getItem('systemSettings');
+    if (savedSettings) {
+      const parsedSettings = JSON.parse(savedSettings);
+      setSettings(parsedSettings);
+      
+      // Aplicar logo e favicon se configurados
+      if (parsedSettings.logoUrl) {
+        const logoElements = document.querySelectorAll('[data-logo]');
+        logoElements.forEach(element => {
+          if (element instanceof HTMLImageElement) {
+            element.src = parsedSettings.logoUrl;
+          }
+        });
+      }
+      
+      if (parsedSettings.faviconUrl) {
+        let favicon = document.querySelector('link[rel="icon"]') as HTMLLinkElement;
+        if (!favicon) {
+          favicon = document.createElement('link');
+          favicon.rel = 'icon';
+          document.head.appendChild(favicon);
+        }
+        favicon.href = parsedSettings.faviconUrl;
+      }
+      
+      // Aplicar cores personalizadas
+      if (parsedSettings.primaryColor) {
+        document.documentElement.style.setProperty('--primary-color', parsedSettings.primaryColor);
+      }
+      if (parsedSettings.secondaryColor) {
+        document.documentElement.style.setProperty('--secondary-color', parsedSettings.secondaryColor);
+      }
+    }
+  }, []);
 
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
 
-  const isActive = (path: string) => {
-    return location.pathname === path;
-  };
+  const isActive = (path: string) => location.pathname === path;
 
-  const getRoleColor = (role: string) => {
-    switch (role) {
-      case 'admin':
-        return 'bg-red-100 text-red-800';
-      case 'supervisor':
-        return 'bg-blue-100 text-blue-800';
-      case 'comercial':
-        return 'bg-green-100 text-green-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
+  const menuItems = [
+    { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
+    { icon: Users, label: 'Leads', path: '/leads' },
+    { icon: Target, label: 'Pipeline', path: '/pipeline' },
+    { icon: Calendar, label: 'Agenda', path: '/calendar' },
+    { icon: MessageSquare, label: 'Mensagens', path: '/messages' },
+    { icon: UserCheck, label: 'Usuários', path: '/users' },
+    { icon: Users, label: 'Supervisão', path: '/supervision' },
+    { icon: Settings, label: 'Configurações', path: '/settings' },
+  ];
 
   return (
-    <div className="min-h-screen bg-slate-50 flex">
-      {/* Sidebar */}
-      <div className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0`}>
-        <div className="flex flex-col h-full">
-          {/* Header */}
-          <div className="flex items-center justify-between h-16 px-6 bg-gradient-to-r from-blue-600 to-purple-600">
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
-                <BarChart3 className="w-5 h-5 text-blue-600" />
+    <div className="min-h-screen bg-slate-50">
+      {/* Mobile Header */}
+      <div className="lg:hidden bg-white shadow-sm border-b px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            {settings?.logoUrl && (
+              <img 
+                src={settings.logoUrl} 
+                alt="Logo" 
+                className="w-8 h-8 object-contain" 
+                data-logo
+              />
+            )}
+            <h1 className="text-xl font-bold text-slate-900">
+              {settings?.systemName || 'CRM System'}
+            </h1>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          >
+            {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          </Button>
+        </div>
+      </div>
+
+      {/* Mobile Menu Overlay */}
+      {isMobileMenuOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 bg-black bg-opacity-50">
+          <div className="bg-white w-64 h-full shadow-lg">
+            <div className="p-4 border-b">
+              <div className="flex items-center space-x-3">
+                {settings?.logoUrl && (
+                  <img 
+                    src={settings.logoUrl} 
+                    alt="Logo" 
+                    className="w-8 h-8 object-contain" 
+                    data-logo
+                  />
+                )}
+                <h2 className="text-lg font-semibold text-slate-900">
+                  {settings?.systemName || 'CRM System'}
+                </h2>
               </div>
-              <span className="font-bold text-white text-lg hidden md:block">CRM</span>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSidebarOpen(false)}
-              className="lg:hidden text-white hover:bg-white/20"
-            >
-              <X className="w-5 h-5" />
-            </Button>
-          </div>
-
-          {/* User Info */}
-          <div className="p-4 border-b">
-            <Card>
-              <CardContent className="p-3">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full flex items-center justify-center">
-                    <span className="text-white font-medium">
-                      {profile?.name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-900 truncate">
-                      {profile?.name || user?.email}
-                    </p>
-                    <div className="flex items-center space-x-1 mt-1">
-                      {profile && (
-                        <Badge className={`text-xs ${getRoleColor(profile.role)}`}>
-                          {profile.role === 'admin' ? 'Admin' : 
-                           profile.role === 'supervisor' ? 'Supervisor' : 'Comercial'}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Navigation */}
-          <nav className="flex-1 p-4">
-            <ul className="space-y-2">
-              {filteredMenuItems.map((item) => {
-                const Icon = item.icon;
+            <nav className="p-4 space-y-2">
+              {menuItems.map((item) => {
+                const IconComponent = item.icon;
                 return (
-                  <li key={item.path}>
-                    <Button
-                      variant={isActive(item.path) ? "default" : "ghost"}
-                      className={`w-full justify-start ${
-                        isActive(item.path) 
-                          ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white' 
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                      }`}
-                      onClick={() => {
-                        navigate(item.path);
-                        setSidebarOpen(false);
-                      }}
-                    >
-                      <Icon className="w-5 h-5 mr-3" />
-                      {item.label}
-                    </Button>
-                  </li>
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
+                      isActive(item.path)
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <IconComponent className="w-5 h-5" />
+                    <span>{item.label}</span>
+                  </Link>
                 );
               })}
-            </ul>
-          </nav>
-
-          {/* Logout */}
-          <div className="p-4 border-t">
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50"
-              onClick={handleLogout}
-            >
-              <LogOut className="w-5 h-5 mr-3" />
-              Sair
-            </Button>
+              <button
+                onClick={handleLogout}
+                className="flex items-center space-x-3 px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 w-full text-left"
+              >
+                <LogOut className="w-5 h-5" />
+                <span>Sair</span>
+              </button>
+            </nav>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col lg:ml-0">
-        {/* Mobile Header */}
-        <div className="lg:hidden bg-white shadow-sm border-b px-4 py-3">
-          <div className="flex items-center justify-between">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSidebarOpen(true)}
-            >
-              <Menu className="w-5 h-5" />
-            </Button>
-            <div className="flex items-center space-x-2">
-              <div className="w-6 h-6 bg-gradient-to-r from-blue-600 to-purple-600 rounded flex items-center justify-center">
-                <BarChart3 className="w-4 h-4 text-white" />
+      <div className="flex">
+        {/* Desktop Sidebar */}
+        <div className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0">
+          <div className="flex flex-col flex-grow pt-5 bg-white overflow-y-auto border-r">
+            <div className="flex items-center flex-shrink-0 px-4 pb-5">
+              {settings?.logoUrl && (
+                <img 
+                  src={settings.logoUrl} 
+                  alt="Logo" 
+                  className="w-10 h-10 object-contain mr-3" 
+                  data-logo
+                />
+              )}
+              <h1 className="text-xl font-bold text-slate-900">
+                {settings?.systemName || 'CRM System'}
+              </h1>
+            </div>
+            <div className="mt-5 flex-grow flex flex-col">
+              <nav className="flex-1 px-2 space-y-1">
+                {menuItems.map((item) => {
+                  const IconComponent = item.icon;
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
+                        isActive(item.path)
+                          ? 'bg-blue-100 text-blue-700'
+                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                      }`}
+                    >
+                      <IconComponent className="mr-3 h-5 w-5 flex-shrink-0" />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </nav>
+              <div className="flex-shrink-0 flex border-t border-slate-200 p-4">
+                <div className="flex-shrink-0 w-full group block">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <div className="inline-block h-8 w-8 rounded-full bg-gradient-to-r from-blue-400 to-purple-500">
+                        <span className="flex h-full w-full items-center justify-center text-white text-sm font-medium">
+                          {user?.name?.charAt(0).toUpperCase() || 'U'}
+                        </span>
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm font-medium text-slate-700 group-hover:text-slate-900">
+                          {user?.name || 'Usuário'}
+                        </p>
+                        <p className="text-xs font-medium text-slate-500 group-hover:text-slate-700">
+                          {user?.role || 'Usuário'}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleLogout}
+                      className="text-slate-400 hover:text-red-600"
+                    >
+                      <LogOut className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Page Content */}
-        <main className="flex-1 p-6">
-          <Outlet />
-        </main>
+        {/* Main Content */}
+        <div className="lg:pl-64 flex flex-col flex-1">
+          <main className="flex-1">
+            <div className="py-6">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <Outlet />
+              </div>
+            </div>
+          </main>
+        </div>
       </div>
-
-      {/* Mobile Overlay */}
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
     </div>
   );
 }

@@ -1,123 +1,149 @@
 
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState } from 'react';
+import { useCrm } from '@/contexts/CrmContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Edit, Trash2, Phone, Mail, User, Building } from 'lucide-react';
-import { useCrm } from '@/contexts/CrmContext';
-import { Lead } from '@/types/crm';
+import { Plus, Upload, Search, Edit, Trash2, Phone, Mail } from 'lucide-react';
 
 export default function Leads() {
+  const { leads, addLead, updateLead, deleteLead, requestLeadEdit, requestLeadDelete } = useCrm();
+  const { user } = useAuth();
   const { toast } = useToast();
-  const { leads, profiles, addLead, updateLead, deleteLead, loading } = useCrm();
-  
+  const [searchTerm, setSearchTerm] = useState('');
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [editingLead, setEditingLead] = useState<Lead | null>(null);
+  const [showBulkDialog, setShowBulkDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [bulkData, setBulkData] = useState('');
+  const [editingLead, setEditingLead] = useState<any>(null);
+
   const [newLead, setNewLead] = useState({
     name: '',
     company: '',
     phone: '',
     email: '',
     niche: '',
-    status: 'novo',
-    responsible_id: ''
+    status: 'Pendente',
+    responsible: user?.email || ''
   });
 
-  const niches = [
-    'Tecnologia', 'Saúde', 'Educação', 'Varejo', 'Serviços',
-    'Indústria', 'Construção', 'Agricultura', 'Turismo', 'Outros'
-  ];
+  const niches = ['Tecnologia', 'Marketing', 'Saúde', 'Educação', 'E-commerce', 'Varejo'];
+  const statuses = ['Pendente', 'Follow-up', 'Proposta Enviada', 'Perdido', 'Ganho'];
 
-  const statuses = [
-    { value: 'novo', label: 'Novo', color: 'bg-blue-100 text-blue-800' },
-    { value: 'contato', label: 'Contato Inicial', color: 'bg-yellow-100 text-yellow-800' },
-    { value: 'qualificado', label: 'Qualificado', color: 'bg-purple-100 text-purple-800' },
-    { value: 'proposta', label: 'Proposta Enviada', color: 'bg-orange-100 text-orange-800' },
-    { value: 'fechado', label: 'Fechado', color: 'bg-green-100 text-green-800' },
-    { value: 'perdido', label: 'Perdido', color: 'bg-red-100 text-red-800' }
-  ];
+  const filteredLeads = leads.filter(lead =>
+    lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    lead.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    lead.phone.includes(searchTerm) ||
+    lead.email?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-  const handleAddLead = async () => {
-    if (!newLead.name || !newLead.company || !newLead.phone || !newLead.responsible_id) {
+  const handleAddLead = () => {
+    if (!newLead.name || !newLead.company || !newLead.phone || !newLead.niche) {
       toast({
         title: "Campos obrigatórios",
-        description: "Preencha todos os campos obrigatórios",
+        description: "Nome, Empresa, Telefone e Nicho são obrigatórios",
         variant: "destructive",
       });
       return;
     }
 
-    await addLead({
-      name: newLead.name,
-      company: newLead.company,
-      phone: newLead.phone,
-      email: newLead.email,
-      niche: newLead.niche,
-      status: newLead.status,
-      responsible_id: newLead.responsible_id
+    addLead(newLead);
+    setNewLead({
+      name: '',
+      company: '',
+      phone: '',
+      email: '',
+      niche: '',
+      status: 'Pendente',
+      responsible: user?.email || ''
     });
-
-    setNewLead({ name: '', company: '', phone: '', email: '', niche: '', status: 'novo', responsible_id: '' });
     setShowAddDialog(false);
   };
 
-  const handleEditLead = (lead: Lead) => {
-    setEditingLead(lead);
-    setNewLead({
-      name: lead.name,
-      company: lead.company,
-      phone: lead.phone,
-      email: lead.email || '',
-      niche: lead.niche,
-      status: lead.status,
-      responsible_id: lead.responsible_id
-    });
+  const handleEditLead = (lead: any) => {
+    setEditingLead({ ...lead });
+    setShowEditDialog(true);
   };
 
-  const handleUpdateLead = async () => {
-    if (!editingLead || !newLead.name || !newLead.company || !newLead.phone || !newLead.responsible_id) {
-      toast({
-        title: "Campos obrigatórios",
-        description: "Preencha todos os campos obrigatórios",
-        variant: "destructive",
-      });
-      return;
+  const handleSaveEdit = () => {
+    if (!editingLead) return;
+
+    if (user?.role === 'admin' || user?.role === 'supervisor') {
+      updateLead(editingLead.id, editingLead);
+    } else {
+      requestLeadEdit(editingLead.id, editingLead, user?.email || '');
     }
-
-    await updateLead(editingLead.id, {
-      name: newLead.name,
-      company: newLead.company,
-      phone: newLead.phone,
-      email: newLead.email,
-      niche: newLead.niche,
-      status: newLead.status,
-      responsible_id: newLead.responsible_id
-    });
-
+    
+    setShowEditDialog(false);
     setEditingLead(null);
-    setNewLead({ name: '', company: '', phone: '', email: '', niche: '', status: 'novo', responsible_id: '' });
   };
 
-  const handleDeleteLead = async (leadId: string) => {
-    await deleteLead(leadId);
+  const handleDeleteLead = (leadId: string) => {
+    if (user?.role === 'admin' || user?.role === 'supervisor') {
+      deleteLead(leadId);
+    } else {
+      requestLeadDelete(leadId, user?.email || '');
+    }
+  };
+
+  const handleBulkAdd = () => {
+    if (!bulkData.trim()) return;
+
+    const lines = bulkData.trim().split('\n');
+    let addedCount = 0;
+
+    lines.forEach(line => {
+      const parts = line.split(',').map(part => part.trim());
+      if (parts.length >= 3) {
+        const [name, company, phone, email = ''] = parts;
+        if (name && company && phone) {
+          addLead({
+            name,
+            company,
+            phone,
+            email,
+            niche: 'Tecnologia',
+            status: 'Pendente',
+            responsible: user?.email || ''
+          });
+          addedCount++;
+        }
+      }
+    });
+
+    setBulkData('');
+    setShowBulkDialog(false);
+    toast({
+      title: "Leads importados",
+      description: `${addedCount} leads foram importados com sucesso`,
+    });
+  };
+
+  const formatPhone = (phone: string) => {
+    const cleaned = phone.replace(/\D/g, '');
+    const match = cleaned.match(/^(\d{2})(\d{4,5})(\d{4})$/);
+    if (match) {
+      return `(${match[1]}) ${match[2]}-${match[3]}`;
+    }
+    return phone;
   };
 
   const getStatusColor = (status: string) => {
-    return statuses.find(s => s.value === status)?.color || 'bg-gray-100 text-gray-800';
+    const colors = {
+      'Pendente': 'bg-yellow-100 text-yellow-800',
+      'Follow-up': 'bg-blue-100 text-blue-800',
+      'Proposta Enviada': 'bg-purple-100 text-purple-800',
+      'Perdido': 'bg-red-100 text-red-800',
+      'Ganho': 'bg-green-100 text-green-800'
+    };
+    return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800';
   };
-
-  const getStatusLabel = (status: string) => {
-    return statuses.find(s => s.value === status)?.label || status;
-  };
-
-  if (loading) {
-    return <div className="flex justify-center items-center h-64">Carregando...</div>;
-  }
 
   return (
     <div className="space-y-6">
@@ -125,76 +151,186 @@ export default function Leads() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Gestão de Leads</h2>
-          <p className="text-slate-600">Gerencie seus potenciais clientes</p>
+          <p className="text-slate-600">Gerencie todos os seus contatos comerciais</p>
         </div>
-        <Dialog open={showAddDialog || !!editingLead} onOpenChange={(open) => {
-          if (!open) {
-            setShowAddDialog(false);
-            setEditingLead(null);
-            setNewLead({ name: '', company: '', phone: '', email: '', niche: '', status: 'novo', responsible_id: '' });
-          }
-        }}>
-          <DialogTrigger asChild>
-            <Button 
-              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-              onClick={() => setShowAddDialog(true)}
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Novo Lead
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>
-                {editingLead ? 'Editar Lead' : 'Novo Lead'}
-              </DialogTitle>
-              <DialogDescription>
-                {editingLead ? 'Atualize as informações do lead' : 'Adicione um novo lead ao sistema'}
-              </DialogDescription>
-            </DialogHeader>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Dialog open={showBulkDialog} onOpenChange={setShowBulkDialog}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="flex items-center gap-2">
+                <Upload className="w-4 h-4" />
+                Importar em Massa
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Importar Leads em Massa</DialogTitle>
+                <DialogDescription>
+                  Cole os dados dos leads no formato: nome,empresa,telefone,email (um por linha)
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="bulk-data">Dados dos Leads</Label>
+                  <textarea
+                    id="bulk-data"
+                    className="w-full h-32 p-3 border border-slate-300 rounded-md resize-none"
+                    placeholder="João Silva,Empresa ABC,47999888777,joao@abc.com&#10;Maria Santos,XYZ Ltda,47888777666,maria@xyz.com"
+                    value={bulkData}
+                    onChange={(e) => setBulkData(e.target.value)}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setShowBulkDialog(false)} className="flex-1">
+                    Cancelar
+                  </Button>
+                  <Button onClick={handleBulkAdd} className="flex-1">
+                    Importar
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+            <DialogTrigger asChild>
+              <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 flex items-center gap-2">
+                <Plus className="w-4 h-4" />
+                Adicionar Lead
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Novo Lead</DialogTitle>
+                <DialogDescription>
+                  Adicione um novo lead ao sistema
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="name">Nome *</Label>
+                  <Input
+                    id="name"
+                    value={newLead.name}
+                    onChange={(e) => setNewLead(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="Nome completo"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="company">Empresa *</Label>
+                  <Input
+                    id="company"
+                    value={newLead.company}
+                    onChange={(e) => setNewLead(prev => ({ ...prev, company: e.target.value }))}
+                    placeholder="Nome da empresa"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="phone">Telefone/WhatsApp *</Label>
+                  <Input
+                    id="phone"
+                    value={newLead.phone}
+                    onChange={(e) => setNewLead(prev => ({ ...prev, phone: e.target.value }))}
+                    placeholder="(47) 99999-9999"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="email">E-mail</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={newLead.email}
+                    onChange={(e) => setNewLead(prev => ({ ...prev, email: e.target.value }))}
+                    placeholder="email@empresa.com"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="niche">Nicho *</Label>
+                  <Select value={newLead.niche} onValueChange={(value) => setNewLead(prev => ({ ...prev, niche: value }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o nicho" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {niches.map(niche => (
+                        <SelectItem key={niche} value={niche}>{niche}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="status">Status</Label>
+                  <Select value={newLead.status} onValueChange={(value) => setNewLead(prev => ({ ...prev, status: value }))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {statuses.map(status => (
+                        <SelectItem key={status} value={status}>{status}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex gap-2 pt-4">
+                  <Button variant="outline" onClick={() => setShowAddDialog(false)} className="flex-1">
+                    Cancelar
+                  </Button>
+                  <Button onClick={handleAddLead} className="flex-1">
+                    Adicionar
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
+
+      {/* Edit Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Lead</DialogTitle>
+            <DialogDescription>
+              Faça as alterações necessárias
+            </DialogDescription>
+          </DialogHeader>
+          {editingLead && (
             <div className="space-y-4">
               <div>
-                <Label htmlFor="name">Nome *</Label>
+                <Label htmlFor="edit-name">Nome *</Label>
                 <Input
-                  id="name"
-                  value={newLead.name}
-                  onChange={(e) => setNewLead(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="Nome do contato"
+                  id="edit-name"
+                  value={editingLead.name}
+                  onChange={(e) => setEditingLead(prev => ({ ...prev, name: e.target.value }))}
                 />
               </div>
               <div>
-                <Label htmlFor="company">Empresa *</Label>
+                <Label htmlFor="edit-company">Empresa *</Label>
                 <Input
-                  id="company"
-                  value={newLead.company}
-                  onChange={(e) => setNewLead(prev => ({ ...prev, company: e.target.value }))}
-                  placeholder="Nome da empresa"
+                  id="edit-company"
+                  value={editingLead.company}
+                  onChange={(e) => setEditingLead(prev => ({ ...prev, company: e.target.value }))}
                 />
               </div>
               <div>
-                <Label htmlFor="phone">Telefone *</Label>
+                <Label htmlFor="edit-phone">Telefone/WhatsApp *</Label>
                 <Input
-                  id="phone"
-                  value={newLead.phone}
-                  onChange={(e) => setNewLead(prev => ({ ...prev, phone: e.target.value }))}
-                  placeholder="(11) 99999-9999"
+                  id="edit-phone"
+                  value={editingLead.phone}
+                  onChange={(e) => setEditingLead(prev => ({ ...prev, phone: e.target.value }))}
                 />
               </div>
               <div>
-                <Label htmlFor="email">E-mail</Label>
+                <Label htmlFor="edit-email">E-mail</Label>
                 <Input
-                  id="email"
-                  type="email"
-                  value={newLead.email}
-                  onChange={(e) => setNewLead(prev => ({ ...prev, email: e.target.value }))}
-                  placeholder="email@empresa.com"
+                  id="edit-email"
+                  value={editingLead.email || ''}
+                  onChange={(e) => setEditingLead(prev => ({ ...prev, email: e.target.value }))}
                 />
               </div>
               <div>
-                <Label htmlFor="niche">Nicho *</Label>
-                <Select value={newLead.niche} onValueChange={(value) => setNewLead(prev => ({ ...prev, niche: value }))}>
+                <Label htmlFor="edit-niche">Nicho *</Label>
+                <Select value={editingLead.niche} onValueChange={(value) => setEditingLead(prev => ({ ...prev, niche: value }))}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecione o nicho" />
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {niches.map(niche => (
@@ -204,97 +340,74 @@ export default function Leads() {
                 </Select>
               </div>
               <div>
-                <Label htmlFor="status">Status *</Label>
-                <Select value={newLead.status} onValueChange={(value) => setNewLead(prev => ({ ...prev, status: value }))}>
+                <Label htmlFor="edit-status">Status</Label>
+                <Select value={editingLead.status} onValueChange={(value) => setEditingLead(prev => ({ ...prev, status: value }))}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {statuses.map(status => (
-                      <SelectItem key={status.value} value={status.value}>{status.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="responsible">Responsável *</Label>
-                <Select value={newLead.responsible_id} onValueChange={(value) => setNewLead(prev => ({ ...prev, responsible_id: value }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione um responsável" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {profiles.map(profile => (
-                      <SelectItem key={profile.id} value={profile.id}>{profile.name}</SelectItem>
+                      <SelectItem key={status} value={status}>{status}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="flex gap-2 pt-4">
-                <Button 
-                  variant="outline" 
-                  onClick={() => {
-                    setShowAddDialog(false);
-                    setEditingLead(null);
-                    setNewLead({ name: '', company: '', phone: '', email: '', niche: '', status: 'novo', responsible_id: '' });
-                  }}
-                  className="flex-1"
-                >
+                <Button variant="outline" onClick={() => setShowEditDialog(false)} className="flex-1">
                   Cancelar
                 </Button>
-                <Button 
-                  onClick={editingLead ? handleUpdateLead : handleAddLead} 
-                  className="flex-1"
-                >
-                  {editingLead ? 'Atualizar' : 'Adicionar'}
+                <Button onClick={handleSaveEdit} className="flex-1">
+                  Salvar
                 </Button>
               </div>
             </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Search */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+            <Input
+              placeholder="Buscar por nome, empresa, telefone ou email..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200">
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg text-blue-900">Total</CardTitle>
+            <CardTitle className="text-lg text-blue-900">Total de Leads</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-blue-700">{leads.length}</div>
-            <p className="text-sm text-blue-600">leads cadastrados</p>
           </CardContent>
         </Card>
         <Card className="bg-gradient-to-r from-green-50 to-green-100 border-green-200">
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg text-green-900">Qualificados</CardTitle>
+            <CardTitle className="text-lg text-green-900">Ativos</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-green-700">
-              {leads.filter(l => l.status === 'qualificado').length}
+              {leads.filter(lead => !['Perdido', 'Ganho'].includes(lead.status)).length}
             </div>
-            <p className="text-sm text-green-600">prontos para proposta</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-gradient-to-r from-orange-50 to-orange-100 border-orange-200">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg text-orange-900">Propostas</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-orange-700">
-              {leads.filter(l => l.status === 'proposta').length}
-            </div>
-            <p className="text-sm text-orange-600">aguardando retorno</p>
           </CardContent>
         </Card>
         <Card className="bg-gradient-to-r from-purple-50 to-purple-100 border-purple-200">
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg text-purple-900">Fechados</CardTitle>
+            <CardTitle className="text-lg text-purple-900">Taxa de Conversão</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-purple-700">
-              {leads.filter(l => l.status === 'fechado').length}
+              {leads.length > 0 ? Math.round((leads.filter(lead => lead.status === 'Ganho').length / leads.length) * 100) : 0}%
             </div>
-            <p className="text-sm text-purple-600">contratos assinados</p>
           </CardContent>
         </Card>
       </div>
@@ -302,49 +415,37 @@ export default function Leads() {
       {/* Leads List */}
       <Card>
         <CardHeader>
-          <CardTitle>Lista de Leads</CardTitle>
-          <CardDescription>Todos os leads cadastrados no sistema</CardDescription>
+          <CardTitle>Lista de Leads ({filteredLeads.length})</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-slate-50 border-b">
                 <tr>
-                  <th className="text-left p-4 font-medium text-slate-700">Lead</th>
+                  <th className="text-left p-4 font-medium text-slate-700">Nome</th>
                   <th className="text-left p-4 font-medium text-slate-700">Empresa</th>
                   <th className="text-left p-4 font-medium text-slate-700">Contato</th>
+                  <th className="text-left p-4 font-medium text-slate-700">Nicho</th>
                   <th className="text-left p-4 font-medium text-slate-700">Status</th>
                   <th className="text-left p-4 font-medium text-slate-700">Responsável</th>
                   <th className="text-left p-4 font-medium text-slate-700">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {leads.map((lead) => (
+                {filteredLeads.map((lead) => (
                   <tr key={lead.id} className="hover:bg-slate-50">
                     <td className="p-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full flex items-center justify-center">
-                          <span className="text-white text-sm font-medium">
-                            {lead.name.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                        <div>
-                          <div className="font-medium text-slate-900">{lead.name}</div>
-                          <div className="text-sm text-slate-500">{lead.niche}</div>
-                        </div>
+                      <div className="font-medium text-slate-900">{lead.name}</div>
+                      <div className="text-sm text-slate-500">
+                        Criado em {new Date(lead.createdAt).toLocaleDateString('pt-BR')}
                       </div>
                     </td>
+                    <td className="p-4 text-slate-900">{lead.company}</td>
                     <td className="p-4">
-                      <div className="flex items-center text-slate-900">
-                        <Building className="w-4 h-4 mr-2 text-slate-400" />
-                        {lead.company}
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <div className="space-y-1">
+                      <div className="flex flex-col space-y-1">
                         <div className="flex items-center text-sm text-slate-600">
                           <Phone className="w-3 h-3 mr-1" />
-                          {lead.phone}
+                          {formatPhone(lead.phone)}
                         </div>
                         {lead.email && (
                           <div className="flex items-center text-sm text-slate-600">
@@ -355,16 +456,14 @@ export default function Leads() {
                       </div>
                     </td>
                     <td className="p-4">
-                      <Badge className={getStatusColor(lead.status)}>
-                        {getStatusLabel(lead.status)}
-                      </Badge>
+                      <Badge variant="outline">{lead.niche}</Badge>
                     </td>
                     <td className="p-4">
-                      <div className="flex items-center text-sm text-slate-600">
-                        <User className="w-3 h-3 mr-1" />
-                        {lead.responsible?.name || 'Não atribuído'}
-                      </div>
+                      <Badge className={getStatusColor(lead.status)}>
+                        {lead.status}
+                      </Badge>
                     </td>
+                    <td className="p-4 text-sm text-slate-600">{lead.responsible}</td>
                     <td className="p-4">
                       <div className="flex items-center space-x-2">
                         <Button 
@@ -376,9 +475,9 @@ export default function Leads() {
                         </Button>
                         <Button 
                           variant="ghost" 
-                          size="sm"
-                          onClick={() => handleDeleteLead(lead.id)}
+                          size="sm" 
                           className="text-red-600 hover:text-red-700"
+                          onClick={() => handleDeleteLead(lead.id)}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
