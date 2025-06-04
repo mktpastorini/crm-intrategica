@@ -1,5 +1,7 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
+
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface Lead {
   id: string;
@@ -12,6 +14,7 @@ export interface Lead {
   responsible: string;
   createdAt: string;
   pipelineStage?: string;
+  responsible_id: string;
 }
 
 export interface PipelineStage {
@@ -31,6 +34,7 @@ export interface Event {
   responsible: string;
   type: 'reunion' | 'call' | 'whatsapp' | 'email';
   leadId?: string;
+  responsible_id: string;
 }
 
 export interface PendingAction {
@@ -43,11 +47,19 @@ export interface PendingAction {
   details: any;
 }
 
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'supervisor' | 'comercial';
+}
+
 interface CrmContextType {
   leads: Lead[];
   pipelineStages: PipelineStage[];
   events: Event[];
   pendingActions: PendingAction[];
+  users: UserProfile[];
   addLead: (lead: Omit<Lead, 'id' | 'createdAt'>) => void;
   updateLead: (id: string, updates: Partial<Lead>) => void;
   deleteLead: (id: string) => void;
@@ -62,12 +74,15 @@ interface CrmContextType {
   addPipelineStage: (stage: PipelineStage) => void;
   updatePipelineStage: (id: string, updates: Partial<PipelineStage>) => void;
   deletePipelineStage: (id: string) => void;
+  fetchUsers: () => Promise<void>;
 }
 
 const CrmContext = createContext<CrmContextType | undefined>(undefined);
 
 export function CrmProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
+  
+  const [users, setUsers] = useState<UserProfile[]>([]);
   
   // Carregar leads do localStorage com fallback
   const [leads, setLeads] = useState<Lead[]>(() => {
@@ -81,7 +96,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         email: 'joao@techsolutions.com',
         niche: 'Tecnologia',
         status: 'Pendente',
-        responsible: 'admin@crm.com',
+        responsible: 'Administrador',
+        responsible_id: '',
         createdAt: new Date().toISOString(),
         pipelineStage: 'aguardando-inicio'
       },
@@ -93,7 +109,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         email: 'maria@marketingpro.com',
         niche: 'Marketing',
         status: 'Follow-up',
-        responsible: 'admin@crm.com',
+        responsible: 'Administrador',
+        responsible_id: '',
         createdAt: new Date().toISOString(),
         pipelineStage: 'primeiro-contato'
       }
@@ -125,6 +142,27 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     return saved ? JSON.parse(saved) : [];
   });
 
+  // Carregar usuários do Supabase
+  const fetchUsers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, name, email, role')
+        .eq('status', 'active')
+        .order('name');
+      
+      if (error) throw error;
+      
+      setUsers(data || []);
+    } catch (error) {
+      console.error('Erro ao carregar usuários:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
   // Salvar no localStorage sempre que os dados mudarem
   const saveLeads = (newLeads: Lead[]) => {
     setLeads(newLeads);
@@ -147,11 +185,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   };
 
   const addLead = (leadData: Omit<Lead, 'id' | 'createdAt'>) => {
+    const responsibleUser = users.find(u => u.id === leadData.responsible_id);
     const newLead: Lead = {
       ...leadData,
       id: Date.now().toString(),
       createdAt: new Date().toISOString(),
-      pipelineStage: 'aguardando-inicio'
+      pipelineStage: 'aguardando-inicio',
+      responsible: responsibleUser?.name || leadData.responsible
     };
     const newLeads = [...leads, newLead];
     saveLeads(newLeads);
@@ -162,8 +202,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   };
 
   const updateLead = (id: string, updates: Partial<Lead>) => {
+    const responsibleUser = updates.responsible_id ? users.find(u => u.id === updates.responsible_id) : null;
+    const updatedData = { 
+      ...updates, 
+      responsible: responsibleUser?.name || updates.responsible 
+    };
+    
     const newLeads = leads.map(lead => 
-      lead.id === id ? { ...lead, ...updates } : lead
+      lead.id === id ? { ...lead, ...updatedData } : lead
     );
     saveLeads(newLeads);
     toast({
@@ -200,9 +246,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   };
 
   const addEvent = (eventData: Omit<Event, 'id'>) => {
+    const responsibleUser = users.find(u => u.id === eventData.responsible_id);
     const newEvent: Event = {
       ...eventData,
-      id: Date.now().toString()
+      id: Date.now().toString(),
+      responsible: responsibleUser?.name || eventData.responsible
     };
     const newEvents = [...events, newEvent];
     saveEvents(newEvents);
@@ -213,8 +261,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   };
 
   const updateEvent = (id: string, updates: Partial<Event>) => {
+    const responsibleUser = updates.responsible_id ? users.find(u => u.id === updates.responsible_id) : null;
+    const updatedData = { 
+      ...updates, 
+      responsible: responsibleUser?.name || updates.responsible 
+    };
+    
     const newEvents = events.map(event => 
-      event.id === id ? { ...event, ...updates } : event
+      event.id === id ? { ...event, ...updatedData } : event
     );
     saveEvents(newEvents);
     toast({
@@ -356,6 +410,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       pipelineStages,
       events,
       pendingActions,
+      users,
       addLead,
       updateLead,
       deleteLead,
@@ -369,7 +424,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       requestLeadDelete,
       addPipelineStage,
       updatePipelineStage,
-      deletePipelineStage
+      deletePipelineStage,
+      fetchUsers
     }}>
       {children}
     </CrmContext.Provider>

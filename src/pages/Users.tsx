@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Edit, Trash2, Shield, UserCog, Users as UsersIcon } from 'lucide-react';
+import { usersService, CreateUserData, UpdateUserData } from '@/services/usersService';
 
 interface User {
   id: string;
@@ -16,42 +17,14 @@ interface User {
   email: string;
   role: 'admin' | 'supervisor' | 'comercial';
   status: 'active' | 'inactive';
-  createdAt: string;
-  lastLogin?: string;
+  created_at: string;
+  last_login?: string;
 }
 
 export default function Users() {
   const { toast } = useToast();
-  const [users, setUsers] = useState<User[]>([
-    {
-      id: '1',
-      name: 'Administrador',
-      email: 'admin@crm.com',
-      role: 'admin',
-      status: 'active',
-      createdAt: '2024-01-01',
-      lastLogin: '2024-01-15 09:00'
-    },
-    {
-      id: '2',
-      name: 'Carlos Supervisor',
-      email: 'carlos@empresa.com',
-      role: 'supervisor',
-      status: 'active',
-      createdAt: '2024-01-05',
-      lastLogin: '2024-01-14 16:30'
-    },
-    {
-      id: '3',
-      name: 'Maria Comercial',
-      email: 'maria@empresa.com',
-      role: 'comercial',
-      status: 'active',
-      createdAt: '2024-01-10',
-      lastLogin: '2024-01-14 15:45'
-    }
-  ]);
-
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [newUser, setNewUser] = useState({
@@ -66,6 +39,27 @@ export default function Users() {
     { value: 'supervisor', label: 'Supervisor', description: 'Pode aprovar ações e gerenciar leads' },
     { value: 'comercial', label: 'Comercial', description: 'Pode criar leads e enviar mensagens' }
   ];
+
+  const fetchUsers = async () => {
+    try {
+      setLoading(true);
+      const data = await usersService.getAll();
+      setUsers(data);
+    } catch (error) {
+      console.error('Erro ao carregar usuários:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar usuários",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
 
   const getRoleColor = (role: string) => {
     switch (role) {
@@ -93,7 +87,7 @@ export default function Users() {
     }
   };
 
-  const handleAddUser = () => {
+  const handleAddUser = async () => {
     if (!newUser.name || !newUser.email || !newUser.password) {
       toast({
         title: "Campos obrigatórios",
@@ -103,23 +97,32 @@ export default function Users() {
       return;
     }
 
-    const user: User = {
-      id: Date.now().toString(),
-      name: newUser.name,
-      email: newUser.email,
-      role: newUser.role,
-      status: 'active',
-      createdAt: new Date().toISOString().split('T')[0]
-    };
+    try {
+      const userData: CreateUserData = {
+        name: newUser.name,
+        email: newUser.email,
+        role: newUser.role,
+        password: newUser.password
+      };
 
-    setUsers(prev => [...prev, user]);
-    setNewUser({ name: '', email: '', role: 'comercial', password: '' });
-    setShowAddDialog(false);
+      await usersService.create(userData);
+      await fetchUsers(); // Recarregar lista
+      
+      setNewUser({ name: '', email: '', role: 'comercial', password: '' });
+      setShowAddDialog(false);
 
-    toast({
-      title: "Usuário criado",
-      description: `${user.name} foi adicionado ao sistema`,
-    });
+      toast({
+        title: "Usuário criado",
+        description: `${newUser.name} foi adicionado ao sistema`,
+      });
+    } catch (error: any) {
+      console.error('Erro ao criar usuário:', error);
+      toast({
+        title: "Erro ao criar usuário",
+        description: error.message || "Erro desconhecido",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleEditUser = (user: User) => {
@@ -132,7 +135,7 @@ export default function Users() {
     });
   };
 
-  const handleUpdateUser = () => {
+  const handleUpdateUser = async () => {
     if (!editingUser || !newUser.name || !newUser.email) {
       toast({
         title: "Campos obrigatórios",
@@ -142,22 +145,34 @@ export default function Users() {
       return;
     }
 
-    setUsers(prev => prev.map(user => 
-      user.id === editingUser.id 
-        ? { ...user, name: newUser.name, email: newUser.email, role: newUser.role }
-        : user
-    ));
+    try {
+      const updates: UpdateUserData = {
+        name: newUser.name,
+        email: newUser.email,
+        role: newUser.role
+      };
 
-    setEditingUser(null);
-    setNewUser({ name: '', email: '', role: 'comercial', password: '' });
+      await usersService.update(editingUser.id, updates);
+      await fetchUsers(); // Recarregar lista
 
-    toast({
-      title: "Usuário atualizado",
-      description: "As informações do usuário foram atualizadas",
-    });
+      setEditingUser(null);
+      setNewUser({ name: '', email: '', role: 'comercial', password: '' });
+
+      toast({
+        title: "Usuário atualizado",
+        description: "As informações do usuário foram atualizadas",
+      });
+    } catch (error: any) {
+      console.error('Erro ao atualizar usuário:', error);
+      toast({
+        title: "Erro ao atualizar usuário",
+        description: error.message || "Erro desconhecido",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleDeleteUser = (userId: string) => {
+  const handleDeleteUser = async (userId: string) => {
     const user = users.find(u => u.id === userId);
     if (!user) return;
 
@@ -170,21 +185,45 @@ export default function Users() {
       return;
     }
 
-    setUsers(prev => prev.filter(u => u.id !== userId));
-    
-    toast({
-      title: "Usuário removido",
-      description: `${user.name} foi removido do sistema`,
-    });
+    try {
+      await usersService.delete(userId);
+      await fetchUsers(); // Recarregar lista
+      
+      toast({
+        title: "Usuário removido",
+        description: `${user.name} foi removido do sistema`,
+      });
+    } catch (error: any) {
+      console.error('Erro ao deletar usuário:', error);
+      toast({
+        title: "Erro ao remover usuário",
+        description: error.message || "Erro desconhecido",
+        variant: "destructive",
+      });
+    }
   };
 
-  const toggleUserStatus = (userId: string) => {
-    setUsers(prev => prev.map(user => 
-      user.id === userId 
-        ? { ...user, status: user.status === 'active' ? 'inactive' : 'active' }
-        : user
-    ));
+  const toggleUserStatus = async (userId: string) => {
+    try {
+      await usersService.toggleStatus(userId);
+      await fetchUsers(); // Recarregar lista
+    } catch (error: any) {
+      console.error('Erro ao alterar status:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao alterar status do usuário",
+        variant: "destructive",
+      });
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-lg">Carregando usuários...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -374,7 +413,7 @@ export default function Users() {
                         <div>
                           <div className="font-medium text-slate-900">{user.name}</div>
                           <div className="text-sm text-slate-500">
-                            Criado em {new Date(user.createdAt).toLocaleDateString('pt-BR')}
+                            Criado em {new Date(user.created_at).toLocaleDateString('pt-BR')}
                           </div>
                         </div>
                       </div>
@@ -397,7 +436,7 @@ export default function Users() {
                       </Badge>
                     </td>
                     <td className="p-4 text-sm text-slate-600">
-                      {user.lastLogin ? new Date(user.lastLogin).toLocaleString('pt-BR') : 'Nunca'}
+                      {user.last_login ? new Date(user.last_login).toLocaleString('pt-BR') : 'Nunca'}
                     </td>
                     <td className="p-4">
                       <div className="flex items-center space-x-2">

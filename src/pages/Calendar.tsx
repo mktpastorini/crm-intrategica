@@ -1,15 +1,12 @@
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { 
   Calendar as CalendarIcon, 
@@ -40,7 +37,7 @@ const eventTypeIcons = {
 };
 
 export default function Calendar() {
-  const { leads, events, addEvent, updateEvent, deleteEvent } = useCrm();
+  const { leads, events, addEvent, updateEvent, deleteEvent, users } = useCrm();
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -54,8 +51,16 @@ export default function Calendar() {
     date: '',
     time: '',
     type: 'reunion' as 'reunion' | 'call' | 'whatsapp' | 'email',
-    leadId: ''
+    leadId: '',
+    responsible_id: user?.id || ''
   });
+
+  useEffect(() => {
+    // Atualizar responsible_id quando o usuário mudar
+    if (user?.id && !newEvent.responsible_id) {
+      setNewEvent(prev => ({ ...prev, responsible_id: user.id }));
+    }
+  }, [user]);
 
   // Corrigir o problema de timezone - usar data local sem conversão
   const formatDateForInput = (date: Date) => {
@@ -116,7 +121,8 @@ export default function Calendar() {
       date: event.date,
       time: event.time,
       type: event.type,
-      leadId: event.leadId || ''
+      leadId: event.leadId || '',
+      responsible_id: event.responsible_id || user?.id || ''
     });
   };
 
@@ -139,7 +145,8 @@ export default function Calendar() {
       date: newEvent.date,
       time: newEvent.time,
       type: newEvent.type,
-      leadId: selectedLead ? newEvent.leadId : undefined
+      leadId: selectedLead ? newEvent.leadId : undefined,
+      responsible_id: newEvent.responsible_id
     });
 
     setEditingEvent(null);
@@ -150,7 +157,8 @@ export default function Calendar() {
       date: '',
       time: '',
       type: 'reunion',
-      leadId: ''
+      leadId: '',
+      responsible_id: user?.id || ''
     });
     setShowAddDialog(false);
   };
@@ -177,9 +185,10 @@ export default function Calendar() {
       company: selectedLead?.company || newEvent.company,
       date: newEvent.date,
       time: newEvent.time,
-      responsible: user?.email || 'admin@crm.com',
+      responsible: user?.name || 'Sistema',
       type: newEvent.type,
-      leadId: selectedLead ? newEvent.leadId : undefined
+      leadId: selectedLead ? newEvent.leadId : undefined,
+      responsible_id: newEvent.responsible_id
     });
 
     setNewEvent({
@@ -189,7 +198,8 @@ export default function Calendar() {
       date: '',
       time: '',
       type: 'reunion',
-      leadId: ''
+      leadId: '',
+      responsible_id: user?.id || ''
     });
     setShowAddDialog(false);
   };
@@ -213,7 +223,8 @@ export default function Calendar() {
               date: '',
               time: '',
               type: 'reunion',
-              leadId: ''
+              leadId: '',
+              responsible_id: user?.id || ''
             });
           }
         }}>
@@ -244,6 +255,25 @@ export default function Calendar() {
                   onChange={(e) => setNewEvent(prev => ({ ...prev, title: e.target.value }))}
                   placeholder="Ex: Reunião de negócios"
                 />
+              </div>
+
+              <div>
+                <Label htmlFor="responsible">Responsável *</Label>
+                <Select 
+                  value={newEvent.responsible_id} 
+                  onValueChange={(value) => setNewEvent(prev => ({ ...prev, responsible_id: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecionar responsável" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {users.map(userItem => (
+                      <SelectItem key={userItem.id} value={userItem.id}>
+                        {userItem.name} - {userItem.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div>
@@ -363,7 +393,8 @@ export default function Calendar() {
                       date: '',
                       time: '',
                       type: 'reunion',
-                      leadId: ''
+                      leadId: '',
+                      responsible_id: user?.id || ''
                     });
                   }}
                   className="flex-1"
@@ -469,6 +500,7 @@ export default function Calendar() {
               .slice(0, 5)
               .map(event => {
                 const IconComponent = eventTypeIcons[event.type];
+                const responsibleUser = users.find(u => u.id === event.responsible_id);
                 return (
                   <div key={event.id} className="flex items-center justify-between p-3 border border-slate-200 rounded-lg">
                     <div className="flex items-center space-x-3">
@@ -485,6 +517,10 @@ export default function Calendar() {
                           <span className="flex items-center gap-1">
                             <Clock className="w-4 h-4" />
                             {event.time}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <User className="w-4 h-4" />
+                            {responsibleUser?.name || event.responsible}
                           </span>
                           {event.leadName && (
                             <span className="flex items-center gap-1">
