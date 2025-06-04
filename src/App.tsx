@@ -32,60 +32,39 @@ const App = () => (
               <Route path="/login" element={<Login />} />
               <Route path="/" element={
                 <ProtectedRoute>
-                  <Layout>
-                    <Dashboard />
-                  </Layout>
+                  <Layout />
                 </ProtectedRoute>
-              } />
-              <Route path="/leads" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Leads />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/pipeline" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Pipeline />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/messages" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Messages />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/calendar" element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Calendar />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/supervision" element={
-                <ProtectedRoute requiredRole={["admin", "supervisor"]}>
-                  <Layout>
-                    <Supervision />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/users" element={
-                <ProtectedRoute requiredRole={["admin"]}>
-                  <Layout>
-                    <Users />
-                  </Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/settings" element={
-                <ProtectedRoute requiredRole={["admin"]}>
-                  <Layout>
-                    <Settings />
-                  </Layout>
-                </ProtectedRoute>
-              } />
+              }>
+                <Route index element={<Dashboard />} />
+                <Route path="leads" element={<Leads />} />
+                <Route path="pipeline" element={<Pipeline />} />
+                <Route path="messages" element={<Messages />} />
+                <Route path="calendar" element={<Calendar />} />
+                <Route 
+                  path="supervision" 
+                  element={
+                    <ProtectedRoute requiredRole={["admin", "supervisor"]}>
+                      <Supervision />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="users" 
+                  element={
+                    <ProtectedRoute requiredRole={["admin"]}>
+                      <Users />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="settings" 
+                  element={
+                    <ProtectedRoute requiredRole={["admin"]}>
+                      <Settings />
+                    </ProtectedRoute>
+                  } 
+                />
+              </Route>
             </Routes>
           </CrmProvider>
         </AuthProvider>
