@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -129,7 +130,7 @@ export default function Calendar() {
       return;
     }
 
-    const selectedLead = leads.find(lead => lead.id === newEvent.leadId);
+    const selectedLead = newEvent.leadId && newEvent.leadId !== 'none' ? leads.find(lead => lead.id === newEvent.leadId) : null;
 
     updateEvent(editingEvent.id, {
       title: newEvent.title,
@@ -138,7 +139,7 @@ export default function Calendar() {
       date: newEvent.date,
       time: newEvent.time,
       type: newEvent.type,
-      leadId: newEvent.leadId || undefined
+      leadId: selectedLead ? newEvent.leadId : undefined
     });
 
     setEditingEvent(null);
@@ -168,7 +169,7 @@ export default function Calendar() {
       return;
     }
 
-    const selectedLead = leads.find(lead => lead.id === newEvent.leadId);
+    const selectedLead = newEvent.leadId && newEvent.leadId !== 'none' ? leads.find(lead => lead.id === newEvent.leadId) : null;
     
     addEvent({
       title: newEvent.title,
@@ -178,7 +179,7 @@ export default function Calendar() {
       time: newEvent.time,
       responsible: user?.email || 'admin@crm.com',
       type: newEvent.type,
-      leadId: newEvent.leadId || undefined
+      leadId: selectedLead ? newEvent.leadId : undefined
     });
 
     setNewEvent({
@@ -248,10 +249,10 @@ export default function Calendar() {
               <div>
                 <Label htmlFor="lead-select">Lead (Opcional)</Label>
                 <Select value={newEvent.leadId} onValueChange={(value) => {
-                  const selectedLead = leads.find(lead => lead.id === value);
+                  const selectedLead = value !== 'none' ? leads.find(lead => lead.id === value) : null;
                   setNewEvent(prev => ({ 
                     ...prev, 
-                    leadId: value,
+                    leadId: value === 'none' ? '' : value,
                     leadName: selectedLead?.name || '',
                     company: selectedLead?.company || ''
                   }));
@@ -260,7 +261,7 @@ export default function Calendar() {
                     <SelectValue placeholder="Selecionar lead" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Nenhum lead</SelectItem>
+                    <SelectItem value="none">Nenhum lead</SelectItem>
                     {leads.map(lead => (
                       <SelectItem key={lead.id} value={lead.id}>
                         {lead.name} - {lead.company}
@@ -270,7 +271,7 @@ export default function Calendar() {
                 </Select>
               </div>
 
-              {!newEvent.leadId && (
+              {(!newEvent.leadId || newEvent.leadId === 'none') && (
                 <>
                   <div>
                     <Label htmlFor="lead-name">Nome do Contato</Label>
