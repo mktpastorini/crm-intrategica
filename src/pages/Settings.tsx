@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -66,7 +65,7 @@ const statusOptions = [
 
 export default function Settings() {
   const { toast } = useToast();
-  const { pipelineStages, addPipelineStage, updatePipelineStage, deletePipelineStage } = useCrm();
+  const { pipelineStages, addPipelineStage, updatePipelineStage, deletePipelineStage, leadStatuses, setLeadStatuses } = useCrm();
   
   const [settings, setSettings] = useState<SystemSettings>(() => {
     const saved = localStorage.getItem('systemSettings');
@@ -529,7 +528,6 @@ export default function Settings() {
                 <Label htmlFor="db-service-role-key">Service Role Key (Privado)</Label>
                 <Textarea
                   id="db-service-role-key"
-                  type="password"
                   value={settings.dbServiceRoleKey}
                   onChange={(e) => handleInputChange('dbServiceRoleKey', e.target.value)}
                   placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
