@@ -17,14 +17,14 @@ export default function Dashboard() {
     new Date(event.date + 'T' + event.time) <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
   ).length;
 
-  // Dados reais para gráficos baseados nos dados atuais
+  // Real data for charts based on current data
   const statusData = pipelineStages.map(stage => ({
     name: stage.name,
     value: leads.filter(lead => lead.pipelineStage === stage.id).length,
     color: stage.color
-  })).filter(item => item.value > 0); // Só mostrar estágios com leads
+  })).filter(item => item.value > 0);
 
-  // Dados de performance baseados nos leads reais por mês de criação
+  // Performance data based on real leads by creation month
   const getPerformanceData = () => {
     const monthlyData: { [key: string]: { leads: number, fechamentos: number } } = {};
     
@@ -44,23 +44,23 @@ export default function Dashboard() {
 
     return Object.entries(monthlyData)
       .map(([month, data]) => ({ month, ...data }))
-      .slice(-6); // Últimos 6 meses
+      .slice(-6);
   };
 
   const performanceData = getPerformanceData();
 
-  // Calcular estatísticas de usuários (baseado em responsáveis)
+  // Calculate user stats (based on responsibles)
   const getUserStats = () => {
     const userStats: { [key: string]: { leads: number, fechamentos: number } } = {};
     
     leads.forEach(lead => {
-      const user = lead.responsible || 'Não atribuído';
-      if (!userStats[user]) {
-        userStats[user] = { leads: 0, fechamentos: 0 };
+      const userName = lead.responsible?.name || 'Não atribuído';
+      if (!userStats[userName]) {
+        userStats[userName] = { leads: 0, fechamentos: 0 };
       }
-      userStats[user].leads++;
+      userStats[userName].leads++;
       if (lead.pipelineStage === 'contrato-assinado') {
-        userStats[user].fechamentos++;
+        userStats[userName].fechamentos++;
       }
     });
 
@@ -71,11 +71,11 @@ export default function Dashboard() {
 
   const userStats = getUserStats();
 
-  // Atividades recentes baseadas em dados reais
+  // Recent activities based on real data
   const getRecentActivities = () => {
     const activities = [];
     
-    // Últimos leads adicionados
+    // Latest added leads
     const recentLeads = leads
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 3);
@@ -88,7 +88,7 @@ export default function Dashboard() {
       });
     });
 
-    // Próximos eventos
+    // Upcoming events
     const upcomingEvents = events
       .filter(event => new Date(event.date + 'T' + event.time) >= new Date())
       .sort((a, b) => new Date(a.date + 'T' + a.time).getTime() - new Date(b.date + 'T' + b.time).getTime())
