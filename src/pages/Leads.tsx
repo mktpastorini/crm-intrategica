@@ -13,13 +13,15 @@ import { useToast } from '@/hooks/use-toast';
 import { Plus, Upload, Search, Edit, Trash2, Phone, Mail } from 'lucide-react';
 
 export default function Leads() {
-  const { leads, addLead, updateLead, deleteLead } = useCrm();
+  const { leads, addLead, updateLead, deleteLead, requestLeadEdit, requestLeadDelete } = useCrm();
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showBulkDialog, setShowBulkDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   const [bulkData, setBulkData] = useState('');
+  const [editingLead, setEditingLead] = useState<any>(null);
 
   const [newLead, setNewLead] = useState({
     name: '',
@@ -62,10 +64,32 @@ export default function Leads() {
       responsible: user?.email || ''
     });
     setShowAddDialog(false);
-    toast({
-      title: "Lead adicionado",
-      description: "Lead foi adicionado com sucesso ao pipeline",
-    });
+  };
+
+  const handleEditLead = (lead: any) => {
+    setEditingLead({ ...lead });
+    setShowEditDialog(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingLead) return;
+
+    if (user?.role === 'admin' || user?.role === 'supervisor') {
+      updateLead(editingLead.id, editingLead);
+    } else {
+      requestLeadEdit(editingLead.id, editingLead, user?.email || '');
+    }
+    
+    setShowEditDialog(false);
+    setEditingLead(null);
+  };
+
+  const handleDeleteLead = (leadId: string) => {
+    if (user?.role === 'admin' || user?.role === 'supervisor') {
+      deleteLead(leadId);
+    } else {
+      requestLeadDelete(leadId, user?.email || '');
+    }
   };
 
   const handleBulkAdd = () => {
@@ -84,7 +108,7 @@ export default function Leads() {
             company,
             phone,
             email,
-            niche: 'Tecnologia', // Default
+            niche: 'Tecnologia',
             status: 'Pendente',
             responsible: user?.email || ''
           });
@@ -259,6 +283,88 @@ export default function Leads() {
         </div>
       </div>
 
+      {/* Edit Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Lead</DialogTitle>
+            <DialogDescription>
+              Faça as alterações necessárias
+            </DialogDescription>
+          </DialogHeader>
+          {editingLead && (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="edit-name">Nome *</Label>
+                <Input
+                  id="edit-name"
+                  value={editingLead.name}
+                  onChange={(e) => setEditingLead(prev => ({ ...prev, name: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-company">Empresa *</Label>
+                <Input
+                  id="edit-company"
+                  value={editingLead.company}
+                  onChange={(e) => setEditingLead(prev => ({ ...prev, company: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-phone">Telefone/WhatsApp *</Label>
+                <Input
+                  id="edit-phone"
+                  value={editingLead.phone}
+                  onChange={(e) => setEditingLead(prev => ({ ...prev, phone: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-email">E-mail</Label>
+                <Input
+                  id="edit-email"
+                  value={editingLead.email || ''}
+                  onChange={(e) => setEditingLead(prev => ({ ...prev, email: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-niche">Nicho *</Label>
+                <Select value={editingLead.niche} onValueChange={(value) => setEditingLead(prev => ({ ...prev, niche: value }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {niches.map(niche => (
+                      <SelectItem key={niche} value={niche}>{niche}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="edit-status">Status</Label>
+                <Select value={editingLead.status} onValueChange={(value) => setEditingLead(prev => ({ ...prev, status: value }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {statuses.map(status => (
+                      <SelectItem key={status} value={status}>{status}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-2 pt-4">
+                <Button variant="outline" onClick={() => setShowEditDialog(false)} className="flex-1">
+                  Cancelar
+                </Button>
+                <Button onClick={handleSaveEdit} className="flex-1">
+                  Salvar
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Search */}
       <Card>
         <CardContent className="p-4">
@@ -360,14 +466,21 @@ export default function Leads() {
                     <td className="p-4 text-sm text-slate-600">{lead.responsible}</td>
                     <td className="p-4">
                       <div className="flex items-center space-x-2">
-                        <Button variant="ghost" size="sm">
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => handleEditLead(lead)}
+                        >
                           <Edit className="w-4 h-4" />
                         </Button>
-                        {(user?.role === 'admin' || user?.role === 'supervisor') && (
-                          <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700">
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        )}
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="text-red-600 hover:text-red-700"
+                          onClick={() => handleDeleteLead(lead.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </div>
                     </td>
                   </tr>

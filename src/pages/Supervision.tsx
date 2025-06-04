@@ -3,48 +3,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Shield, Clock, CheckCircle, XCircle, User, Edit, Trash2 } from 'lucide-react';
+import { useCrm } from '@/contexts/CrmContext';
 
 export default function Supervision() {
-  // Mock data para ações pendentes
-  const pendingActions = [
-    {
-      id: '1',
-      type: 'edit_lead',
-      user: 'carlos@empresa.com',
-      description: 'Solicitou edição do lead "João Silva" - alteração de telefone',
-      timestamp: '2024-01-15 14:30',
-      details: {
-        leadName: 'João Silva',
-        field: 'Telefone',
-        oldValue: '(47) 99888-7766',
-        newValue: '(47) 99999-8888'
-      }
-    },
-    {
-      id: '2',
-      type: 'delete_lead',
-      user: 'maria@empresa.com',
-      description: 'Solicitou exclusão do lead "Pedro Santos"',
-      timestamp: '2024-01-15 13:15',
-      details: {
-        leadName: 'Pedro Santos',
-        reason: 'Lead duplicado'
-      }
-    },
-    {
-      id: '3',
-      type: 'edit_event',
-      user: 'carlos@empresa.com',
-      description: 'Solicitou alteração de horário da reunião com "Ana Costa"',
-      timestamp: '2024-01-15 12:00',
-      details: {
-        eventTitle: 'Reunião - Ana Costa',
-        field: 'Horário',
-        oldValue: '15:00',
-        newValue: '16:30'
-      }
-    }
-  ];
+  const { pendingActions, approveAction, rejectAction } = useCrm();
 
   const getActionIcon = (type: string) => {
     switch (type) {
@@ -52,6 +14,7 @@ export default function Supervision() {
       case 'edit_event':
         return <Edit className="w-4 h-4 text-blue-600" />;
       case 'delete_lead':
+      case 'delete_event':
         return <Trash2 className="w-4 h-4 text-red-600" />;
       default:
         return <Shield className="w-4 h-4 text-slate-600" />;
@@ -66,6 +29,8 @@ export default function Supervision() {
         return 'Exclusão de Lead';
       case 'edit_event':
         return 'Edição de Evento';
+      case 'delete_event':
+        return 'Exclusão de Evento';
       default:
         return 'Ação';
     }
@@ -77,20 +42,11 @@ export default function Supervision() {
       case 'edit_event':
         return 'bg-blue-100 text-blue-800';
       case 'delete_lead':
+      case 'delete_event':
         return 'bg-red-100 text-red-800';
       default:
         return 'bg-slate-100 text-slate-800';
     }
-  };
-
-  const handleApprove = (actionId: string) => {
-    console.log('Aprovando ação:', actionId);
-    // Implementar lógica de aprovação
-  };
-
-  const handleReject = (actionId: string) => {
-    console.log('Rejeitando ação:', actionId);
-    // Implementar lógica de rejeição
   };
 
   return (
@@ -187,46 +143,18 @@ export default function Supervision() {
                       {/* Action Details */}
                       <div className="bg-slate-50 rounded-lg p-4 space-y-2">
                         <h4 className="font-medium text-slate-900">Detalhes da Solicitação:</h4>
-                        {action.type === 'edit_lead' && (
-                          <div className="space-y-1">
-                            <p className="text-sm text-slate-600">
-                              <strong>Lead:</strong> {action.details.leadName}
-                            </p>
-                            <p className="text-sm text-slate-600">
-                              <strong>Campo:</strong> {action.details.field}
-                            </p>
-                            <p className="text-sm text-slate-600">
-                              <strong>Valor atual:</strong> {action.details.oldValue}
-                            </p>
-                            <p className="text-sm text-slate-600">
-                              <strong>Novo valor:</strong> {action.details.newValue}
-                            </p>
-                          </div>
+                        {action.details && action.details.leadName && (
+                          <p className="text-sm text-slate-600">
+                            <strong>Lead:</strong> {action.details.leadName}
+                          </p>
                         )}
-                        {action.type === 'delete_lead' && (
+                        {action.details && action.details.changes && (
                           <div className="space-y-1">
-                            <p className="text-sm text-slate-600">
-                              <strong>Lead:</strong> {action.details.leadName}
-                            </p>
-                            <p className="text-sm text-slate-600">
-                              <strong>Motivo:</strong> {action.details.reason}
-                            </p>
-                          </div>
-                        )}
-                        {action.type === 'edit_event' && (
-                          <div className="space-y-1">
-                            <p className="text-sm text-slate-600">
-                              <strong>Evento:</strong> {action.details.eventTitle}
-                            </p>
-                            <p className="text-sm text-slate-600">
-                              <strong>Campo:</strong> {action.details.field}
-                            </p>
-                            <p className="text-sm text-slate-600">
-                              <strong>Valor atual:</strong> {action.details.oldValue}
-                            </p>
-                            <p className="text-sm text-slate-600">
-                              <strong>Novo valor:</strong> {action.details.newValue}
-                            </p>
+                            {Object.entries(action.details.changes).map(([key, value]) => (
+                              <p key={key} className="text-sm text-slate-600">
+                                <strong>{key}:</strong> {String(value)}
+                              </p>
+                            ))}
                           </div>
                         )}
                       </div>
@@ -234,7 +162,7 @@ export default function Supervision() {
 
                     <div className="flex gap-2 ml-4">
                       <Button
-                        onClick={() => handleReject(action.id)}
+                        onClick={() => rejectAction(action.id)}
                         variant="outline"
                         size="sm"
                         className="text-red-600 hover:text-red-700 hover:border-red-200"
@@ -243,7 +171,7 @@ export default function Supervision() {
                         Rejeitar
                       </Button>
                       <Button
-                        onClick={() => handleApprove(action.id)}
+                        onClick={() => approveAction(action.id)}
                         size="sm"
                         className="bg-green-600 hover:bg-green-700"
                       >

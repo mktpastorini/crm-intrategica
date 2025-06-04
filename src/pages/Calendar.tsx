@@ -1,81 +1,140 @@
 
 import { useState } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Calendar as CalendarIcon, Clock, Plus, User, Building } from 'lucide-react';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { useToast } from '@/hooks/use-toast';
+import { Plus, Calendar as CalendarIcon, Clock, User, Edit, Trash2, Upload } from 'lucide-react';
 
 export default function Calendar() {
-  const { events } = useCrm();
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const { events, leads, addEvent, updateEvent, deleteEvent } = useCrm();
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<any>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
 
-  // Get current week
-  const getWeekDays = (date: Date) => {
-    const week = [];
-    const startDate = new Date(date);
-    const day = startDate.getDay();
-    const diff = startDate.getDate() - day + (day === 0 ? -6 : 1); // Adjust for Monday start
-    startDate.setDate(diff);
+  const [newEvent, setNewEvent] = useState({
+    title: '',
+    leadName: '',
+    company: '',
+    date: '',
+    time: '',
+    responsible: user?.email || '',
+    type: 'reunion' as 'reunion' | 'call' | 'whatsapp' | 'email',
+    leadId: ''
+  });
 
-    for (let i = 0; i < 7; i++) {
-      const currentDay = new Date(startDate);
-      currentDay.setDate(startDate.getDate() + i);
-      week.push(currentDay);
+  const eventTypes = [
+    { value: 'reunion', label: 'Reunião' },
+    { value: 'call', label: 'Telefonema' },
+    { value: 'whatsapp', label: 'WhatsApp' },
+    { value: 'email', label: 'E-mail' }
+  ];
+
+  const todayEvents = events.filter(event => {
+    const eventDate = new Date(event.date);
+    const today = new Date();
+    return eventDate.toDateString() === today.toDateString();
+  });
+
+  const selectedDateEvents = selectedDate ? events.filter(event => {
+    const eventDate = new Date(event.date);
+    return eventDate.toDateString() === selectedDate.toDateString();
+  }) : [];
+
+  const handleAddEvent = () => {
+    if (!newEvent.title || !newEvent.date || !newEvent.time) {
+      toast({
+        title: "Campos obrigatórios",
+        description: "Título, Data e Hora são obrigatórios",
+        variant: "destructive",
+      });
+      return;
     }
-    return week;
-  };
 
-  const weekDays = getWeekDays(currentDate);
-  const dayNames = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
-
-  const getEventsForDate = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
-    return events.filter(event => event.date === dateStr);
-  };
-
-  const getAllEventsThisWeek = () => {
-    return weekDays.flatMap(day => getEventsForDate(day));
-  };
-
-  const getAllEventsThisMonth = () => {
-    const currentMonth = currentDate.getMonth();
-    const currentYear = currentDate.getFullYear();
-    return events.filter(event => {
-      const eventDate = new Date(event.date);
-      return eventDate.getMonth() === currentMonth && eventDate.getFullYear() === currentYear;
+    addEvent(newEvent);
+    setNewEvent({
+      title: '',
+      leadName: '',
+      company: '',
+      date: '',
+      time: '',
+      responsible: user?.email || '',
+      type: 'reunion',
+      leadId: ''
     });
+    setImageFile(null);
+    setShowAddDialog(false);
   };
 
-  const getTodayEvents = () => {
-    const today = new Date().toISOString().split('T')[0];
-    return events.filter(event => event.date === today);
+  const handleEditEvent = (event: any) => {
+    setEditingEvent({ ...event });
+    setShowEditDialog(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingEvent) return;
+
+    updateEvent(editingEvent.id, editingEvent);
+    setShowEditDialog(false);
+    setEditingEvent(null);
+  };
+
+  const handleDeleteEvent = (eventId: string) => {
+    deleteEvent(eventId);
+  };
+
+  const handleLeadSelect = (leadId: string) => {
+    const lead = leads.find(l => l.id === leadId);
+    if (lead) {
+      setNewEvent(prev => ({
+        ...prev,
+        leadId,
+        leadName: lead.name,
+        company: lead.company
+      }));
+    }
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      toast({
+        title: "Imagem selecionada",
+        description: `Arquivo ${file.name} foi selecionado`,
+      });
+    }
   };
 
   const getEventTypeColor = (type: string) => {
     const colors = {
-      'reunion': 'bg-blue-100 text-blue-800 border-blue-200',
-      'call': 'bg-green-100 text-green-800 border-green-200',
-      'whatsapp': 'bg-emerald-100 text-emerald-800 border-emerald-200',
-      'email': 'bg-purple-100 text-purple-800 border-purple-200'
+      'reunion': 'bg-blue-100 text-blue-800',
+      'call': 'bg-green-100 text-green-800',
+      'whatsapp': 'bg-emerald-100 text-emerald-800',
+      'email': 'bg-purple-100 text-purple-800'
     };
-    return colors[type as keyof typeof colors] || 'bg-gray-100 text-gray-800 border-gray-200';
+    return colors[type as keyof typeof colors] || 'bg-gray-100 text-gray-800';
   };
 
-  const getEventTypeIcon = (type: string) => {
-    switch (type) {
-      case 'reunion': return '🤝';
-      case 'call': return '📞';
-      case 'whatsapp': return '💬';
-      case 'email': return '📧';
-      default: return '📅';
-    }
-  };
-
-  const navigateWeek = (direction: 'prev' | 'next') => {
-    const newDate = new Date(currentDate);
-    newDate.setDate(currentDate.getDate() + (direction === 'next' ? 7 : -7));
-    setCurrentDate(newDate);
+  const getEventTypeLabel = (type: string) => {
+    const labels = {
+      'reunion': 'Reunião',
+      'call': 'Telefonema',
+      'whatsapp': 'WhatsApp',
+      'email': 'E-mail'
+    };
+    return labels[type as keyof typeof labels] || type;
   };
 
   return (
@@ -86,13 +145,208 @@ export default function Calendar() {
           <h2 className="text-2xl font-bold text-slate-900">Agenda</h2>
           <p className="text-slate-600">Organize todos os seus compromissos comerciais</p>
         </div>
-        <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
-          <Plus className="w-4 h-4 mr-2" />
-          Adicionar Evento
-        </Button>
+        <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+          <DialogTrigger asChild>
+            <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 flex items-center gap-2">
+              <Plus className="w-4 h-4" />
+              Adicionar Evento
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Novo Evento</DialogTitle>
+              <DialogDescription>
+                Agende um novo compromisso
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="title">Título *</Label>
+                <Input
+                  id="title"
+                  value={newEvent.title}
+                  onChange={(e) => setNewEvent(prev => ({ ...prev, title: e.target.value }))}
+                  placeholder="Título do evento"
+                />
+              </div>
+              <div>
+                <Label htmlFor="lead-select">Lead (opcional)</Label>
+                <Select value={newEvent.leadId} onValueChange={handleLeadSelect}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um lead" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {leads.map(lead => (
+                      <SelectItem key={lead.id} value={lead.id}>
+                        {lead.name} - {lead.company}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="lead-name">Nome do Lead</Label>
+                <Input
+                  id="lead-name"
+                  value={newEvent.leadName}
+                  onChange={(e) => setNewEvent(prev => ({ ...prev, leadName: e.target.value }))}
+                  placeholder="Nome do contato"
+                />
+              </div>
+              <div>
+                <Label htmlFor="company">Empresa</Label>
+                <Input
+                  id="company"
+                  value={newEvent.company}
+                  onChange={(e) => setNewEvent(prev => ({ ...prev, company: e.target.value }))}
+                  placeholder="Nome da empresa"
+                />
+              </div>
+              <div>
+                <Label htmlFor="date">Data *</Label>
+                <Input
+                  id="date"
+                  type="date"
+                  value={newEvent.date}
+                  onChange={(e) => setNewEvent(prev => ({ ...prev, date: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="time">Hora *</Label>
+                <Input
+                  id="time"
+                  type="time"
+                  value={newEvent.time}
+                  onChange={(e) => setNewEvent(prev => ({ ...prev, time: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="type">Tipo de Evento</Label>
+                <Select value={newEvent.type} onValueChange={(value: any) => setNewEvent(prev => ({ ...prev, type: value }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {eventTypes.map(type => (
+                      <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="image">Adicionar Imagem (opcional)</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="image"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="hidden"
+                  />
+                  <Button 
+                    type="button"
+                    variant="outline" 
+                    onClick={() => document.getElementById('image')?.click()}
+                    className="flex items-center gap-2"
+                  >
+                    <Upload className="w-4 h-4" />
+                    {imageFile ? imageFile.name : 'Selecionar Imagem'}
+                  </Button>
+                </div>
+              </div>
+              <div className="flex gap-2 pt-4">
+                <Button variant="outline" onClick={() => setShowAddDialog(false)} className="flex-1">
+                  Cancelar
+                </Button>
+                <Button onClick={handleAddEvent} className="flex-1">
+                  Adicionar
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      {/* Stats Cards */}
+      {/* Edit Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Evento</DialogTitle>
+            <DialogDescription>
+              Faça as alterações necessárias
+            </DialogDescription>
+          </DialogHeader>
+          {editingEvent && (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="edit-title">Título *</Label>
+                <Input
+                  id="edit-title"
+                  value={editingEvent.title}
+                  onChange={(e) => setEditingEvent(prev => ({ ...prev, title: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-lead-name">Nome do Lead</Label>
+                <Input
+                  id="edit-lead-name"
+                  value={editingEvent.leadName || ''}
+                  onChange={(e) => setEditingEvent(prev => ({ ...prev, leadName: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-company">Empresa</Label>
+                <Input
+                  id="edit-company"
+                  value={editingEvent.company || ''}
+                  onChange={(e) => setEditingEvent(prev => ({ ...prev, company: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-date">Data *</Label>
+                <Input
+                  id="edit-date"
+                  type="date"
+                  value={editingEvent.date}
+                  onChange={(e) => setEditingEvent(prev => ({ ...prev, date: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-time">Hora *</Label>
+                <Input
+                  id="edit-time"
+                  type="time"
+                  value={editingEvent.time}
+                  onChange={(e) => setEditingEvent(prev => ({ ...prev, time: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-type">Tipo de Evento</Label>
+                <Select value={editingEvent.type} onValueChange={(value: any) => setEditingEvent(prev => ({ ...prev, type: value }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {eventTypes.map(type => (
+                      <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-2 pt-4">
+                <Button variant="outline" onClick={() => setShowEditDialog(false)} className="flex-1">
+                  Cancelar
+                </Button>
+                <Button onClick={handleSaveEdit} className="flex-1">
+                  Salvar
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200">
           <CardHeader className="pb-3">
@@ -102,8 +356,8 @@ export default function Calendar() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-blue-700">{getTodayEvents().length}</div>
-            <p className="text-sm text-blue-600">eventos programados</p>
+            <div className="text-3xl font-bold text-blue-700">{todayEvents.length}</div>
+            <p className="text-sm text-blue-600">eventos agendados</p>
           </CardContent>
         </Card>
 
@@ -115,144 +369,121 @@ export default function Calendar() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-green-700">{getAllEventsThisWeek().length}</div>
-            <p className="text-sm text-green-600">compromissos agendados</p>
+            <div className="text-3xl font-bold text-green-700">
+              {events.filter(event => {
+                const eventDate = new Date(event.date);
+                const now = new Date();
+                const weekStart = new Date(now.setDate(now.getDate() - now.getDay()));
+                const weekEnd = new Date(now.setDate(now.getDate() - now.getDay() + 6));
+                return eventDate >= weekStart && eventDate <= weekEnd;
+              }).length}
+            </div>
+            <p className="text-sm text-green-600">eventos esta semana</p>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-r from-purple-50 to-purple-100 border-purple-200">
           <CardHeader className="pb-3">
             <CardTitle className="text-lg text-purple-900 flex items-center gap-2">
-              <CalendarIcon className="w-5 h-5" />
-              Este Mês
+              <User className="w-5 h-5" />
+              Total
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-purple-700">{getAllEventsThisMonth().length}</div>
+            <div className="text-3xl font-bold text-purple-700">{events.length}</div>
             <p className="text-sm text-purple-600">eventos no total</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Calendar Navigation */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>
-              Semana de {weekDays[0].toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })} - {weekDays[6].toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
-            </CardTitle>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => navigateWeek('prev')}>
-                ← Anterior
-              </Button>
-              <Button variant="outline" onClick={() => setCurrentDate(new Date())}>
-                Hoje
-              </Button>
-              <Button variant="outline" onClick={() => navigateWeek('next')}>
-                Próxima →
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-7 gap-4">
-            {weekDays.map((day, index) => {
-              const dayEvents = getEventsForDate(day);
-              const isToday = day.toDateString() === new Date().toDateString();
-              
-              return (
-                <div
-                  key={day.toISOString()}
-                  className={`min-h-48 p-3 border-2 rounded-lg ${
-                    isToday ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white'
-                  }`}
-                >
-                  <div className="text-center mb-3">
-                    <div className="text-sm font-medium text-slate-600">{dayNames[index]}</div>
-                    <div className={`text-2xl font-bold ${isToday ? 'text-blue-600' : 'text-slate-900'}`}>
-                      {day.getDate()}
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    {dayEvents.map(event => (
-                      <div
-                        key={event.id}
-                        className={`p-2 rounded border text-xs ${getEventTypeColor(event.type)}`}
-                      >
-                        <div className="flex items-center gap-1 mb-1">
-                          <span>{getEventTypeIcon(event.type)}</span>
-                          <span className="font-medium">{event.time}</span>
-                        </div>
-                        <div className="font-medium truncate">{event.title}</div>
-                        {event.leadName && (
-                          <div className="flex items-center gap-1 mt-1 text-xs opacity-75">
-                            <User className="w-3 h-3" />
-                            <span className="truncate">{event.leadName}</span>
-                          </div>
-                        )}
-                        {event.company && (
-                          <div className="flex items-center gap-1 mt-1 text-xs opacity-75">
-                            <Building className="w-3 h-3" />
-                            <span className="truncate">{event.company}</span>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Today's Events Detail */}
-      {getTodayEvents().length > 0 && (
+      {/* Calendar and Events */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Calendar */}
         <Card>
           <CardHeader>
-            <CardTitle>Eventos de Hoje</CardTitle>
-            <CardDescription>Seus compromissos programados para hoje</CardDescription>
+            <CardTitle>Calendário</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {getTodayEvents()
-                .sort((a, b) => a.time.localeCompare(b.time))
-                .map(event => (
-                <div key={event.id} className="flex items-center justify-between p-4 border border-slate-200 rounded-lg hover:bg-slate-50">
-                  <div className="flex items-center space-x-4">
-                    <div className="text-2xl">{getEventTypeIcon(event.type)}</div>
-                    <div>
-                      <div className="font-medium text-slate-900">{event.title}</div>
-                      <div className="text-sm text-slate-600 flex items-center gap-4">
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {event.time}
-                        </span>
-                        {event.company && (
-                          <span className="flex items-center gap-1">
-                            <Building className="w-3 h-3" />
-                            {event.company}
-                          </span>
+            <CalendarComponent
+              mode="single"
+              selected={selectedDate}
+              onSelect={setSelectedDate}
+              className="rounded-md border"
+            />
+          </CardContent>
+        </Card>
+
+        {/* Events for selected date */}
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              Eventos - {selectedDate?.toLocaleDateString('pt-BR') || 'Hoje'}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {selectedDateEvents.length === 0 ? (
+              <div className="text-center py-8">
+                <CalendarIcon className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                <p className="text-slate-600">Nenhum evento nesta data</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {selectedDateEvents.map((event) => (
+                  <div key={event.id} className="border border-slate-200 rounded-lg p-4 hover:bg-slate-50 transition-colors">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h3 className="font-medium text-slate-900">{event.title}</h3>
+                          <Badge className={getEventTypeColor(event.type)}>
+                            {getEventTypeLabel(event.type)}
+                          </Badge>
+                        </div>
+                        {event.leadName && (
+                          <p className="text-sm text-slate-600 mb-1">
+                            <strong>Lead:</strong> {event.leadName}
+                          </p>
                         )}
-                        <span className="flex items-center gap-1">
-                          <User className="w-3 h-3" />
-                          {event.responsible}
-                        </span>
+                        {event.company && (
+                          <p className="text-sm text-slate-600 mb-1">
+                            <strong>Empresa:</strong> {event.company}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-4 text-sm text-slate-500">
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {event.time}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <User className="w-3 h-3" />
+                            {event.responsible}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-1 ml-4">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEditEvent(event)}
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-600 hover:text-red-700"
+                          onClick={() => handleDeleteEvent(event.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </div>
                     </div>
                   </div>
-                  <Badge className={getEventTypeColor(event.type)}>
-                    {event.type === 'reunion' ? 'Reunião' :
-                     event.type === 'call' ? 'Telefonema' :
-                     event.type === 'whatsapp' ? 'WhatsApp' : 'E-mail'}
-                  </Badge>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
-      )}
+      </div>
     </div>
   );
 }
