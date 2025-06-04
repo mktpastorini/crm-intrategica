@@ -1,3 +1,4 @@
+
 import { createContext, useContext, ReactNode } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Lead, Event, Profile, PipelineStage, PendingAction } from '@/types/crm';

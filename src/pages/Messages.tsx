@@ -3,154 +3,90 @@ import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/hooks/use-toast';
-import { Send, MessageSquare, Clock, CheckCircle, XCircle, User } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Search, Plus, MessageSquare, Phone, Mail, Send } from 'lucide-react';
 import { useCrm } from '@/contexts/CrmContext';
-import { useAuth } from '@/contexts/AuthContext';
-
-interface Message {
-  id: string;
-  leadId: string;
-  leadName: string;
-  company: string;
-  content: string;
-  type: 'whatsapp' | 'email' | 'sms';
-  status: 'pending' | 'sent' | 'delivered' | 'failed';
-  sentAt: string;
-  sentBy: string;
-}
 
 export default function Messages() {
-  const { toast } = useToast();
   const { leads, profiles } = useCrm();
-  const { user, profile } = useAuth();
-  const [showComposeDialog, setShowComposeDialog] = useState(false);
-  const [selectedLead, setSelectedLead] = useState('');
-  const [messageType, setMessageType] = useState<'whatsapp' | 'email' | 'sms'>('whatsapp');
-  const [messageContent, setMessageContent] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [showNewMessageDialog, setShowNewMessageDialog] = useState(false);
+  const [newMessage, setNewMessage] = useState({
+    leadId: '',
+    type: 'whatsapp' as 'whatsapp' | 'email' | 'call',
+    subject: '',
+    content: ''
+  });
 
-  // Mock messages data - in a real app this would come from the database
-  const [messages] = useState<Message[]>([
+  // Mock messages data - in a real app this would come from a database
+  const [messages] = useState([
     {
       id: '1',
-      leadId: 'lead1',
-      leadName: 'João Silva',
-      company: 'Tech Solutions',
-      content: 'Olá João, tudo bem? Gostaria de agendar uma reunião para apresentar nossa proposta...',
-      type: 'whatsapp',
-      status: 'delivered',
-      sentAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-      sentBy: profile?.name || 'Usuário'
+      leadId: leads[0]?.id || '1',
+      leadName: leads[0]?.name || 'João Silva',
+      company: leads[0]?.company || 'TechCorp',
+      type: 'whatsapp' as const,
+      subject: 'Apresentação da proposta',
+      content: 'Olá! Gostaria de agendar uma reunião para apresentar nossa proposta comercial.',
+      timestamp: '2024-01-15T10:30:00Z',
+      status: 'sent',
+      response: 'Perfeito! Podemos marcar para quinta-feira às 14h?'
     },
     {
       id: '2',
-      leadId: 'lead2',
-      leadName: 'Maria Santos',
-      company: 'Inovação Digital',
-      content: 'Prezada Maria, segue em anexo nossa proposta comercial conforme solicitado...',
-      type: 'email',
-      status: 'sent',
-      sentAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-      sentBy: profile?.name || 'Usuário'
+      leadId: leads[1]?.id || '2',
+      leadName: leads[1]?.name || 'Maria Santos',
+      company: leads[1]?.company || 'InnovateCorp',
+      type: 'email' as const,
+      subject: 'Proposta comercial - Soluções digitais',
+      content: 'Prezada Maria, conforme nossa conversa, segue em anexo nossa proposta para implementação das soluções digitais.',
+      timestamp: '2024-01-14T15:45:00Z',
+      status: 'delivered',
+      response: null
     }
   ]);
 
+  const filteredMessages = messages.filter(message => {
+    const matchesSearch = message.leadName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         message.company.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || message.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
   const handleSendMessage = () => {
-    if (!selectedLead || !messageContent.trim()) {
-      toast({
-        title: "Campos obrigatórios",
-        description: "Selecione um lead e digite uma mensagem",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const lead = leads.find(l => l.id === selectedLead);
-    if (!lead) return;
-
-    // Here you would integrate with your messaging service
-    // For now, we'll just show a success message
-    toast({
-      title: "Mensagem enviada",
-      description: `Mensagem enviada para ${lead.name} via ${messageType}`,
-    });
-
-    setSelectedLead('');
-    setMessageContent('');
-    setShowComposeDialog(false);
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return <Clock className="w-4 h-4 text-yellow-600" />;
-      case 'sent':
-        return <Send className="w-4 h-4 text-blue-600" />;
-      case 'delivered':
-        return <CheckCircle className="w-4 h-4 text-green-600" />;
-      case 'failed':
-        return <XCircle className="w-4 h-4 text-red-600" />;
-      default:
-        return <Clock className="w-4 h-4 text-gray-600" />;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'sent':
-        return 'bg-blue-100 text-blue-800';
-      case 'delivered':
-        return 'bg-green-100 text-green-800';
-      case 'failed':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return 'Pendente';
-      case 'sent':
-        return 'Enviada';
-      case 'delivered':
-        return 'Entregue';
-      case 'failed':
-        return 'Falhou';
-      default:
-        return status;
-    }
+    // In a real app, this would send the message via API
+    console.log('Enviando mensagem:', newMessage);
+    setNewMessage({ leadId: '', type: 'whatsapp', subject: '', content: '' });
+    setShowNewMessageDialog(false);
   };
 
   const getTypeIcon = (type: string) => {
     switch (type) {
       case 'whatsapp':
-        return '📱';
+        return <MessageSquare className="w-4 h-4 text-green-600" />;
       case 'email':
-        return '📧';
-      case 'sms':
-        return '💬';
+        return <Mail className="w-4 h-4 text-blue-600" />;
+      case 'call':
+        return <Phone className="w-4 h-4 text-orange-600" />;
       default:
-        return '📄';
+        return <MessageSquare className="w-4 h-4" />;
     }
   };
 
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'whatsapp':
-        return 'bg-green-100 text-green-800';
-      case 'email':
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'sent':
         return 'bg-blue-100 text-blue-800';
-      case 'sms':
+      case 'delivered':
+        return 'bg-green-100 text-green-800';
+      case 'read':
         return 'bg-purple-100 text-purple-800';
+      case 'failed':
+        return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -162,73 +98,70 @@ export default function Messages() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Central de Mensagens</h2>
-          <p className="text-slate-600">Envie mensagens para seus leads via WhatsApp, E-mail ou SMS</p>
+          <p className="text-slate-600">Gerencie todas as comunicações com seus leads</p>
         </div>
-        <Dialog open={showComposeDialog} onOpenChange={setShowComposeDialog}>
+        <Dialog open={showNewMessageDialog} onOpenChange={setShowNewMessageDialog}>
           <DialogTrigger asChild>
-            <Button className="bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700">
-              <MessageSquare className="w-4 h-4 mr-2" />
+            <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
+              <Plus className="w-4 h-4 mr-2" />
               Nova Mensagem
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Compor Mensagem</DialogTitle>
+              <DialogTitle>Nova Mensagem</DialogTitle>
               <DialogDescription>
-                Envie uma mensagem personalizada para um lead
+                Envie uma mensagem para um lead
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <Label htmlFor="lead">Destinatário *</Label>
-                <Select value={selectedLead} onValueChange={setSelectedLead}>
+                <label className="text-sm font-medium">Lead</label>
+                <Select value={newMessage.leadId} onValueChange={(value) => setNewMessage(prev => ({ ...prev, leadId: value }))}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione um lead" />
                   </SelectTrigger>
                   <SelectContent>
                     {leads.map(lead => (
                       <SelectItem key={lead.id} value={lead.id}>
-                        <div className="flex items-center space-x-2">
-                          <span>{lead.name}</span>
-                          <span className="text-sm text-slate-500">- {lead.company}</span>
-                        </div>
+                        {lead.name} - {lead.company}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label htmlFor="type">Tipo de Mensagem *</Label>
-                <Select value={messageType} onValueChange={(value: any) => setMessageType(value)}>
+                <label className="text-sm font-medium">Tipo</label>
+                <Select value={newMessage.type} onValueChange={(value: 'whatsapp' | 'email' | 'call') => setNewMessage(prev => ({ ...prev, type: value }))}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="whatsapp">📱 WhatsApp</SelectItem>
-                    <SelectItem value="email">📧 E-mail</SelectItem>
-                    <SelectItem value="sms">💬 SMS</SelectItem>
+                    <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                    <SelectItem value="email">E-mail</SelectItem>
+                    <SelectItem value="call">Ligação</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label htmlFor="content">Mensagem *</Label>
+                <label className="text-sm font-medium">Assunto</label>
+                <Input
+                  value={newMessage.subject}
+                  onChange={(e) => setNewMessage(prev => ({ ...prev, subject: e.target.value }))}
+                  placeholder="Assunto da mensagem"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Mensagem</label>
                 <Textarea
-                  id="content"
-                  value={messageContent}
-                  onChange={(e) => setMessageContent(e.target.value)}
-                  placeholder="Digite sua mensagem aqui..."
+                  value={newMessage.content}
+                  onChange={(e) => setNewMessage(prev => ({ ...prev, content: e.target.value }))}
+                  placeholder="Digite sua mensagem..."
                   rows={4}
                 />
-                <div className="text-sm text-slate-500 mt-1">
-                  {messageContent.length}/500 caracteres
-                </div>
               </div>
               <div className="flex gap-2 pt-4">
-                <Button 
-                  variant="outline" 
-                  onClick={() => setShowComposeDialog(false)}
-                  className="flex-1"
-                >
+                <Button variant="outline" onClick={() => setShowNewMessageDialog(false)} className="flex-1">
                   Cancelar
                 </Button>
                 <Button onClick={handleSendMessage} className="flex-1">
@@ -241,123 +174,92 @@ export default function Messages() {
         </Dialog>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg text-blue-900">Total Enviadas</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-blue-700">{messages.length}</div>
-            <p className="text-sm text-blue-600">mensagens enviadas</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-gradient-to-r from-green-50 to-green-100 border-green-200">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg text-green-900">Entregues</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-green-700">
-              {messages.filter(m => m.status === 'delivered').length}
-            </div>
-            <p className="text-sm text-green-600">mensagens entregues</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-gradient-to-r from-yellow-50 to-yellow-100 border-yellow-200">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg text-yellow-900">Pendentes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-yellow-700">
-              {messages.filter(m => m.status === 'pending').length}
-            </div>
-            <p className="text-sm text-yellow-600">aguardando envio</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-gradient-to-r from-red-50 to-red-100 border-red-200">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg text-red-900">Falharam</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-red-700">
-              {messages.filter(m => m.status === 'failed').length}
-            </div>
-            <p className="text-sm text-red-600">erro no envio</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Messages List */}
+      {/* Filters */}
       <Card>
-        <CardHeader>
-          <CardTitle>Histórico de Mensagens</CardTitle>
-          <CardDescription>Todas as mensagens enviadas recentemente</CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-slate-50 border-b">
-                <tr>
-                  <th className="text-left p-4 font-medium text-slate-700">Lead</th>
-                  <th className="text-left p-4 font-medium text-slate-700">Tipo</th>
-                  <th className="text-left p-4 font-medium text-slate-700">Mensagem</th>
-                  <th className="text-left p-4 font-medium text-slate-700">Status</th>
-                  <th className="text-left p-4 font-medium text-slate-700">Enviado por</th>
-                  <th className="text-left p-4 font-medium text-slate-700">Data/Hora</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {messages.map((message) => (
-                  <tr key={message.id} className="hover:bg-slate-50">
-                    <td className="p-4">
-                      <div>
-                        <div className="font-medium text-slate-900">{message.leadName}</div>
-                        <div className="text-sm text-slate-500">{message.company}</div>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <Badge className={getTypeColor(message.type)}>
-                        {getTypeIcon(message.type)} {message.type.toUpperCase()}
-                      </Badge>
-                    </td>
-                    <td className="p-4">
-                      <div className="max-w-xs">
-                        <p className="text-sm text-slate-700 truncate">
-                          {message.content}
-                        </p>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <div className="flex items-center space-x-2">
-                        {getStatusIcon(message.status)}
-                        <Badge className={getStatusColor(message.status)}>
-                          {getStatusLabel(message.status)}
-                        </Badge>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <div className="flex items-center text-sm text-slate-600">
-                        <User className="w-3 h-3 mr-1" />
-                        {message.sentBy}
-                      </div>
-                    </td>
-                    <td className="p-4 text-sm text-slate-600">
-                      {new Date(message.sentAt).toLocaleString('pt-BR')}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {messages.length === 0 && (
-            <div className="text-center py-12">
-              <MessageSquare className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-slate-900 mb-2">Nenhuma mensagem enviada</h3>
-              <p className="text-slate-600">Comece enviando sua primeira mensagem</p>
+        <CardContent className="p-4">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Buscar por lead ou empresa..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9"
+              />
             </div>
-          )}
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-full md:w-48">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os status</SelectItem>
+                <SelectItem value="sent">Enviado</SelectItem>
+                <SelectItem value="delivered">Entregue</SelectItem>
+                <SelectItem value="read">Lido</SelectItem>
+                <SelectItem value="failed">Falhou</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
+
+      {/* Messages List */}
+      <div className="space-y-4">
+        {filteredMessages.length > 0 ? (
+          filteredMessages.map((message) => (
+            <Card key={message.id} className="hover:shadow-md transition-shadow">
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center space-x-3">
+                    {getTypeIcon(message.type)}
+                    <div>
+                      <h3 className="font-semibold text-slate-900">{message.leadName}</h3>
+                      <p className="text-sm text-slate-600">{message.company}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Badge className={getStatusColor(message.status)}>
+                      {message.status === 'sent' ? 'Enviado' :
+                       message.status === 'delivered' ? 'Entregue' :
+                       message.status === 'read' ? 'Lido' : 'Falhou'}
+                    </Badge>
+                    <span className="text-sm text-slate-500">
+                      {new Date(message.timestamp).toLocaleDateString('pt-BR')}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="space-y-3">
+                  <div>
+                    <h4 className="font-medium text-slate-900 mb-1">{message.subject}</h4>
+                    <p className="text-slate-700">{message.content}</p>
+                  </div>
+                  
+                  {message.response && (
+                    <div className="bg-slate-50 p-3 rounded-lg border-l-4 border-blue-500">
+                      <p className="text-sm font-medium text-slate-900 mb-1">Resposta:</p>
+                      <p className="text-slate-700">{message.response}</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          <Card>
+            <CardContent className="p-12 text-center">
+              <MessageSquare className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-slate-900 mb-2">Nenhuma mensagem encontrada</h3>
+              <p className="text-slate-600">
+                {searchTerm || statusFilter !== 'all' 
+                  ? 'Tente ajustar os filtros de busca'
+                  : 'Comece enviando sua primeira mensagem para um lead'
+                }
+              </p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }
