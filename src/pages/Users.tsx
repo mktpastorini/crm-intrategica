@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,57 +9,24 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Edit, Trash2, Shield, UserCog, Users as UsersIcon } from 'lucide-react';
-
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: 'admin' | 'supervisor' | 'comercial';
-  status: 'active' | 'inactive';
-  createdAt: string;
-  lastLogin?: string;
-}
+import { useCrm } from '@/contexts/CrmContext';
 
 export default function Users() {
   const { toast } = useToast();
-  const [users, setUsers] = useState<User[]>([
-    {
-      id: '1',
-      name: 'Administrador',
-      email: 'admin@crm.com',
-      role: 'admin',
-      status: 'active',
-      createdAt: '2024-01-01',
-      lastLogin: '2024-01-15 09:00'
-    },
-    {
-      id: '2',
-      name: 'Carlos Supervisor',
-      email: 'carlos@empresa.com',
-      role: 'supervisor',
-      status: 'active',
-      createdAt: '2024-01-05',
-      lastLogin: '2024-01-14 16:30'
-    },
-    {
-      id: '3',
-      name: 'Maria Comercial',
-      email: 'maria@empresa.com',
-      role: 'comercial',
-      status: 'active',
-      createdAt: '2024-01-10',
-      lastLogin: '2024-01-14 15:45'
-    }
-  ]);
-
+  const { profiles, addProfile, updateProfile, deleteProfile, fetchProfiles, loading } = useCrm();
+  
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editingUser, setEditingUser] = useState<any>(null);
   const [newUser, setNewUser] = useState({
     name: '',
     email: '',
     role: 'comercial' as 'admin' | 'supervisor' | 'comercial',
     password: ''
   });
+
+  useEffect(() => {
+    fetchProfiles();
+  }, []);
 
   const roles = [
     { value: 'admin', label: 'Administrador', description: 'Acesso total ao sistema' },
@@ -93,36 +60,28 @@ export default function Users() {
     }
   };
 
-  const handleAddUser = () => {
-    if (!newUser.name || !newUser.email || !newUser.password) {
+  const handleAddUser = async () => {
+    if (!newUser.name || !newUser.email) {
       toast({
         title: "Campos obrigatórios",
-        description: "Preencha todos os campos para criar o usuário",
+        description: "Preencha nome e e-mail para criar o usuário",
         variant: "destructive",
       });
       return;
     }
 
-    const user: User = {
-      id: Date.now().toString(),
+    await addProfile({
       name: newUser.name,
       email: newUser.email,
       role: newUser.role,
-      status: 'active',
-      createdAt: new Date().toISOString().split('T')[0]
-    };
+      status: 'active'
+    });
 
-    setUsers(prev => [...prev, user]);
     setNewUser({ name: '', email: '', role: 'comercial', password: '' });
     setShowAddDialog(false);
-
-    toast({
-      title: "Usuário criado",
-      description: `${user.name} foi adicionado ao sistema`,
-    });
   };
 
-  const handleEditUser = (user: User) => {
+  const handleEditUser = (user: any) => {
     setEditingUser(user);
     setNewUser({
       name: user.name,
@@ -132,7 +91,7 @@ export default function Users() {
     });
   };
 
-  const handleUpdateUser = () => {
+  const handleUpdateUser = async () => {
     if (!editingUser || !newUser.name || !newUser.email) {
       toast({
         title: "Campos obrigatórios",
@@ -142,26 +101,21 @@ export default function Users() {
       return;
     }
 
-    setUsers(prev => prev.map(user => 
-      user.id === editingUser.id 
-        ? { ...user, name: newUser.name, email: newUser.email, role: newUser.role }
-        : user
-    ));
+    await updateProfile(editingUser.id, {
+      name: newUser.name,
+      email: newUser.email,
+      role: newUser.role
+    });
 
     setEditingUser(null);
     setNewUser({ name: '', email: '', role: 'comercial', password: '' });
-
-    toast({
-      title: "Usuário atualizado",
-      description: "As informações do usuário foram atualizadas",
-    });
   };
 
-  const handleDeleteUser = (userId: string) => {
-    const user = users.find(u => u.id === userId);
+  const handleDeleteUser = async (userId: string) => {
+    const user = profiles.find(u => u.id === userId);
     if (!user) return;
 
-    if (user.role === 'admin' && users.filter(u => u.role === 'admin').length === 1) {
+    if (user.role === 'admin' && profiles.filter(u => u.role === 'admin').length === 1) {
       toast({
         title: "Não é possível excluir",
         description: "Deve haver pelo menos um administrador no sistema",
@@ -170,21 +124,21 @@ export default function Users() {
       return;
     }
 
-    setUsers(prev => prev.filter(u => u.id !== userId));
-    
-    toast({
-      title: "Usuário removido",
-      description: `${user.name} foi removido do sistema`,
+    await deleteProfile(userId);
+  };
+
+  const toggleUserStatus = async (userId: string) => {
+    const user = profiles.find(u => u.id === userId);
+    if (!user) return;
+
+    await updateProfile(userId, {
+      status: user.status === 'active' ? 'inactive' : 'active'
     });
   };
 
-  const toggleUserStatus = (userId: string) => {
-    setUsers(prev => prev.map(user => 
-      user.id === userId 
-        ? { ...user, status: user.status === 'active' ? 'inactive' : 'active' }
-        : user
-    ));
-  };
+  if (loading) {
+    return <div className="flex justify-center items-center h-64">Carregando...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -260,18 +214,6 @@ export default function Users() {
                   </SelectContent>
                 </Select>
               </div>
-              {!editingUser && (
-                <div>
-                  <Label htmlFor="password">Senha *</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={newUser.password}
-                    onChange={(e) => setNewUser(prev => ({ ...prev, password: e.target.value }))}
-                    placeholder="••••••••"
-                  />
-                </div>
-              )}
               <div className="flex gap-2 pt-4">
                 <Button 
                   variant="outline" 
@@ -303,7 +245,7 @@ export default function Users() {
             <CardTitle className="text-lg text-blue-900">Total</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-blue-700">{users.length}</div>
+            <div className="text-3xl font-bold text-blue-700">{profiles.length}</div>
             <p className="text-sm text-blue-600">usuários</p>
           </CardContent>
         </Card>
@@ -313,7 +255,7 @@ export default function Users() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-red-700">
-              {users.filter(u => u.role === 'admin').length}
+              {profiles.filter(u => u.role === 'admin').length}
             </div>
             <p className="text-sm text-red-600">administradores</p>
           </CardContent>
@@ -324,7 +266,7 @@ export default function Users() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-purple-700">
-              {users.filter(u => u.role === 'supervisor').length}
+              {profiles.filter(u => u.role === 'supervisor').length}
             </div>
             <p className="text-sm text-purple-600">supervisores</p>
           </CardContent>
@@ -335,7 +277,7 @@ export default function Users() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-green-700">
-              {users.filter(u => u.role === 'comercial').length}
+              {profiles.filter(u => u.role === 'comercial').length}
             </div>
             <p className="text-sm text-green-600">comerciais</p>
           </CardContent>
@@ -362,7 +304,7 @@ export default function Users() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {users.map((user) => (
+                {profiles.map((user) => (
                   <tr key={user.id} className="hover:bg-slate-50">
                     <td className="p-4">
                       <div className="flex items-center space-x-3">
@@ -374,7 +316,7 @@ export default function Users() {
                         <div>
                           <div className="font-medium text-slate-900">{user.name}</div>
                           <div className="text-sm text-slate-500">
-                            Criado em {new Date(user.createdAt).toLocaleDateString('pt-BR')}
+                            Criado em {new Date(user.created_at).toLocaleDateString('pt-BR')}
                           </div>
                         </div>
                       </div>
@@ -397,7 +339,7 @@ export default function Users() {
                       </Badge>
                     </td>
                     <td className="p-4 text-sm text-slate-600">
-                      {user.lastLogin ? new Date(user.lastLogin).toLocaleString('pt-BR') : 'Nunca'}
+                      {user.last_login ? new Date(user.last_login).toLocaleString('pt-BR') : 'Nunca'}
                     </td>
                     <td className="p-4">
                       <div className="flex items-center space-x-2">
