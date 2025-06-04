@@ -25,11 +25,11 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const success = await login(email, password);
-      if (!success) {
+      const result = await login(email, password);
+      if (!result.success) {
         toast({
           title: "Erro de autenticação",
-          description: "Email ou senha incorretos",
+          description: result.error || "Email ou senha incorretos",
           variant: "destructive",
         });
       }
