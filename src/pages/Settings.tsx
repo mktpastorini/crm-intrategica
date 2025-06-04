@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -65,7 +66,7 @@ const statusOptions = [
 
 export default function Settings() {
   const { toast } = useToast();
-  const { pipelineStages, addPipelineStage, updatePipelineStage, deletePipelineStage, leadStatuses, setLeadStatuses } = useCrm();
+  const { pipelineStages, addPipelineStage, updatePipelineStage, deletePipelineStage } = useCrm();
   
   const [settings, setSettings] = useState<SystemSettings>(() => {
     const saved = localStorage.getItem('systemSettings');
