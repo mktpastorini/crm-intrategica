@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,6 +22,7 @@ import {
   Upload,
   X
 } from 'lucide-react';
+import { SystemSettings } from '@/types/settings';
 
 interface ScheduledMessage {
   id: string;
@@ -37,6 +37,9 @@ export default function Messages() {
   const { leads } = useCrm();
   const { user } = useAuth();
   const { toast } = useToast();
+
+  // Carregar configurações do sistema
+  const settings: SystemSettings = JSON.parse(localStorage.getItem('systemSettings') || '{}');
 
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
   const [message, setMessage] = useState('');
@@ -100,7 +103,7 @@ export default function Messages() {
     }
   };
 
-  const handleSendNow = () => {
+  const handleSendNow = async () => {
     if (!message.trim() || selectedLeads.length === 0) {
       toast({
         title: "Campos obrigatórios",
@@ -113,15 +116,49 @@ export default function Messages() {
     const payload = selectedLeadsData.map(lead => ({
       nome: lead.name,
       telefone: lead.phone,
+      empresa: lead.company,
       mensagem: message.replace('{nome}', lead.name).replace('{empresa}', lead.company)
     }));
 
-    console.log('Enviando para webhook:', payload);
+    // Enviar para webhook se habilitado e URL configurada
+    if (settings.enableMessageWebhook && settings.messageWebhookUrl) {
+      try {
+        const response = await fetch(settings.messageWebhookUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messages: payload,
+            timestamp: new Date().toISOString(),
+            user: user?.name || 'Sistema'
+          })
+        });
 
-    toast({
-      title: "Mensagens enviadas",
-      description: `${selectedLeads.length} mensagem(ns) enviada(s) com sucesso`,
-    });
+        if (!response.ok) {
+          throw new Error('Erro no webhook');
+        }
+
+        console.log('Webhook enviado com sucesso:', payload);
+        toast({
+          title: "Mensagens enviadas",
+          description: `${selectedLeads.length} mensagem(ns) enviada(s) via webhook`,
+        });
+      } catch (error) {
+        console.error('Erro ao enviar webhook:', error);
+        toast({
+          title: "Erro no webhook",
+          description: "Erro ao enviar para o webhook. Mensagens salvas localmente.",
+          variant: "destructive",
+        });
+      }
+    } else {
+      console.log('Webhook desabilitado ou URL não configurada:', payload);
+      toast({
+        title: "Mensagens processadas",
+        description: `${selectedLeads.length} mensagem(ns) processada(s) (webhook não configurado)`,
+      });
+    }
 
     setMessage('');
     setSelectedLeads([]);

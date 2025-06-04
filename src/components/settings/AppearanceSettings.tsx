@@ -19,24 +19,65 @@ export default function AppearanceSettings({ settings, onInputChange, onSave }: 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      onInputChange('logo', file);
-      onInputChange('logoUrl', URL.createObjectURL(file));
-      toast({
-        title: "Logo carregado",
-        description: "Logo foi carregado com sucesso",
-      });
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const logoUrl = event.target?.result as string;
+        onInputChange('logo', file);
+        onInputChange('logoUrl', logoUrl);
+        
+        // Aplicar logo no sistema imediatamente
+        const logoElements = document.querySelectorAll('[data-logo]');
+        logoElements.forEach(element => {
+          if (element instanceof HTMLImageElement) {
+            element.src = logoUrl;
+          }
+        });
+        
+        toast({
+          title: "Logo atualizado",
+          description: "Logo foi carregado e aplicado ao sistema",
+        });
+      };
+      reader.readAsDataURL(file);
     }
   };
 
   const handleFaviconUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      onInputChange('favicon', file);
-      onInputChange('faviconUrl', URL.createObjectURL(file));
-      toast({
-        title: "Favicon carregado",
-        description: "Favicon foi carregado com sucesso",
-      });
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const faviconUrl = event.target?.result as string;
+        onInputChange('favicon', file);
+        onInputChange('faviconUrl', faviconUrl);
+        
+        // Aplicar favicon imediatamente
+        let favicon = document.querySelector('link[rel="icon"]') as HTMLLinkElement;
+        if (!favicon) {
+          favicon = document.createElement('link');
+          favicon.rel = 'icon';
+          document.head.appendChild(favicon);
+        }
+        favicon.href = faviconUrl;
+        
+        toast({
+          title: "Favicon atualizado",
+          description: "Favicon foi carregado e aplicado ao sistema",
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleColorChange = (field: 'primaryColor' | 'secondaryColor', value: string) => {
+    onInputChange(field, value);
+    
+    // Aplicar cores CSS customizadas
+    const root = document.documentElement;
+    if (field === 'primaryColor') {
+      root.style.setProperty('--primary-color', value);
+    } else {
+      root.style.setProperty('--secondary-color', value);
     }
   };
 
@@ -45,7 +86,7 @@ export default function AppearanceSettings({ settings, onInputChange, onSave }: 
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Palette className="w-5 h-5" />
-          Aparência
+          Aparência do Sistema
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -54,8 +95,11 @@ export default function AppearanceSettings({ settings, onInputChange, onSave }: 
           <div className="mt-2 space-y-2">
             {settings.logoUrl && (
               <div className="flex items-center gap-2 p-2 bg-slate-50 rounded border">
-                <img src={settings.logoUrl} alt="Logo" className="w-8 h-8 object-contain" />
-                <span className="text-sm text-slate-700 flex-1">Logo atual</span>
+                <img src={settings.logoUrl} alt="Logo" className="w-12 h-12 object-contain" data-logo />
+                <div className="flex-1">
+                  <span className="text-sm text-slate-700">Logo atual</span>
+                  <p className="text-xs text-slate-500">Aplicado em todo o sistema</p>
+                </div>
               </div>
             )}
             <Input
@@ -71,18 +115,21 @@ export default function AppearanceSettings({ settings, onInputChange, onSave }: 
               className="w-full"
             >
               <Upload className="w-4 h-4 mr-2" />
-              Selecionar Logo
+              {settings.logoUrl ? 'Alterar Logo' : 'Selecionar Logo'}
             </Button>
           </div>
         </div>
 
         <div>
-          <Label>Favicon</Label>
+          <Label>Favicon (Ícone da Aba)</Label>
           <div className="mt-2 space-y-2">
             {settings.faviconUrl && (
               <div className="flex items-center gap-2 p-2 bg-slate-50 rounded border">
-                <img src={settings.faviconUrl} alt="Favicon" className="w-4 h-4 object-contain" />
-                <span className="text-sm text-slate-700 flex-1">Favicon atual</span>
+                <img src={settings.faviconUrl} alt="Favicon" className="w-6 h-6 object-contain" />
+                <div className="flex-1">
+                  <span className="text-sm text-slate-700">Favicon atual</span>
+                  <p className="text-xs text-slate-500">Exibido na aba do navegador</p>
+                </div>
               </div>
             )}
             <Input
@@ -98,7 +145,7 @@ export default function AppearanceSettings({ settings, onInputChange, onSave }: 
               className="w-full"
             >
               <Upload className="w-4 h-4 mr-2" />
-              Selecionar Favicon
+              {settings.faviconUrl ? 'Alterar Favicon' : 'Selecionar Favicon'}
             </Button>
           </div>
         </div>
@@ -106,25 +153,43 @@ export default function AppearanceSettings({ settings, onInputChange, onSave }: 
         <div className="grid grid-cols-2 gap-4">
           <div>
             <Label htmlFor="primary-color">Cor Primária</Label>
-            <Input
-              id="primary-color"
-              type="color"
-              value={settings.primaryColor}
-              onChange={(e) => onInputChange('primaryColor', e.target.value)}
-            />
+            <div className="flex gap-2 mt-1">
+              <Input
+                id="primary-color"
+                type="color"
+                value={settings.primaryColor}
+                onChange={(e) => handleColorChange('primaryColor', e.target.value)}
+                className="w-16 h-10"
+              />
+              <Input
+                value={settings.primaryColor}
+                onChange={(e) => handleColorChange('primaryColor', e.target.value)}
+                placeholder="#3b82f6"
+                className="flex-1"
+              />
+            </div>
           </div>
           <div>
             <Label htmlFor="secondary-color">Cor Secundária</Label>
-            <Input
-              id="secondary-color"
-              type="color"
-              value={settings.secondaryColor}
-              onChange={(e) => onInputChange('secondaryColor', e.target.value)}
-            />
+            <div className="flex gap-2 mt-1">
+              <Input
+                id="secondary-color"
+                type="color"
+                value={settings.secondaryColor}
+                onChange={(e) => handleColorChange('secondaryColor', e.target.value)}
+                className="w-16 h-10"
+              />
+              <Input
+                value={settings.secondaryColor}
+                onChange={(e) => handleColorChange('secondaryColor', e.target.value)}
+                placeholder="#8b5cf6"
+                className="flex-1"
+              />
+            </div>
           </div>
         </div>
 
-        <Button onClick={onSave}>
+        <Button onClick={onSave} className="w-full">
           <Save className="w-4 h-4 mr-2" />
           Salvar Configurações de Aparência
         </Button>

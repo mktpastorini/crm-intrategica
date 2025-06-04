@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -135,17 +134,18 @@ export default function DatabaseSettings({ settings, onInputChange, onSave }: Da
       </CardHeader>
       <CardContent className="space-y-4">
         <div>
-          <Label htmlFor="db-url">URL do Projeto Supabase</Label>
+          <Label htmlFor="db-url">URL do Projeto</Label>
           <Input
             id="db-url"
             value={settings.dbUrl}
             onChange={(e) => onInputChange('dbUrl', e.target.value)}
             placeholder="https://seu-projeto.supabase.co"
           />
+          <p className="text-xs text-slate-500 mt-1">URL atual: {settings.dbUrl || 'Não configurado'}</p>
         </div>
 
         <div>
-          <Label htmlFor="db-anon-key">Anon Key (Público)</Label>
+          <Label htmlFor="db-anon-key">Anon Key (Chave Pública)</Label>
           <Textarea
             id="db-anon-key"
             value={settings.dbAnonKey}
@@ -153,10 +153,13 @@ export default function DatabaseSettings({ settings, onInputChange, onSave }: Da
             placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
             rows={3}
           />
+          <p className="text-xs text-slate-500 mt-1">
+            Status: {settings.dbAnonKey ? 'Configurado' : 'Não configurado'}
+          </p>
         </div>
 
         <div>
-          <Label htmlFor="db-service-role-key">Service Role Key (Privado)</Label>
+          <Label htmlFor="db-service-role-key">Service Role Key (Chave Privada - Opcional)</Label>
           <Textarea
             id="db-service-role-key"
             value={settings.dbServiceRoleKey}
@@ -164,6 +167,9 @@ export default function DatabaseSettings({ settings, onInputChange, onSave }: Da
             placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
             rows={3}
           />
+          <p className="text-xs text-slate-500 mt-1">
+            Status: {settings.dbServiceRoleKey ? 'Configurado' : 'Não configurado'}
+          </p>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -235,7 +241,7 @@ export default function DatabaseSettings({ settings, onInputChange, onSave }: Da
         <Separator />
 
         <div>
-          <h3 className="text-lg font-medium mb-4">Backup e Restauração</h3>
+          <h3 className="text-lg font-medium mb-4">Backup e Restauração Local</h3>
           <div className="flex gap-2">
             <Button onClick={handleDownloadBackup} variant="outline">
               <Download className="w-4 h-4 mr-2" />

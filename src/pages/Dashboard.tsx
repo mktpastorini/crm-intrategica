@@ -11,23 +11,101 @@ export default function Dashboard() {
   const totalLeads = leads.length;
   const leadsInPipeline = leads.filter(lead => lead.pipelineStage !== 'contrato-assinado').length;
   const proposalsSent = leads.filter(lead => lead.pipelineStage === 'proposta-enviada').length;
-  const meetingsScheduled = events.filter(event => event.type === 'reunion').length;
+  const meetingsScheduled = events.filter(event => 
+    event.type === 'reunion' && 
+    new Date(event.date + 'T' + event.time) >= new Date() &&
+    new Date(event.date + 'T' + event.time) <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+  ).length;
 
-  // Dados para gráficos
+  // Dados reais para gráficos baseados nos dados atuais
   const statusData = pipelineStages.map(stage => ({
     name: stage.name,
     value: leads.filter(lead => lead.pipelineStage === stage.id).length,
     color: stage.color
-  }));
+  })).filter(item => item.value > 0); // Só mostrar estágios com leads
 
-  const performanceData = [
-    { month: 'Jan', leads: 45, fechamentos: 12 },
-    { month: 'Fev', leads: 52, fechamentos: 15 },
-    { month: 'Mar', leads: 38, fechamentos: 8 },
-    { month: 'Abr', leads: 61, fechamentos: 18 },
-    { month: 'Mai', leads: 55, fechamentos: 14 },
-    { month: 'Jun', leads: 67, fechamentos: 22 },
-  ];
+  // Dados de performance baseados nos leads reais por mês de criação
+  const getPerformanceData = () => {
+    const monthlyData: { [key: string]: { leads: number, fechamentos: number } } = {};
+    
+    leads.forEach(lead => {
+      const date = new Date(lead.createdAt);
+      const monthKey = date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+      
+      if (!monthlyData[monthKey]) {
+        monthlyData[monthKey] = { leads: 0, fechamentos: 0 };
+      }
+      
+      monthlyData[monthKey].leads++;
+      if (lead.pipelineStage === 'contrato-assinado') {
+        monthlyData[monthKey].fechamentos++;
+      }
+    });
+
+    return Object.entries(monthlyData)
+      .map(([month, data]) => ({ month, ...data }))
+      .slice(-6); // Últimos 6 meses
+  };
+
+  const performanceData = getPerformanceData();
+
+  // Calcular estatísticas de usuários (baseado em responsáveis)
+  const getUserStats = () => {
+    const userStats: { [key: string]: { leads: number, fechamentos: number } } = {};
+    
+    leads.forEach(lead => {
+      const user = lead.responsible || 'Não atribuído';
+      if (!userStats[user]) {
+        userStats[user] = { leads: 0, fechamentos: 0 };
+      }
+      userStats[user].leads++;
+      if (lead.pipelineStage === 'contrato-assinado') {
+        userStats[user].fechamentos++;
+      }
+    });
+
+    return Object.entries(userStats)
+      .map(([user, stats]) => ({ user, ...stats }))
+      .sort((a, b) => b.fechamentos - a.fechamentos);
+  };
+
+  const userStats = getUserStats();
+
+  // Atividades recentes baseadas em dados reais
+  const getRecentActivities = () => {
+    const activities = [];
+    
+    // Últimos leads adicionados
+    const recentLeads = leads
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 3);
+    
+    recentLeads.forEach(lead => {
+      activities.push({
+        type: 'lead',
+        message: `Novo lead adicionado: ${lead.company}`,
+        time: new Date(lead.createdAt).toLocaleDateString('pt-BR')
+      });
+    });
+
+    // Próximos eventos
+    const upcomingEvents = events
+      .filter(event => new Date(event.date + 'T' + event.time) >= new Date())
+      .sort((a, b) => new Date(a.date + 'T' + a.time).getTime() - new Date(b.date + 'T' + b.time).getTime())
+      .slice(0, 2);
+
+    upcomingEvents.forEach(event => {
+      activities.push({
+        type: 'event',
+        message: `${event.type === 'reunion' ? 'Reunião agendada' : 'Evento agendado'} com ${event.leadName || 'cliente'}`,
+        time: new Date(event.date).toLocaleDateString('pt-BR')
+      });
+    });
+
+    return activities.slice(0, 5);
+  };
+
+  const recentActivities = getRecentActivities();
 
   return (
     <div className="space-y-6">
@@ -41,7 +119,7 @@ export default function Dashboard() {
           <CardContent>
             <div className="text-2xl font-bold text-blue-900">{totalLeads}</div>
             <p className="text-xs text-blue-600 mt-1">
-              +12% em relação ao mês anterior
+              {totalLeads > 0 ? 'Leads cadastrados no sistema' : 'Nenhum lead cadastrado'}
             </p>
           </CardContent>
         </Card>
@@ -94,61 +172,73 @@ export default function Dashboard() {
             <CardDescription>Distribuição de leads por estágio</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={statusData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {statusData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
+            {statusData.length > 0 ? (
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={statusData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {statusData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-80 flex items-center justify-center text-slate-500">
+                Nenhum lead cadastrado para exibir no gráfico
+              </div>
+            )}
           </CardContent>
         </Card>
 
         {/* Performance Chart */}
         <Card className="bg-white shadow-lg">
           <CardHeader>
-            <CardTitle className="text-lg font-semibold text-slate-800">Desempenho Mensal</CardTitle>
+            <CardTitle className="text-lg font-semibold text-slate-800">Desempenho por Período</CardTitle>
             <CardDescription>Leads captados vs Fechamentos</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={performanceData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip />
-                  <Line 
-                    type="monotone" 
-                    dataKey="leads" 
-                    stroke="#3b82f6" 
-                    strokeWidth={3}
-                    name="Leads"
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="fechamentos" 
-                    stroke="#10b981" 
-                    strokeWidth={3}
-                    name="Fechamentos"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+            {performanceData.length > 0 ? (
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={performanceData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis />
+                    <Tooltip />
+                    <Line 
+                      type="monotone" 
+                      dataKey="leads" 
+                      stroke="#3b82f6" 
+                      strokeWidth={3}
+                      name="Leads"
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="fechamentos" 
+                      stroke="#10b981" 
+                      strokeWidth={3}
+                      name="Fechamentos"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-80 flex items-center justify-center text-slate-500">
+                Dados insuficientes para gerar o gráfico de desempenho
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -164,18 +254,33 @@ export default function Dashboard() {
             <CardDescription>Usuários com mais fechamentos</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-green-200">
-              <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm font-bold">1</span>
+            {userStats.length > 0 ? (
+              userStats.slice(0, 3).map((user, index) => (
+                <div key={user.user} className="flex items-center justify-between p-3 bg-white rounded-lg border border-green-200">
+                  <div className="flex items-center space-x-3">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                      index === 0 ? 'bg-gradient-to-r from-green-400 to-emerald-500' :
+                      index === 1 ? 'bg-gradient-to-r from-blue-400 to-blue-500' :
+                      'bg-gradient-to-r from-gray-400 to-gray-500'
+                    }`}>
+                      <span className="text-white text-sm font-bold">{index + 1}</span>
+                    </div>
+                    <div>
+                      <p className="font-medium text-slate-900">{user.user}</p>
+                      <p className="text-sm text-slate-600">{user.fechamentos} fechamentos</p>
+                    </div>
+                  </div>
+                  <Progress 
+                    value={userStats.length > 0 ? (user.fechamentos / Math.max(...userStats.map(u => u.fechamentos))) * 100 : 0} 
+                    className="w-20" 
+                  />
                 </div>
-                <div>
-                  <p className="font-medium text-slate-900">Administrador</p>
-                  <p className="text-sm text-slate-600">22 fechamentos</p>
-                </div>
+              ))
+            ) : (
+              <div className="text-center text-slate-500 py-8">
+                Nenhum dado de performance disponível
               </div>
-              <Progress value={95} className="w-20" />
-            </div>
+            )}
           </CardContent>
         </Card>
 
@@ -188,18 +293,24 @@ export default function Dashboard() {
             <CardDescription>Últimas ações do sistema</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex items-center space-x-3 p-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <p className="text-sm text-slate-700">Novo lead adicionado: Tech Solutions Ltda</p>
-            </div>
-            <div className="flex items-center space-x-3 p-2">
-              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-              <p className="text-sm text-slate-700">Reunião agendada com Marketing Pro</p>
-            </div>
-            <div className="flex items-center space-x-3 p-2">
-              <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-              <p className="text-sm text-slate-700">Proposta enviada para cliente ABC</p>
-            </div>
+            {recentActivities.length > 0 ? (
+              recentActivities.map((activity, index) => (
+                <div key={index} className="flex items-center space-x-3 p-2">
+                  <div className={`w-2 h-2 rounded-full ${
+                    activity.type === 'lead' ? 'bg-green-500' :
+                    activity.type === 'event' ? 'bg-blue-500' : 'bg-purple-500'
+                  }`}></div>
+                  <div className="flex-1">
+                    <p className="text-sm text-slate-700">{activity.message}</p>
+                    <p className="text-xs text-slate-500">{activity.time}</p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center text-slate-500 py-8">
+                Nenhuma atividade recente
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

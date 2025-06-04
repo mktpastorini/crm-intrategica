@@ -1,161 +1,241 @@
 
-import { ReactNode, useState } from 'react';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
-import { Link, useLocation } from 'react-router-dom';
-import {
-  BarChart3,
-  Users,
-  Workflow,
-  MessageSquare,
-  Calendar,
-  Shield,
-  UserCog,
+import { 
+  LayoutDashboard, 
+  Users, 
+  Calendar, 
+  MessageSquare, 
   Settings,
   LogOut,
+  UserCheck,
+  Target,
   Menu,
   X
 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { SystemSettings } from '@/types/settings';
 
-interface LayoutProps {
-  children: ReactNode;
-}
-
-const menuItems = [
-  { id: 'dashboard', label: 'Dashboard', icon: BarChart3, path: '/', roles: ['admin', 'supervisor', 'comercial'] },
-  { id: 'leads', label: 'Leads', icon: Users, path: '/leads', roles: ['admin', 'supervisor', 'comercial'] },
-  { id: 'pipeline', label: 'Atendimento', icon: Workflow, path: '/pipeline', roles: ['admin', 'supervisor', 'comercial'] },
-  { id: 'messages', label: 'Mensagens', icon: MessageSquare, path: '/messages', roles: ['admin', 'supervisor', 'comercial'] },
-  { id: 'calendar', label: 'Agenda', icon: Calendar, path: '/calendar', roles: ['admin', 'supervisor', 'comercial'] },
-  { id: 'supervision', label: 'Supervisão', icon: Shield, path: '/supervision', roles: ['admin', 'supervisor'] },
-  { id: 'users', label: 'Usuários', icon: UserCog, path: '/users', roles: ['admin'] },
-  { id: 'settings', label: 'Ajustes', icon: Settings, path: '/settings', roles: ['admin'] },
-];
-
-export default function Layout({ children }: LayoutProps) {
+export function Layout() {
   const { user, logout } = useAuth();
   const location = useLocation();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const navigate = useNavigate();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [settings, setSettings] = useState<SystemSettings | null>(null);
 
-  const filteredMenuItems = menuItems.filter(item => 
-    item.roles.includes(user?.role || 'comercial')
-  );
+  // Carregar configurações do sistema
+  useEffect(() => {
+    const savedSettings = localStorage.getItem('systemSettings');
+    if (savedSettings) {
+      const parsedSettings = JSON.parse(savedSettings);
+      setSettings(parsedSettings);
+      
+      // Aplicar logo e favicon se configurados
+      if (parsedSettings.logoUrl) {
+        const logoElements = document.querySelectorAll('[data-logo]');
+        logoElements.forEach(element => {
+          if (element instanceof HTMLImageElement) {
+            element.src = parsedSettings.logoUrl;
+          }
+        });
+      }
+      
+      if (parsedSettings.faviconUrl) {
+        let favicon = document.querySelector('link[rel="icon"]') as HTMLLinkElement;
+        if (!favicon) {
+          favicon = document.createElement('link');
+          favicon.rel = 'icon';
+          document.head.appendChild(favicon);
+        }
+        favicon.href = parsedSettings.faviconUrl;
+      }
+      
+      // Aplicar cores personalizadas
+      if (parsedSettings.primaryColor) {
+        document.documentElement.style.setProperty('--primary-color', parsedSettings.primaryColor);
+      }
+      if (parsedSettings.secondaryColor) {
+        document.documentElement.style.setProperty('--secondary-color', parsedSettings.secondaryColor);
+      }
+    }
+  }, []);
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  const isActive = (path: string) => location.pathname === path;
+
+  const menuItems = [
+    { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
+    { icon: Users, label: 'Leads', path: '/leads' },
+    { icon: Target, label: 'Pipeline', path: '/pipeline' },
+    { icon: Calendar, label: 'Agenda', path: '/calendar' },
+    { icon: MessageSquare, label: 'Mensagens', path: '/messages' },
+    { icon: UserCheck, label: 'Usuários', path: '/users' },
+    { icon: Users, label: 'Supervisão', path: '/supervision' },
+    { icon: Settings, label: 'Configurações', path: '/settings' },
+  ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex">
-      {/* Mobile menu overlay */}
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <div className={cn(
-        "fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-xl transform transition-transform duration-200 ease-in-out lg:translate-x-0 lg:static lg:inset-0 flex-shrink-0",
-        sidebarOpen ? "translate-x-0" : "-translate-x-full"
-      )}>
-        <div className="flex flex-col h-full">
-          {/* Logo */}
-          <div className="flex items-center justify-between p-6 border-b border-slate-200">
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-                <BarChart3 className="w-5 h-5 text-white" />
-              </div>
-              <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                AgencyCRM
-              </span>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="lg:hidden"
-              onClick={() => setSidebarOpen(false)}
-            >
-              <X className="w-4 h-4" />
-            </Button>
+    <div className="min-h-screen bg-slate-50">
+      {/* Mobile Header */}
+      <div className="lg:hidden bg-white shadow-sm border-b px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            {settings?.logoUrl && (
+              <img 
+                src={settings.logoUrl} 
+                alt="Logo" 
+                className="w-8 h-8 object-contain" 
+                data-logo
+              />
+            )}
+            <h1 className="text-xl font-bold text-slate-900">
+              {settings?.systemName || 'CRM System'}
+            </h1>
           </div>
-
-          {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-2">
-            {filteredMenuItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = location.pathname === item.path;
-              
-              return (
-                <Link
-                  key={item.id}
-                  to={item.path}
-                  onClick={() => setSidebarOpen(false)}
-                  className={cn(
-                    "flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 hover:bg-slate-100",
-                    isActive && "bg-gradient-to-r from-blue-50 to-purple-50 border-l-4 border-blue-500 text-blue-700"
-                  )}
-                >
-                  <Icon className={cn("w-5 h-5", isActive ? "text-blue-600" : "text-slate-600")} />
-                  <span className={cn("font-medium", isActive ? "text-blue-700" : "text-slate-700")}>
-                    {item.label}
-                  </span>
-                </Link>
-              );
-            })}
-          </nav>
-
-          {/* User info */}
-          <div className="p-4 border-t border-slate-200">
-            <div className="flex items-center space-x-3 mb-3">
-              <div className="w-8 h-8 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center">
-                <span className="text-white text-sm font-medium">
-                  {user?.name.charAt(0).toUpperCase()}
-                </span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-slate-900 truncate">{user?.name}</p>
-                <p className="text-xs text-slate-500 capitalize">{user?.role}</p>
-              </div>
-            </div>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={logout}
-              className="w-full justify-start text-slate-600 hover:text-red-600 hover:border-red-200"
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              Sair
-            </Button>
-          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          >
+            {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          </Button>
         </div>
       </div>
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Top bar */}
-        <div className="bg-white shadow-sm border-b border-slate-200 p-4 flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="lg:hidden"
-              onClick={() => setSidebarOpen(true)}
-            >
-              <Menu className="w-5 h-5" />
-            </Button>
-            <div className="hidden lg:block">
-              <h1 className="text-2xl font-bold text-slate-900">
-                {menuItems.find(item => item.path === location.pathname)?.label || 'Dashboard'}
+      {/* Mobile Menu Overlay */}
+      {isMobileMenuOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 bg-black bg-opacity-50">
+          <div className="bg-white w-64 h-full shadow-lg">
+            <div className="p-4 border-b">
+              <div className="flex items-center space-x-3">
+                {settings?.logoUrl && (
+                  <img 
+                    src={settings.logoUrl} 
+                    alt="Logo" 
+                    className="w-8 h-8 object-contain" 
+                    data-logo
+                  />
+                )}
+                <h2 className="text-lg font-semibold text-slate-900">
+                  {settings?.systemName || 'CRM System'}
+                </h2>
+              </div>
+            </div>
+            <nav className="p-4 space-y-2">
+              {menuItems.map((item) => {
+                const IconComponent = item.icon;
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
+                      isActive(item.path)
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <IconComponent className="w-5 h-5" />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+              <button
+                onClick={handleLogout}
+                className="flex items-center space-x-3 px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 w-full text-left"
+              >
+                <LogOut className="w-5 h-5" />
+                <span>Sair</span>
+              </button>
+            </nav>
+          </div>
+        </div>
+      )}
+
+      <div className="flex">
+        {/* Desktop Sidebar */}
+        <div className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0">
+          <div className="flex flex-col flex-grow pt-5 bg-white overflow-y-auto border-r">
+            <div className="flex items-center flex-shrink-0 px-4 pb-5">
+              {settings?.logoUrl && (
+                <img 
+                  src={settings.logoUrl} 
+                  alt="Logo" 
+                  className="w-10 h-10 object-contain mr-3" 
+                  data-logo
+                />
+              )}
+              <h1 className="text-xl font-bold text-slate-900">
+                {settings?.systemName || 'CRM System'}
               </h1>
             </div>
-            <div className="flex items-center space-x-2">
-              <span className="text-sm text-slate-600">Bem-vindo, {user?.name}</span>
+            <div className="mt-5 flex-grow flex flex-col">
+              <nav className="flex-1 px-2 space-y-1">
+                {menuItems.map((item) => {
+                  const IconComponent = item.icon;
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
+                        isActive(item.path)
+                          ? 'bg-blue-100 text-blue-700'
+                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                      }`}
+                    >
+                      <IconComponent className="mr-3 h-5 w-5 flex-shrink-0" />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </nav>
+              <div className="flex-shrink-0 flex border-t border-slate-200 p-4">
+                <div className="flex-shrink-0 w-full group block">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <div className="inline-block h-8 w-8 rounded-full bg-gradient-to-r from-blue-400 to-purple-500">
+                        <span className="flex h-full w-full items-center justify-center text-white text-sm font-medium">
+                          {user?.name?.charAt(0).toUpperCase() || 'U'}
+                        </span>
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm font-medium text-slate-700 group-hover:text-slate-900">
+                          {user?.name || 'Usuário'}
+                        </p>
+                        <p className="text-xs font-medium text-slate-500 group-hover:text-slate-700">
+                          {user?.role || 'Usuário'}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleLogout}
+                      className="text-slate-400 hover:text-red-600"
+                    >
+                      <LogOut className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Page content */}
-        <div className="flex-1 p-6 overflow-auto">
-          {children}
+        {/* Main Content */}
+        <div className="lg:pl-64 flex flex-col flex-1">
+          <main className="flex-1">
+            <div className="py-6">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <Outlet />
+              </div>
+            </div>
+          </main>
         </div>
       </div>
     </div>

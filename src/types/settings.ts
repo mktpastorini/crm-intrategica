@@ -7,11 +7,6 @@ export interface SystemSettings {
   scheduleReminderDays: number;
   enableImmediateSend: boolean;
   enableMessageWebhook: boolean;
-  dbHost: string;
-  dbPort: string;
-  dbName: string;
-  dbUser: string;
-  dbPassword: string;
   dbUrl: string;
   dbAnonKey: string;
   dbServiceRoleKey: string;
