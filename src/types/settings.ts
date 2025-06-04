@@ -10,6 +10,11 @@ export interface SystemSettings {
   dbUrl: string;
   dbAnonKey: string;
   dbServiceRoleKey: string;
+  dbHost: string;
+  dbPort: string;
+  dbName: string;
+  dbUser: string;
+  dbPassword: string;
   logo: File | null;
   logoUrl: string;
   favicon: File | null;

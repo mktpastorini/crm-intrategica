@@ -17,7 +17,7 @@ import {
 import { useState, useEffect } from 'react';
 import { SystemSettings } from '@/types/settings';
 
-export function Layout() {
+export default function Layout() {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
