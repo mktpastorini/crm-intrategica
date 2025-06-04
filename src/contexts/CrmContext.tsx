@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useState, ReactNode } from 'react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -60,6 +59,9 @@ interface CrmContextType {
   rejectAction: (actionId: string) => void;
   requestLeadEdit: (leadId: string, updates: Partial<Lead>, user: string) => void;
   requestLeadDelete: (leadId: string, user: string) => void;
+  addPipelineStage: (stage: PipelineStage) => void;
+  updatePipelineStage: (id: string, updates: Partial<PipelineStage>) => void;
+  deletePipelineStage: (id: string) => void;
 }
 
 const CrmContext = createContext<CrmContextType | undefined>(undefined);
