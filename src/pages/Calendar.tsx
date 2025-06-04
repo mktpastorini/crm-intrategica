@@ -9,7 +9,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Calendar as CalendarIcon, Clock, User, Edit, Trash2, Upload, X } from 'lucide-react';
 
@@ -89,7 +88,15 @@ export default function Calendar() {
       return;
     }
 
-    addEvent(newEvent);
+    // Corrigir o problema de data: usar a data exata sem conversão de timezone
+    const eventDate = new Date(newEvent.date + 'T00:00:00');
+    const formattedDate = eventDate.toISOString().split('T')[0];
+
+    addEvent({
+      ...newEvent,
+      date: formattedDate
+    });
+    
     setNewEvent({
       title: '',
       leadName: '',
@@ -112,7 +119,14 @@ export default function Calendar() {
   const handleSaveEdit = () => {
     if (!editingEvent) return;
 
-    updateEvent(editingEvent.id, editingEvent);
+    // Corrigir o problema de data na edição também
+    const eventDate = new Date(editingEvent.date + 'T00:00:00');
+    const formattedDate = eventDate.toISOString().split('T')[0];
+
+    updateEvent(editingEvent.id, {
+      ...editingEvent,
+      date: formattedDate
+    });
     setShowEditDialog(false);
     setEditingEvent(null);
   };
@@ -488,16 +502,16 @@ export default function Calendar() {
                     <div
                       key={index}
                       className={`
-                        min-h-24 p-1 border border-slate-200 cursor-pointer
+                        min-h-28 p-2 border border-slate-200 cursor-pointer
                         ${isCurrentMonth ? 'bg-white' : 'bg-slate-50'}
-                        ${isTodayDate ? 'bg-blue-50 border-blue-300' : ''}
-                        ${hasEventsToday ? 'border-blue-400' : ''}
+                        ${isTodayDate ? 'bg-blue-50 border-blue-400 ring-2 ring-blue-200' : ''}
+                        ${hasEventsToday ? 'border-blue-300' : ''}
                         hover:bg-slate-50 transition-colors
                       `}
                       onClick={() => setSelectedDate(date)}
                     >
                       <div className={`
-                        text-xs font-medium mb-1
+                        text-sm font-medium mb-2
                         ${isCurrentMonth ? 'text-slate-900' : 'text-slate-400'}
                         ${isTodayDate ? 'text-blue-600 font-bold' : ''}
                       `}>
@@ -510,11 +524,12 @@ export default function Calendar() {
                             className="text-xs p-1 bg-blue-100 text-blue-700 rounded truncate"
                             title={`${event.time} - ${event.title}`}
                           >
-                            {event.time} {event.title}
+                            <div className="font-medium">{event.time}</div>
+                            <div className="truncate">{event.title}</div>
                           </div>
                         ))}
                         {dayEvents.length > 2 && (
-                          <div className="text-xs text-slate-500">
+                          <div className="text-xs text-slate-500 text-center">
                             +{dayEvents.length - 2} mais
                           </div>
                         )}
