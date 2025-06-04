@@ -1,166 +1,215 @@
 
 import { useState } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { Send, Clock, Save, Image, Search, Users, MessageSquare } from 'lucide-react';
-
-interface ScheduledMessage {
-  id: string;
-  recipients: string[];
-  message: string;
-  scheduledFor: string;
-  createdAt: string;
-}
+import { 
+  Send, 
+  Clock, 
+  Users, 
+  MessageSquare, 
+  Image as ImageIcon, 
+  Calendar as CalendarIcon,
+  Save,
+  Trash2,
+  Upload,
+  X
+} from 'lucide-react';
 
 export default function Messages() {
   const { leads } = useCrm();
+  const { user } = useAuth();
   const { toast } = useToast();
+
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
   const [message, setMessage] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterStage, setFilterStage] = useState('all');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [templates] = useState([
-    'Olá {nome}! Temos uma proposta especial para a {empresa}. Gostaria de agendar uma conversa?',
-    'Oi {nome}! Vamos conversar sobre as necessidades de marketing da {empresa}?',
-    'Prezado {nome}, preparamos uma análise personalizada para a {empresa}. Posso apresentar?'
-  ]);
-  const [scheduledMessages, setScheduledMessages] = useState<ScheduledMessage[]>([]);
-  const [scheduleDate, setScheduleDate] = useState('');
-  const [scheduleTime, setScheduleTime] = useState('');
+  const [scheduledDate, setScheduledDate] = useState('');
+  const [scheduledTime, setScheduledTime] = useState('');
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
 
-  const statuses = ['Pendente', 'Follow-up', 'Proposta Enviada', 'Perdido', 'Ganho'];
-  const stages = ['aguardando-inicio', 'primeiro-contato', 'reuniao', 'proposta-enviada', 'negociacao', 'contrato-assinado'];
+  // Templates
+  const [templates, setTemplates] = useState([
+    { id: '1', name: 'Primeiro Contato', content: 'Olá {nome}, tudo bem? Sou da {empresa} e gostaria de conversar sobre nossos serviços.' },
+    { id: '2', name: 'Follow-up', content: 'Oi {nome}, espero que esteja bem! Queria saber se já teve tempo de analisar nossa proposta.' },
+    { id: '3', name: 'Agradecimento', content: 'Obrigado pelo seu tempo hoje, {nome}! Foi um prazer conhecer a {empresa}.' }
+  ]);
+  const [templateName, setTemplateName] = useState('');
+
+  // Scheduled messages
+  const [scheduledMessages, setScheduledMessages] = useState<any[]>([]);
 
   const filteredLeads = leads.filter(lead => {
-    const matchesSearch = lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         lead.company.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = filterStatus === 'all' || lead.status === filterStatus;
-    const matchesStage = filterStage === 'all' || lead.pipelineStage === filterStage;
-    
-    return matchesSearch && matchesStatus && matchesStage;
+    const statusMatch = filterStatus === 'all' || lead.status === filterStatus;
+    const stageMatch = filterStage === 'all' || lead.pipelineStage === filterStage;
+    return statusMatch && stageMatch;
   });
 
-  const handleLeadToggle = (leadId: string) => {
-    setSelectedLeads(prev => 
-      prev.includes(leadId) 
-        ? prev.filter(id => id !== leadId)
-        : [...prev, leadId]
-    );
-  };
+  const selectedLeadsData = leads.filter(lead => selectedLeads.includes(lead.id));
 
-  const handleSelectAll = () => {
-    if (selectedLeads.length === filteredLeads.length) {
-      setSelectedLeads([]);
+  const handleLeadSelect = (leadId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedLeads(prev => [...prev, leadId]);
     } else {
+      setSelectedLeads(prev => prev.filter(id => id !== leadId));
+    }
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
       setSelectedLeads(filteredLeads.map(lead => lead.id));
-    }
-  };
-
-  const personalizeMessage = (template: string, lead: any) => {
-    return template
-      .replace('{nome}', lead.name)
-      .replace('{empresa}', lead.company);
-  };
-
-  const handleSendNow = async () => {
-    if (selectedLeads.length === 0) {
-      toast({
-        title: "Nenhum destinatário",
-        description: "Selecione pelo menos um lead para enviar a mensagem",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!message.trim()) {
-      toast({
-        title: "Mensagem vazia",
-        description: "Digite uma mensagem para enviar",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const recipients = selectedLeads.map(leadId => {
-      const lead = leads.find(l => l.id === leadId);
-      return lead ? {
-        nome: lead.name,
-        telefone: lead.phone,
-        mensagem: personalizeMessage(message, lead)
-      } : null;
-    }).filter(Boolean);
-
-    try {
-      // Simular envio para webhook
-      const response = await fetch('https://webhook-url.com/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(recipients),
-      });
-
-      toast({
-        title: "Mensagens enviadas",
-        description: `${recipients.length} mensagens foram enviadas com sucesso`,
-      });
-
+    } else {
       setSelectedLeads([]);
-      setMessage('');
-    } catch (error) {
+    }
+  };
+
+  const handleSendNow = () => {
+    if (!message.trim() || selectedLeads.length === 0) {
       toast({
-        title: "Erro no envio",
-        description: "Erro ao enviar mensagens. Verifique a configuração do webhook.",
+        title: "Campos obrigatórios",
+        description: "Selecione pelo menos um lead e escreva uma mensagem",
         variant: "destructive",
       });
+      return;
     }
+
+    // Simular envio via webhook
+    const payload = selectedLeadsData.map(lead => ({
+      nome: lead.name,
+      telefone: lead.phone,
+      mensagem: message.replace('{nome}', lead.name).replace('{empresa}', lead.company)
+    }));
+
+    console.log('Enviando para webhook:', payload);
+
+    toast({
+      title: "Mensagens enviadas",
+      description: `${selectedLeads.length} mensagem(ns) enviada(s) com sucesso`,
+    });
+
+    setMessage('');
+    setSelectedLeads([]);
+    setMediaFile(null);
   };
 
   const handleSchedule = () => {
-    if (selectedLeads.length === 0 || !message.trim() || !scheduleDate || !scheduleTime) {
+    if (!message.trim() || selectedLeads.length === 0 || !scheduledDate || !scheduledTime) {
       toast({
         title: "Campos obrigatórios",
-        description: "Preencha todos os campos para agendar o envio",
+        description: "Preencha todos os campos para agendar",
         variant: "destructive",
       });
       return;
     }
 
-    const newScheduled: ScheduledMessage = {
+    const newScheduled = {
       id: Date.now().toString(),
-      recipients: selectedLeads,
       message,
-      scheduledFor: `${scheduleDate} ${scheduleTime}`,
-      createdAt: new Date().toISOString()
+      leads: selectedLeadsData,
+      scheduledFor: `${scheduledDate} ${scheduledTime}`,
+      createdBy: user?.name,
+      mediaFile: mediaFile?.name || null
     };
 
     setScheduledMessages(prev => [...prev, newScheduled]);
-    
+
     toast({
-      title: "Envio agendado",
-      description: `Mensagem agendada para ${new Date(`${scheduleDate} ${scheduleTime}`).toLocaleString('pt-BR')}`,
+      title: "Mensagem agendada",
+      description: `Mensagem agendada para ${new Date(scheduledDate + ' ' + scheduledTime).toLocaleString('pt-BR')}`,
     });
 
-    setSelectedLeads([]);
     setMessage('');
-    setScheduleDate('');
-    setScheduleTime('');
+    setSelectedLeads([]);
+    setScheduledDate('');
+    setScheduledTime('');
+    setShowSchedule(false);
+    setMediaFile(null);
   };
 
-  const removeScheduled = (id: string) => {
-    setScheduledMessages(prev => prev.filter(msg => msg.id !== id));
+  const handleSaveTemplate = () => {
+    if (!templateName.trim() || !message.trim()) {
+      toast({
+        title: "Campos obrigatórios",
+        description: "Preencha o nome do template e a mensagem",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const newTemplate = {
+      id: Date.now().toString(),
+      name: templateName,
+      content: message
+    };
+
+    setTemplates(prev => [...prev, newTemplate]);
+    setTemplateName('');
+
     toast({
-      title: "Agendamento removido",
-      description: "O envio agendado foi cancelado",
+      title: "Template salvo",
+      description: `Template "${templateName}" foi salvo com sucesso`,
+    });
+  };
+
+  const handleLoadTemplate = (template: any) => {
+    setMessage(template.content);
+    toast({
+      title: "Template carregado",
+      description: `Template "${template.name}" foi carregado`,
+    });
+  };
+
+  const handleDeleteTemplate = (templateId: string) => {
+    const template = templates.find(t => t.id === templateId);
+    setTemplates(prev => prev.filter(t => t.id !== templateId));
+    toast({
+      title: "Template excluído",
+      description: `Template "${template?.name}" foi excluído`,
+    });
+  };
+
+  const handleDeleteScheduled = (scheduledId: string) => {
+    setScheduledMessages(prev => prev.filter(s => s.id !== scheduledId));
+    toast({
+      title: "Agendamento cancelado",
+      description: "Mensagem agendada foi cancelada",
+    });
+  };
+
+  const handleMediaUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) { // 10MB limit
+        toast({
+          title: "Arquivo muito grande",
+          description: "O arquivo deve ter no máximo 10MB",
+          variant: "destructive",
+        });
+        return;
+      }
+      setMediaFile(file);
+      toast({
+        title: "Arquivo selecionado",
+        description: `${file.name} foi selecionado`,
+      });
+    }
+  };
+
+  const removeMediaFile = () => {
+    setMediaFile(null);
+    toast({
+      title: "Arquivo removido",
+      description: "Arquivo de mídia foi removido",
     });
   };
 
@@ -168,161 +217,273 @@ export default function Messages() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold text-slate-900">Enviar Mensagens</h2>
-        <p className="text-slate-600">Comunique-se com seus leads de forma personalizada e automatizada</p>
+        <h2 className="text-2xl font-bold text-slate-900">Envio de Mensagens</h2>
+        <p className="text-slate-600">Envie mensagens personalizadas para seus leads</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Lead Selection */}
-        <Card className="lg:col-span-1">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg text-blue-900 flex items-center gap-2">
               <Users className="w-5 h-5" />
-              Destinatários ({selectedLeads.length})
+              Selecionados
             </CardTitle>
-            <CardDescription>Selecione os leads para enviar a mensagem</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Filters */}
-            <div className="space-y-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
-                <Input
-                  placeholder="Buscar leads..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
+          <CardContent>
+            <div className="text-3xl font-bold text-blue-700">{selectedLeads.length}</div>
+            <p className="text-sm text-blue-600">leads selecionados</p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-r from-green-50 to-green-100 border-green-200">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg text-green-900 flex items-center gap-2">
+              <MessageSquare className="w-5 h-5" />
+              Templates
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-green-700">{templates.length}</div>
+            <p className="text-sm text-green-600">templates salvos</p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-r from-purple-50 to-purple-100 border-purple-200">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg text-purple-900 flex items-center gap-2">
+              <Clock className="w-5 h-5" />
+              Agendadas
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-purple-700">{scheduledMessages.length}</div>
+            <p className="text-sm text-purple-600">mensagens agendadas</p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-r from-orange-50 to-orange-100 border-orange-200">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg text-orange-900 flex items-center gap-2">
+              <Users className="w-5 h-5" />
+              Total Leads
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-orange-700">{filteredLeads.length}</div>
+            <p className="text-sm text-orange-600">leads disponíveis</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Lead Selection */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Selecionar Destinatários</CardTitle>
+            <div className="flex gap-2">
               <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger>
+                <SelectTrigger className="w-48">
                   <SelectValue placeholder="Filtrar por status" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos os status</SelectItem>
-                  {statuses.map(status => (
-                    <SelectItem key={status} value={status}>{status}</SelectItem>
-                  ))}
+                  <SelectItem value="Pendente">Pendente</SelectItem>
+                  <SelectItem value="Follow-up">Follow-up</SelectItem>
+                  <SelectItem value="Proposta Enviada">Proposta Enviada</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={filterStage} onValueChange={setFilterStage}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Filtrar por estágio" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os estágios</SelectItem>
+                  <SelectItem value="aguardando-inicio">Aguardando Início</SelectItem>
+                  <SelectItem value="primeiro-contato">Primeiro Contato</SelectItem>
+                  <SelectItem value="reuniao">Reunião</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="select-all"
+                  checked={selectedLeads.length === filteredLeads.length && filteredLeads.length > 0}
+                  onCheckedChange={handleSelectAll}
+                />
+                <Label htmlFor="select-all" className="font-medium">
+                  Selecionar todos ({filteredLeads.length})
+                </Label>
+              </div>
 
-            {/* Select All */}
-            <div className="flex items-center space-x-2 pb-2 border-b">
-              <Checkbox
-                checked={selectedLeads.length === filteredLeads.length && filteredLeads.length > 0}
-                onCheckedChange={handleSelectAll}
-              />
-              <Label className="text-sm">Selecionar todos ({filteredLeads.length})</Label>
-            </div>
-
-            {/* Lead List */}
-            <div className="max-h-96 overflow-y-auto space-y-2">
-              {filteredLeads.map(lead => (
-                <div key={lead.id} className="flex items-center space-x-2 p-2 hover:bg-slate-50 rounded">
-                  <Checkbox
-                    checked={selectedLeads.includes(lead.id)}
-                    onCheckedChange={() => handleLeadToggle(lead.id)}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-slate-900 truncate">{lead.name}</div>
-                    <div className="text-xs text-slate-500 truncate">{lead.company}</div>
-                    <div className="text-xs text-slate-500">{lead.phone}</div>
-                    <Badge variant="outline" className="text-xs mt-1">{lead.status}</Badge>
+              <div className="max-h-96 overflow-y-auto space-y-2">
+                {filteredLeads.map((lead) => (
+                  <div key={lead.id} className="flex items-center space-x-3 p-3 border border-slate-200 rounded-lg">
+                    <Checkbox
+                      id={lead.id}
+                      checked={selectedLeads.includes(lead.id)}
+                      onCheckedChange={(checked) => handleLeadSelect(lead.id, checked as boolean)}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-slate-900 truncate">{lead.name}</p>
+                        <Badge variant="outline" className="text-xs">{lead.status}</Badge>
+                      </div>
+                      <p className="text-sm text-slate-600 truncate">{lead.company}</p>
+                      <p className="text-xs text-slate-500">{lead.phone}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </CardContent>
         </Card>
 
         {/* Message Composer */}
-        <Card className="lg:col-span-2">
+        <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <MessageSquare className="w-5 h-5" />
-              Compose Message
-            </CardTitle>
-            <CardDescription>Crie sua mensagem personalizada</CardDescription>
+            <CardTitle>Compor Mensagem</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Templates */}
             <div>
-              <Label className="text-sm font-medium">Templates Salvos</Label>
-              <div className="mt-2 space-y-2">
-                {templates.map((template, index) => (
-                  <Button
-                    key={index}
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setMessage(template)}
-                    className="w-full text-left justify-start h-auto p-3 text-wrap"
-                  >
-                    {template.substring(0, 80)}...
-                  </Button>
+              <Label>Templates Salvos</Label>
+              <div className="grid grid-cols-1 gap-2 mt-2">
+                {templates.map((template) => (
+                  <div key={template.id} className="flex items-center gap-2 p-2 border border-slate-200 rounded">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleLoadTemplate(template)}
+                      className="flex-1 justify-start"
+                    >
+                      {template.name}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDeleteTemplate(template.id)}
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
                 ))}
               </div>
             </div>
 
-            {/* Message Input */}
+            {/* Message */}
             <div>
               <Label htmlFor="message">Mensagem</Label>
               <Textarea
                 id="message"
-                placeholder="Digite sua mensagem... Use {nome} e {empresa} para personalizar"
+                placeholder="Digite sua mensagem aqui... Use {nome} e {empresa} para personalizar"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                className="min-h-32"
+                rows={4}
+                className="mt-1"
               />
-              <div className="text-xs text-slate-500 mt-1">
-                Variáveis disponíveis: {'{nome}'}, {'{empresa}'}
+              <p className="text-xs text-slate-500 mt-1">
+                Use {'{nome}'} e {'{empresa}'} para personalizar a mensagem
+              </p>
+            </div>
+
+            {/* Media Upload */}
+            <div>
+              <Label>Adicionar Imagem/Vídeo (opcional)</Label>
+              <div className="mt-2">
+                {mediaFile ? (
+                  <div className="flex items-center gap-2 p-2 bg-slate-50 rounded border">
+                    <ImageIcon className="w-4 h-4 text-slate-600" />
+                    <span className="text-sm text-slate-700 flex-1">{mediaFile.name}</span>
+                    <Button variant="ghost" size="sm" onClick={removeMediaFile}>
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <Input
+                      type="file"
+                      accept="image/*,video/*"
+                      onChange={handleMediaUpload}
+                      className="hidden"
+                      id="media-upload"
+                    />
+                    <Button 
+                      variant="outline" 
+                      onClick={() => document.getElementById('media-upload')?.click()}
+                      className="w-full"
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      Selecionar Imagem/Vídeo
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
 
-            {/* Actions */}
-            <div className="space-y-4">
-              <div className="flex gap-2">
-                <Button variant="outline" className="flex-1">
-                  <Save className="w-4 h-4 mr-2" />
-                  Salvar Template
-                </Button>
-                <Button variant="outline">
-                  <Image className="w-4 h-4" />
-                </Button>
-              </div>
+            {/* Save Template */}
+            <div className="flex gap-2">
+              <Input
+                placeholder="Nome do template"
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+              />
+              <Button variant="outline" onClick={handleSaveTemplate}>
+                <Save className="w-4 h-4" />
+              </Button>
+            </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Button onClick={handleSendNow} className="bg-gradient-to-r from-green-600 to-green-700">
+            {/* Schedule Toggle */}
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="schedule"
+                checked={showSchedule}
+                onCheckedChange={setShowSchedule}
+              />
+              <Label htmlFor="schedule">Agendar envio</Label>
+            </div>
+
+            {/* Schedule Fields */}
+            {showSchedule && (
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label htmlFor="date">Data</Label>
+                  <Input
+                    id="date"
+                    type="date"
+                    value={scheduledDate}
+                    onChange={(e) => setScheduledDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="time">Hora</Label>
+                  <Input
+                    id="time"
+                    type="time"
+                    value={scheduledTime}
+                    onChange={(e) => setScheduledTime(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex gap-2">
+              {showSchedule ? (
+                <Button onClick={handleSchedule} className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600">
+                  <CalendarIcon className="w-4 h-4 mr-2" />
+                  Agendar Envio
+                </Button>
+              ) : (
+                <Button onClick={handleSendNow} className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600">
                   <Send className="w-4 h-4 mr-2" />
                   Enviar Agora
                 </Button>
-                
-                <div className="space-y-2">
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      type="date"
-                      value={scheduleDate}
-                      onChange={(e) => setScheduleDate(e.target.value)}
-                      className="text-sm"
-                    />
-                    <Input
-                      type="time"
-                      value={scheduleTime}
-                      onChange={(e) => setScheduleTime(e.target.value)}
-                      className="text-sm"
-                    />
-                  </div>
-                  <Button 
-                    onClick={handleSchedule} 
-                    variant="outline" 
-                    className="w-full"
-                    disabled={!scheduleDate || !scheduleTime}
-                  >
-                    <Clock className="w-4 h-4 mr-2" />
-                    Agendar Envio
-                  </Button>
-                </div>
-              </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -333,31 +494,31 @@ export default function Messages() {
         <Card>
           <CardHeader>
             <CardTitle>Mensagens Agendadas</CardTitle>
-            <CardDescription>Gerencie seus envios programados</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {scheduledMessages.map(scheduled => (
-                <div key={scheduled.id} className="flex items-center justify-between p-4 border border-slate-200 rounded-lg">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Clock className="w-4 h-4 text-slate-500" />
-                      <span className="text-sm font-medium">
-                        {new Date(scheduled.scheduledFor).toLocaleString('pt-BR')}
-                      </span>
-                      <Badge variant="outline">{scheduled.recipients.length} destinatários</Badge>
+              {scheduledMessages.map((scheduled) => (
+                <div key={scheduled.id} className="border border-slate-200 rounded-lg p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <CalendarIcon className="w-4 h-4 text-slate-600" />
+                        <span className="font-medium">{new Date(scheduled.scheduledFor).toLocaleString('pt-BR')}</span>
+                        <Badge variant="outline">{scheduled.leads.length} destinatários</Badge>
+                      </div>
+                      <p className="text-sm text-slate-700 mb-2">{scheduled.message}</p>
+                      <p className="text-xs text-slate-500">Criado por: {scheduled.createdBy}</p>
+                      {scheduled.mediaFile && (
+                        <p className="text-xs text-slate-500">Arquivo: {scheduled.mediaFile}</p>
+                      )}
                     </div>
-                    <p className="text-sm text-slate-600 line-clamp-2">{scheduled.message}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm">Editar</Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => removeScheduled(scheduled.id)}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDeleteScheduled(scheduled.id)}
                       className="text-red-600 hover:text-red-700"
                     >
-                      Cancelar
+                      <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
                 </div>

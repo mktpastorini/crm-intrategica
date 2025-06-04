@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Calendar as CalendarIcon, Clock, User, Edit, Trash2, Upload } from 'lucide-react';
+import { Plus, Calendar as CalendarIcon, Clock, User, Edit, Trash2, Upload, X } from 'lucide-react';
 
 export default function Calendar() {
   const { events, leads, addEvent, updateEvent, deleteEvent } = useCrm();
@@ -51,6 +51,28 @@ export default function Calendar() {
     const eventDate = new Date(event.date);
     return eventDate.toDateString() === selectedDate.toDateString();
   }) : [];
+
+  // Get this week's events
+  const getWeekEvents = () => {
+    const now = new Date();
+    const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay()));
+    const endOfWeek = new Date(now.setDate(now.getDate() - now.getDay() + 6));
+    
+    return events.filter(event => {
+      const eventDate = new Date(event.date);
+      return eventDate >= startOfWeek && eventDate <= endOfWeek;
+    }).sort((a, b) => new Date(a.date + ' ' + a.time).getTime() - new Date(b.date + ' ' + b.time).getTime());
+  };
+
+  const weekEvents = getWeekEvents();
+
+  // Check if date has events for calendar highlighting
+  const hasEvents = (date: Date) => {
+    return events.some(event => {
+      const eventDate = new Date(event.date);
+      return eventDate.toDateString() === date.toDateString();
+    });
+  };
 
   const handleAddEvent = () => {
     if (!newEvent.title || !newEvent.date || !newEvent.time) {
@@ -115,6 +137,14 @@ export default function Calendar() {
         description: `Arquivo ${file.name} foi selecionado`,
       });
     }
+  };
+
+  const removeImageFile = () => {
+    setImageFile(null);
+    toast({
+      title: "Imagem removida",
+      description: "Arquivo de imagem foi removido",
+    });
   };
 
   const getEventTypeColor = (type: string) => {
@@ -234,24 +264,35 @@ export default function Calendar() {
                 </Select>
               </div>
               <div>
-                <Label htmlFor="image">Adicionar Imagem (opcional)</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    id="image"
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    className="hidden"
-                  />
-                  <Button 
-                    type="button"
-                    variant="outline" 
-                    onClick={() => document.getElementById('image')?.click()}
-                    className="flex items-center gap-2"
-                  >
-                    <Upload className="w-4 h-4" />
-                    {imageFile ? imageFile.name : 'Selecionar Imagem'}
-                  </Button>
+                <Label>Adicionar Imagem (opcional)</Label>
+                <div className="mt-2">
+                  {imageFile ? (
+                    <div className="flex items-center gap-2 p-2 bg-slate-50 rounded border">
+                      <span className="text-sm text-slate-700 flex-1">{imageFile.name}</span>
+                      <Button variant="ghost" size="sm" onClick={removeImageFile}>
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                        id="image-upload"
+                      />
+                      <Button 
+                        type="button"
+                        variant="outline" 
+                        onClick={() => document.getElementById('image-upload')?.click()}
+                        className="w-full"
+                      >
+                        <Upload className="w-4 h-4 mr-2" />
+                        Selecionar Imagem
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
               <div className="flex gap-2 pt-4">
@@ -369,15 +410,7 @@ export default function Calendar() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-green-700">
-              {events.filter(event => {
-                const eventDate = new Date(event.date);
-                const now = new Date();
-                const weekStart = new Date(now.setDate(now.getDate() - now.getDay()));
-                const weekEnd = new Date(now.setDate(now.getDate() - now.getDay() + 6));
-                return eventDate >= weekStart && eventDate <= weekEnd;
-              }).length}
-            </div>
+            <div className="text-3xl font-bold text-green-700">{weekEvents.length}</div>
             <p className="text-sm text-green-600">eventos esta semana</p>
           </CardContent>
         </Card>
@@ -397,9 +430,9 @@ export default function Calendar() {
       </div>
 
       {/* Calendar and Events */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Calendar */}
-        <Card>
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Calendário</CardTitle>
           </CardHeader>
@@ -409,74 +442,124 @@ export default function Calendar() {
               selected={selectedDate}
               onSelect={setSelectedDate}
               className="rounded-md border"
+              modifiers={{
+                hasEvents: (date) => hasEvents(date),
+                today: (date) => {
+                  const today = new Date();
+                  return date.toDateString() === today.toDateString();
+                }
+              }}
+              modifiersStyles={{
+                hasEvents: {
+                  backgroundColor: '#dbeafe',
+                  color: '#1e40af',
+                  fontWeight: 'bold'
+                },
+                today: {
+                  backgroundColor: '#dc2626',
+                  color: 'white',
+                  fontWeight: 'bold'
+                }
+              }}
             />
+            
+            {/* Events for selected date */}
+            <div className="mt-6">
+              <h3 className="font-medium text-slate-900 mb-3">
+                Eventos - {selectedDate?.toLocaleDateString('pt-BR') || 'Hoje'}
+              </h3>
+              {selectedDateEvents.length === 0 ? (
+                <div className="text-center py-4">
+                  <CalendarIcon className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                  <p className="text-slate-600">Nenhum evento nesta data</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {selectedDateEvents.map((event) => (
+                    <div key={event.id} className="border border-slate-200 rounded-lg p-3 hover:bg-slate-50 transition-colors">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="font-medium text-slate-900">{event.title}</h4>
+                            <Badge className={getEventTypeColor(event.type)}>
+                              {getEventTypeLabel(event.type)}
+                            </Badge>
+                          </div>
+                          {event.leadName && (
+                            <p className="text-sm text-slate-600 mb-1">
+                              <strong>Lead:</strong> {event.leadName}
+                            </p>
+                          )}
+                          {event.company && (
+                            <p className="text-sm text-slate-600 mb-1">
+                              <strong>Empresa:</strong> {event.company}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-4 text-sm text-slate-500">
+                            <div className="flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {event.time}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <User className="w-3 h-3" />
+                              {event.responsible}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex gap-1 ml-4">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEditEvent(event)}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700"
+                            onClick={() => handleDeleteEvent(event.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
 
-        {/* Events for selected date */}
+        {/* Week Events */}
         <Card>
           <CardHeader>
-            <CardTitle>
-              Eventos - {selectedDate?.toLocaleDateString('pt-BR') || 'Hoje'}
-            </CardTitle>
+            <CardTitle>Eventos da Semana</CardTitle>
           </CardHeader>
           <CardContent>
-            {selectedDateEvents.length === 0 ? (
+            {weekEvents.length === 0 ? (
               <div className="text-center py-8">
-                <CalendarIcon className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                <p className="text-slate-600">Nenhum evento nesta data</p>
+                <CalendarIcon className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <p className="text-slate-600">Nenhum evento esta semana</p>
               </div>
             ) : (
-              <div className="space-y-4">
-                {selectedDateEvents.map((event) => (
-                  <div key={event.id} className="border border-slate-200 rounded-lg p-4 hover:bg-slate-50 transition-colors">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <h3 className="font-medium text-slate-900">{event.title}</h3>
-                          <Badge className={getEventTypeColor(event.type)}>
-                            {getEventTypeLabel(event.type)}
-                          </Badge>
-                        </div>
-                        {event.leadName && (
-                          <p className="text-sm text-slate-600 mb-1">
-                            <strong>Lead:</strong> {event.leadName}
-                          </p>
-                        )}
-                        {event.company && (
-                          <p className="text-sm text-slate-600 mb-1">
-                            <strong>Empresa:</strong> {event.company}
-                          </p>
-                        )}
-                        <div className="flex items-center gap-4 text-sm text-slate-500">
-                          <div className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {event.time}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <User className="w-3 h-3" />
-                            {event.responsible}
-                          </div>
-                        </div>
+              <div className="space-y-3">
+                {weekEvents.map((event) => (
+                  <div key={event.id} className="border border-slate-200 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="text-sm font-medium text-slate-900">
+                        {new Date(event.date).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })}
                       </div>
-                      <div className="flex gap-1 ml-4">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEditEvent(event)}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-red-600 hover:text-red-700"
-                          onClick={() => handleDeleteEvent(event.id)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
+                      <div className="text-sm text-slate-600">{event.time}</div>
                     </div>
+                    <h4 className="font-medium text-slate-900 mb-1">{event.title}</h4>
+                    {event.leadName && (
+                      <p className="text-sm text-slate-600">{event.leadName}</p>
+                    )}
+                    <Badge className={`${getEventTypeColor(event.type)} text-xs mt-1`}>
+                      {getEventTypeLabel(event.type)}
+                    </Badge>
                   </div>
                 ))}
               </div>

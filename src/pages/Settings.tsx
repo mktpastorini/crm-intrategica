@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { 
   Settings as SettingsIcon, 
@@ -20,18 +21,24 @@ import {
   TestTube,
   Download,
   Upload,
-  Copy
+  Copy,
+  Edit,
+  FileText
 } from 'lucide-react';
 
 export default function Settings() {
   const { toast } = useToast();
+  
+  // System name settings
+  const [systemName, setSystemName] = useState('AgencyCRM');
   
   // Webhook settings
   const [webhookSettings, setWebhookSettings] = useState({
     messageWebhook: 'https://api.exemplo.com/webhook/messages',
     calendarWebhook: 'https://api.exemplo.com/webhook/calendar',
     reminderHours: 2,
-    reminderDays: 1
+    reminderDays: 1,
+    immediateCalendarSend: true
   });
 
   // Categories
@@ -54,21 +61,44 @@ export default function Settings() {
     { id: 'negociacao', name: 'Negociação', order: 5, color: '#06b6d4' },
     { id: 'contrato-assinado', name: 'Contrato Assinado', order: 6, color: '#10b981' }
   ]);
+  const [newStageName, setNewStageName] = useState('');
+  const [newStageColor, setNewStageColor] = useState('#3b82f6');
 
   // Database settings
   const [dbSettings, setDbSettings] = useState({
-    supabaseUrl: '',
-    supabaseKey: '',
-    connected: false
+    supabaseUrl: 'https://gfuoipqwmhfrqhmkqyxp.supabase.co',
+    supabaseKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdmdW9pcHF3bWhmcnFobWtxeXhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg5OTYzNzEsImV4cCI6MjA2NDU3MjM3MX0.Y4GnTkvLF-tLDqJX7jZosouYYDESs7n2oV6XUseJV7w',
+    projectId: 'gfuoipqwmhfrqhmkqyxp',
+    connected: true,
+    region: 'us-east-1',
+    serviceRole: ''
   });
+
+  // Appearance settings
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [faviconFile, setFaviconFile] = useState<File | null>(null);
 
   // Generate webhook URL
   const [webhookUrl] = useState(`https://api.crm.com/webhook/${Math.random().toString(36).substr(2, 9)}`);
+
+  const handleSaveSystemName = () => {
+    toast({
+      title: "Nome do sistema salvo",
+      description: `Nome alterado para "${systemName}"`,
+    });
+  };
 
   const handleSaveWebhooks = () => {
     toast({
       title: "Configurações salvas",
       description: "As configurações de webhook foram atualizadas",
+    });
+  };
+
+  const handleSaveDatabase = () => {
+    toast({
+      title: "Configurações do banco salvas",
+      description: "As configurações de conexão foram atualizadas",
     });
   };
 
@@ -90,6 +120,31 @@ export default function Settings() {
     });
   };
 
+  const handleAddPipelineStage = () => {
+    if (!newStageName.trim()) return;
+    const newStage = {
+      id: newStageName.toLowerCase().replace(/\s+/g, '-'),
+      name: newStageName.trim(),
+      order: pipelineStages.length + 1,
+      color: newStageColor
+    };
+    setPipelineStages(prev => [...prev, newStage]);
+    setNewStageName('');
+    toast({
+      title: "Estágio adicionado",
+      description: `"${newStageName}" foi adicionado ao pipeline`,
+    });
+  };
+
+  const handleRemovePipelineStage = (stageId: string) => {
+    const stage = pipelineStages.find(s => s.id === stageId);
+    setPipelineStages(prev => prev.filter(s => s.id !== stageId));
+    toast({
+      title: "Estágio removido",
+      description: `"${stage?.name}" foi removido do pipeline`,
+    });
+  };
+
   const handleTestConnection = () => {
     if (!dbSettings.supabaseUrl || !dbSettings.supabaseKey) {
       toast({
@@ -100,7 +155,6 @@ export default function Settings() {
       return;
     }
 
-    // Simular teste de conexão
     setTimeout(() => {
       setDbSettings(prev => ({ ...prev, connected: true }));
       toast({
@@ -118,6 +172,28 @@ export default function Settings() {
     });
   };
 
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setLogoFile(file);
+      toast({
+        title: "Logo selecionado",
+        description: `Arquivo ${file.name} foi selecionado`,
+      });
+    }
+  };
+
+  const handleFaviconUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setFaviconFile(file);
+      toast({
+        title: "Favicon selecionado",
+        description: `Arquivo ${file.name} foi selecionado`,
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -126,8 +202,12 @@ export default function Settings() {
         <p className="text-slate-600">Configure e personalize o funcionamento do CRM</p>
       </div>
 
-      <Tabs defaultValue="webhooks" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
+      <Tabs defaultValue="system" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-6">
+          <TabsTrigger value="system" className="flex items-center gap-2">
+            <FileText className="w-4 h-4" />
+            Sistema
+          </TabsTrigger>
           <TabsTrigger value="webhooks" className="flex items-center gap-2">
             <Webhook className="w-4 h-4" />
             Webhooks
@@ -149,6 +229,41 @@ export default function Settings() {
             Banco de Dados
           </TabsTrigger>
         </TabsList>
+
+        {/* System Tab */}
+        <TabsContent value="system" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="w-5 h-5" />
+                Configurações do Sistema
+              </CardTitle>
+              <CardDescription>
+                Configure o nome e outras configurações gerais do sistema
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="system-name">Nome do Sistema</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="system-name"
+                    value={systemName}
+                    onChange={(e) => setSystemName(e.target.value)}
+                    placeholder="Nome do seu CRM"
+                  />
+                  <Button onClick={handleSaveSystemName}>
+                    <Save className="w-4 h-4 mr-2" />
+                    Salvar
+                  </Button>
+                </div>
+                <p className="text-sm text-slate-500 mt-1">
+                  Este nome aparecerá no cabeçalho e título do sistema
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         {/* Webhooks Tab */}
         <TabsContent value="webhooks" className="space-y-6">
@@ -187,14 +302,14 @@ export default function Settings() {
                       placeholder="https://api.exemplo.com/webhook/calendar"
                     />
                     <p className="text-sm text-slate-500 mt-1">
-                      URL para lembretes de compromissos
+                      URL para lembretes de compromissos da agenda
                     </p>
                   </div>
                 </div>
 
                 <div className="space-y-4">
                   <div>
-                    <Label htmlFor="reminder-hours">Lembrete de Horas</Label>
+                    <Label htmlFor="reminder-hours">Lembrete de Horas (Agenda)</Label>
                     <Input
                       id="reminder-hours"
                       type="number"
@@ -204,12 +319,12 @@ export default function Settings() {
                       max="24"
                     />
                     <p className="text-sm text-slate-500 mt-1">
-                      Enviar lembrete X horas antes do evento
+                      Enviar lembrete da agenda X horas antes do evento
                     </p>
                   </div>
 
                   <div>
-                    <Label htmlFor="reminder-days">Lembrete de Dias</Label>
+                    <Label htmlFor="reminder-days">Lembrete de Dias (Agenda)</Label>
                     <Input
                       id="reminder-days"
                       type="number"
@@ -219,8 +334,19 @@ export default function Settings() {
                       max="7"
                     />
                     <p className="text-sm text-slate-500 mt-1">
-                      Enviar lembrete X dias antes do evento
+                      Enviar lembrete da agenda X dias antes do evento
                     </p>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="immediate-send"
+                      checked={webhookSettings.immediateCalendarSend}
+                      onCheckedChange={(checked) => setWebhookSettings(prev => ({ ...prev, immediateCalendarSend: checked as boolean }))}
+                    />
+                    <Label htmlFor="immediate-send" className="text-sm">
+                      Envio imediato quando evento for criado na agenda
+                    </Label>
                   </div>
                 </div>
               </div>
@@ -287,7 +413,7 @@ export default function Settings() {
               <CardHeader>
                 <CardTitle>Categorias e Nichos</CardTitle>
                 <CardDescription>
-                  Gerencie as categorias usadas em leads e pipeline
+                  Gerencie as categorias usadas em leads
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -328,22 +454,47 @@ export default function Settings() {
                   Configure os estágios do funil de vendas
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3">
-                {pipelineStages.map((stage) => (
-                  <div key={stage.id} className="flex items-center justify-between p-3 border border-slate-200 rounded">
-                    <div className="flex items-center gap-3">
-                      <div 
-                        className="w-4 h-4 rounded-full"
-                        style={{ backgroundColor: stage.color }}
-                      />
-                      <span className="font-medium">{stage.name}</span>
-                      <Badge variant="secondary">{stage.order}</Badge>
+              <CardContent className="space-y-4">
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Nome do estágio"
+                    value={newStageName}
+                    onChange={(e) => setNewStageName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddPipelineStage()}
+                  />
+                  <Input
+                    type="color"
+                    value={newStageColor}
+                    onChange={(e) => setNewStageColor(e.target.value)}
+                    className="w-16"
+                  />
+                  <Button onClick={handleAddPipelineStage}>
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                <div className="space-y-3">
+                  {pipelineStages.map((stage) => (
+                    <div key={stage.id} className="flex items-center justify-between p-3 border border-slate-200 rounded">
+                      <div className="flex items-center gap-3">
+                        <div 
+                          className="w-4 h-4 rounded-full"
+                          style={{ backgroundColor: stage.color }}
+                        />
+                        <span className="font-medium">{stage.name}</span>
+                        <Badge variant="secondary">{stage.order}</Badge>
+                      </div>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => handleRemovePipelineStage(stage.id)}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
                     </div>
-                    <Button variant="ghost" size="sm">
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -360,9 +511,22 @@ export default function Settings() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center">
-                  <Upload className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                  <p className="text-sm text-slate-600">Clique para fazer upload do logotipo</p>
+                <div className="space-y-2">
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoUpload}
+                    className="hidden"
+                    id="logo-upload"
+                  />
+                  <Button 
+                    variant="outline" 
+                    onClick={() => document.getElementById('logo-upload')?.click()}
+                    className="w-full"
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    {logoFile ? logoFile.name : 'Selecionar Logotipo'}
+                  </Button>
                   <p className="text-xs text-slate-500">PNG, JPG até 2MB</p>
                 </div>
               </CardContent>
@@ -376,9 +540,22 @@ export default function Settings() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center">
-                  <Upload className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                  <p className="text-sm text-slate-600">Clique para fazer upload do favicon</p>
+                <div className="space-y-2">
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFaviconUpload}
+                    className="hidden"
+                    id="favicon-upload"
+                  />
+                  <Button 
+                    variant="outline" 
+                    onClick={() => document.getElementById('favicon-upload')?.click()}
+                    className="w-full"
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    {faviconFile ? faviconFile.name : 'Selecionar Favicon'}
+                  </Button>
                   <p className="text-xs text-slate-500">ICO, PNG 32x32px</p>
                 </div>
               </CardContent>
@@ -422,24 +599,65 @@ export default function Settings() {
                     />
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <Button 
-                      onClick={handleTestConnection}
-                      variant="outline"
-                      className="flex items-center gap-2"
-                    >
-                      <TestTube className="w-4 h-4" />
-                      Testar Conexão
-                    </Button>
-                    {dbSettings.connected && (
-                      <Badge className="bg-green-100 text-green-800">
-                        Conectado
-                      </Badge>
-                    )}
+                  <div>
+                    <Label htmlFor="project-id">Project ID</Label>
+                    <Input
+                      id="project-id"
+                      value={dbSettings.projectId}
+                      onChange={(e) => setDbSettings(prev => ({ ...prev, projectId: e.target.value }))}
+                      placeholder="project-id"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="service-role">Service Role Key (opcional)</Label>
+                    <Input
+                      id="service-role"
+                      type="password"
+                      value={dbSettings.serviceRole}
+                      onChange={(e) => setDbSettings(prev => ({ ...prev, serviceRole: e.target.value }))}
+                      placeholder="service-role-key"
+                    />
                   </div>
                 </div>
 
                 <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="region">Região</Label>
+                    <Input
+                      id="region"
+                      value={dbSettings.region}
+                      onChange={(e) => setDbSettings(prev => ({ ...prev, region: e.target.value }))}
+                      placeholder="us-east-1"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Button 
+                        onClick={handleTestConnection}
+                        variant="outline"
+                        className="flex items-center gap-2"
+                      >
+                        <TestTube className="w-4 h-4" />
+                        Testar Conexão
+                      </Button>
+                      {dbSettings.connected && (
+                        <Badge className="bg-green-100 text-green-800">
+                          Conectado
+                        </Badge>
+                      )}
+                    </div>
+
+                    <Button 
+                      onClick={handleSaveDatabase}
+                      className="w-full bg-gradient-to-r from-blue-600 to-purple-600"
+                    >
+                      <Save className="w-4 h-4 mr-2" />
+                      Salvar Configurações
+                    </Button>
+                  </div>
+
                   <div>
                     <h4 className="font-medium text-slate-900 mb-3">Ações do Banco</h4>
                     <div className="space-y-2">
