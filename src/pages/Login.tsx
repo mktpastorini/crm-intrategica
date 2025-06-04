@@ -15,6 +15,8 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [isLogging, setIsLogging] = useState(false);
 
+  console.log('Login page - loading:', loading, 'isAuthenticated:', isAuthenticated);
+
   // Aguardar carregamento inicial da autenticação
   if (loading) {
     return (
@@ -29,6 +31,7 @@ export default function Login() {
 
   // Redirecionar se já estiver autenticado
   if (isAuthenticated) {
+    console.log('Usuário autenticado, redirecionando...');
     return <Navigate to="/" replace />;
   }
 
@@ -43,6 +46,8 @@ export default function Login() {
       });
       return;
     }
+
+    if (isLogging) return; // Evitar múltiplos submits
 
     setIsLogging(true);
 
@@ -62,6 +67,7 @@ export default function Login() {
           title: "Login realizado",
           description: "Bem-vindo ao sistema!",
         });
+        // Não precisa redirecionar manualmente, o Navigate vai fazer isso
       }
     } catch (error) {
       console.error('Erro durante login:', error);
