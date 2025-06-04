@@ -74,6 +74,11 @@ export default function Calendar() {
     });
   };
 
+  const isToday = (date: Date) => {
+    const today = new Date();
+    return date.toDateString() === today.toDateString();
+  };
+
   const handleAddEvent = () => {
     if (!newEvent.title || !newEvent.date || !newEvent.time) {
       toast({
@@ -165,6 +170,16 @@ export default function Calendar() {
       'email': 'E-mail'
     };
     return labels[type as keyof typeof labels] || type;
+  };
+
+  // Format calendar to show events in each day
+  const getDayContent = (date: Date) => {
+    const dayEvents = events.filter(event => {
+      const eventDate = new Date(event.date);
+      return eventDate.toDateString() === date.toDateString();
+    });
+
+    return dayEvents.slice(0, 2); // Show only first 2 events per day
   };
 
   return (
@@ -430,109 +445,89 @@ export default function Calendar() {
       </div>
 
       {/* Calendar and Events */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Calendar */}
-        <Card className="lg:col-span-2">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Large Calendar */}
+        <Card className="lg:col-span-3">
           <CardHeader>
             <CardTitle>Calendário</CardTitle>
           </CardHeader>
           <CardContent>
-            <CalendarComponent
-              mode="single"
-              selected={selectedDate}
-              onSelect={setSelectedDate}
-              className="rounded-md border"
-              modifiers={{
-                hasEvents: (date) => hasEvents(date),
-                today: (date) => {
-                  const today = new Date();
-                  return date.toDateString() === today.toDateString();
-                }
-              }}
-              modifiersStyles={{
-                hasEvents: {
-                  backgroundColor: '#dbeafe',
-                  color: '#1e40af',
-                  fontWeight: 'bold'
-                },
-                today: {
-                  backgroundColor: '#dc2626',
-                  color: 'white',
-                  fontWeight: 'bold'
-                }
-              }}
-            />
-            
-            {/* Events for selected date */}
-            <div className="mt-6">
-              <h3 className="font-medium text-slate-900 mb-3">
-                Eventos - {selectedDate?.toLocaleDateString('pt-BR') || 'Hoje'}
-              </h3>
-              {selectedDateEvents.length === 0 ? (
-                <div className="text-center py-4">
-                  <CalendarIcon className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                  <p className="text-slate-600">Nenhum evento nesta data</p>
+            <div className="grid grid-cols-7 gap-1 mb-4">
+              {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((day) => (
+                <div key={day} className="text-center text-sm font-medium text-slate-600 py-2">
+                  {day}
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {selectedDateEvents.map((event) => (
-                    <div key={event.id} className="border border-slate-200 rounded-lg p-3 hover:bg-slate-50 transition-colors">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h4 className="font-medium text-slate-900">{event.title}</h4>
-                            <Badge className={getEventTypeColor(event.type)}>
-                              {getEventTypeLabel(event.type)}
-                            </Badge>
-                          </div>
-                          {event.leadName && (
-                            <p className="text-sm text-slate-600 mb-1">
-                              <strong>Lead:</strong> {event.leadName}
-                            </p>
-                          )}
-                          {event.company && (
-                            <p className="text-sm text-slate-600 mb-1">
-                              <strong>Empresa:</strong> {event.company}
-                            </p>
-                          )}
-                          <div className="flex items-center gap-4 text-sm text-slate-500">
-                            <div className="flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              {event.time}
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <User className="w-3 h-3" />
-                              {event.responsible}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex gap-1 ml-4">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEditEvent(event)}
+              ))}
+            </div>
+            
+            <div className="grid grid-cols-7 gap-1">
+              {/* Get current month calendar days */}
+              {(() => {
+                const now = selectedDate || new Date();
+                const year = now.getFullYear();
+                const month = now.getMonth();
+                const firstDay = new Date(year, month, 1);
+                const lastDay = new Date(year, month + 1, 0);
+                const startDate = new Date(firstDay);
+                startDate.setDate(startDate.getDate() - firstDay.getDay());
+                
+                const days = [];
+                for (let i = 0; i < 42; i++) {
+                  const currentDate = new Date(startDate);
+                  currentDate.setDate(startDate.getDate() + i);
+                  days.push(currentDate);
+                }
+                
+                return days.map((date, index) => {
+                  const dayEvents = getDayContent(date);
+                  const isCurrentMonth = date.getMonth() === month;
+                  const isTodayDate = isToday(date);
+                  const hasEventsToday = hasEvents(date);
+                  
+                  return (
+                    <div
+                      key={index}
+                      className={`
+                        min-h-24 p-1 border border-slate-200 cursor-pointer
+                        ${isCurrentMonth ? 'bg-white' : 'bg-slate-50'}
+                        ${isTodayDate ? 'bg-blue-50 border-blue-300' : ''}
+                        ${hasEventsToday ? 'border-blue-400' : ''}
+                        hover:bg-slate-50 transition-colors
+                      `}
+                      onClick={() => setSelectedDate(date)}
+                    >
+                      <div className={`
+                        text-xs font-medium mb-1
+                        ${isCurrentMonth ? 'text-slate-900' : 'text-slate-400'}
+                        ${isTodayDate ? 'text-blue-600 font-bold' : ''}
+                      `}>
+                        {date.getDate()}
+                      </div>
+                      <div className="space-y-1">
+                        {dayEvents.map((event, eventIndex) => (
+                          <div
+                            key={eventIndex}
+                            className="text-xs p-1 bg-blue-100 text-blue-700 rounded truncate"
+                            title={`${event.time} - ${event.title}`}
                           >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-red-600 hover:text-red-700"
-                            onClick={() => handleDeleteEvent(event.id)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
+                            {event.time} {event.title}
+                          </div>
+                        ))}
+                        {dayEvents.length > 2 && (
+                          <div className="text-xs text-slate-500">
+                            +{dayEvents.length - 2} mais
+                          </div>
+                        )}
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
+                  );
+                });
+              })()}
             </div>
           </CardContent>
         </Card>
 
-        {/* Week Events */}
+        {/* Week Events Sidebar */}
         <Card>
           <CardHeader>
             <CardTitle>Eventos da Semana</CardTitle>
@@ -557,9 +552,28 @@ export default function Calendar() {
                     {event.leadName && (
                       <p className="text-sm text-slate-600">{event.leadName}</p>
                     )}
-                    <Badge className={`${getEventTypeColor(event.type)} text-xs mt-1`}>
-                      {getEventTypeLabel(event.type)}
-                    </Badge>
+                    <div className="flex items-center justify-between mt-2">
+                      <Badge className={`${getEventTypeColor(event.type)} text-xs`}>
+                        {getEventTypeLabel(event.type)}
+                      </Badge>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEditEvent(event)}
+                        >
+                          <Edit className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-600 hover:text-red-700"
+                          onClick={() => handleDeleteEvent(event.id)}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>

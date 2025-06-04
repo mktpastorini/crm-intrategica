@@ -67,44 +67,82 @@ const CrmContext = createContext<CrmContextType | undefined>(undefined);
 export function CrmProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   
-  const [leads, setLeads] = useState<Lead[]>([
-    {
-      id: '1',
-      name: 'João Silva',
-      company: 'Tech Solutions Ltda',
-      phone: '47999887766',
-      email: 'joao@techsolutions.com',
-      niche: 'Tecnologia',
-      status: 'Pendente',
-      responsible: 'admin@crm.com',
-      createdAt: new Date().toISOString(),
-      pipelineStage: 'aguardando-inicio'
-    },
-    {
-      id: '2',
-      name: 'Maria Santos',
-      company: 'Marketing Pro',
-      phone: '47888777666',
-      email: 'maria@marketingpro.com',
-      niche: 'Marketing',
-      status: 'Follow-up',
-      responsible: 'admin@crm.com',
-      createdAt: new Date().toISOString(),
-      pipelineStage: 'primeiro-contato'
-    }
-  ]);
+  // Carregar leads do localStorage com fallback
+  const [leads, setLeads] = useState<Lead[]>(() => {
+    const saved = localStorage.getItem('leads');
+    return saved ? JSON.parse(saved) : [
+      {
+        id: '1',
+        name: 'João Silva',
+        company: 'Tech Solutions Ltda',
+        phone: '47999887766',
+        email: 'joao@techsolutions.com',
+        niche: 'Tecnologia',
+        status: 'Pendente',
+        responsible: 'admin@crm.com',
+        createdAt: new Date().toISOString(),
+        pipelineStage: 'aguardando-inicio'
+      },
+      {
+        id: '2',
+        name: 'Maria Santos',
+        company: 'Marketing Pro',
+        phone: '47888777666',
+        email: 'maria@marketingpro.com',
+        niche: 'Marketing',
+        status: 'Follow-up',
+        responsible: 'admin@crm.com',
+        createdAt: new Date().toISOString(),
+        pipelineStage: 'primeiro-contato'
+      }
+    ];
+  });
 
-  const [pipelineStages] = useState<PipelineStage[]>([
-    { id: 'aguardando-inicio', name: 'Aguardando Início', order: 1, color: '#e11d48' },
-    { id: 'primeiro-contato', name: 'Primeiro Contato', order: 2, color: '#f59e0b' },
-    { id: 'reuniao', name: 'Reunião', order: 3, color: '#3b82f6' },
-    { id: 'proposta-enviada', name: 'Proposta Enviada', order: 4, color: '#8b5cf6' },
-    { id: 'negociacao', name: 'Negociação', order: 5, color: '#06b6d4' },
-    { id: 'contrato-assinado', name: 'Contrato Assinado', order: 6, color: '#10b981' }
-  ]);
+  // Carregar estágios do pipeline do localStorage com fallback
+  const [pipelineStages, setPipelineStages] = useState<PipelineStage[]>(() => {
+    const saved = localStorage.getItem('pipelineStages');
+    return saved ? JSON.parse(saved) : [
+      { id: 'aguardando-inicio', name: 'Aguardando Início', order: 1, color: '#e11d48' },
+      { id: 'primeiro-contato', name: 'Primeiro Contato', order: 2, color: '#f59e0b' },
+      { id: 'reuniao', name: 'Reunião', order: 3, color: '#3b82f6' },
+      { id: 'proposta-enviada', name: 'Proposta Enviada', order: 4, color: '#8b5cf6' },
+      { id: 'negociacao', name: 'Negociação', order: 5, color: '#06b6d4' },
+      { id: 'contrato-assinado', name: 'Contrato Assinado', order: 6, color: '#10b981' }
+    ];
+  });
 
-  const [events, setEvents] = useState<Event[]>([]);
-  const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
+  // Carregar eventos do localStorage com fallback
+  const [events, setEvents] = useState<Event[]>(() => {
+    const saved = localStorage.getItem('events');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // Carregar ações pendentes do localStorage com fallback
+  const [pendingActions, setPendingActions] = useState<PendingAction[]>(() => {
+    const saved = localStorage.getItem('pendingActions');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // Salvar no localStorage sempre que os dados mudarem
+  const saveLeads = (newLeads: Lead[]) => {
+    setLeads(newLeads);
+    localStorage.setItem('leads', JSON.stringify(newLeads));
+  };
+
+  const savePipelineStages = (newStages: PipelineStage[]) => {
+    setPipelineStages(newStages);
+    localStorage.setItem('pipelineStages', JSON.stringify(newStages));
+  };
+
+  const saveEvents = (newEvents: Event[]) => {
+    setEvents(newEvents);
+    localStorage.setItem('events', JSON.stringify(newEvents));
+  };
+
+  const savePendingActions = (newActions: PendingAction[]) => {
+    setPendingActions(newActions);
+    localStorage.setItem('pendingActions', JSON.stringify(newActions));
+  };
 
   const addLead = (leadData: Omit<Lead, 'id' | 'createdAt'>) => {
     const newLead: Lead = {
@@ -113,7 +151,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       createdAt: new Date().toISOString(),
       pipelineStage: 'aguardando-inicio'
     };
-    setLeads(prev => [...prev, newLead]);
+    const newLeads = [...leads, newLead];
+    saveLeads(newLeads);
     toast({
       title: "Lead adicionado",
       description: "Lead foi adicionado com sucesso ao pipeline",
@@ -121,9 +160,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   };
 
   const updateLead = (id: string, updates: Partial<Lead>) => {
-    setLeads(prev => prev.map(lead => 
+    const newLeads = leads.map(lead => 
       lead.id === id ? { ...lead, ...updates } : lead
-    ));
+    );
+    saveLeads(newLeads);
     toast({
       title: "Lead atualizado",
       description: "As alterações foram salvas com sucesso",
@@ -131,9 +171,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteLead = (id: string) => {
-    setLeads(prev => prev.filter(lead => lead.id !== id));
+    const newLeads = leads.filter(lead => lead.id !== id);
+    saveLeads(newLeads);
+    
     // Remove eventos relacionados ao lead
-    setEvents(prev => prev.filter(event => event.leadId !== id));
+    const newEvents = events.filter(event => event.leadId !== id);
+    saveEvents(newEvents);
+    
     toast({
       title: "Lead removido",
       description: "Lead foi removido com sucesso",
@@ -141,13 +185,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   };
 
   const moveLead = (leadId: string, newStage: string) => {
-    setLeads(prev => prev.map(lead => 
+    const newLeads = leads.map(lead => 
       lead.id === leadId ? { ...lead, pipelineStage: newStage } : lead
-    ));
+    );
+    saveLeads(newLeads);
     
     // Se o lead for movido para fora do estágio "reuniao", remove eventos relacionados
     if (newStage !== 'reuniao') {
-      setEvents(prev => prev.filter(event => event.leadId !== leadId));
+      const newEvents = events.filter(event => event.leadId !== leadId);
+      saveEvents(newEvents);
     }
   };
 
@@ -156,7 +202,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       ...eventData,
       id: Date.now().toString()
     };
-    setEvents(prev => [...prev, newEvent]);
+    const newEvents = [...events, newEvent];
+    saveEvents(newEvents);
     toast({
       title: "Evento adicionado",
       description: "Evento foi agendado com sucesso",
@@ -164,9 +211,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   };
 
   const updateEvent = (id: string, updates: Partial<Event>) => {
-    setEvents(prev => prev.map(event => 
+    const newEvents = events.map(event => 
       event.id === id ? { ...event, ...updates } : event
-    ));
+    );
+    saveEvents(newEvents);
     toast({
       title: "Evento atualizado",
       description: "As alterações foram salvas com sucesso",
@@ -174,10 +222,40 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteEvent = (id: string) => {
-    setEvents(prev => prev.filter(event => event.id !== id));
+    const newEvents = events.filter(event => event.id !== id);
+    saveEvents(newEvents);
     toast({
       title: "Evento removido",
       description: "Evento foi removido com sucesso",
+    });
+  };
+
+  const addPipelineStage = (stage: PipelineStage) => {
+    const newStages = [...pipelineStages, stage];
+    savePipelineStages(newStages);
+    toast({
+      title: "Estágio adicionado",
+      description: "Novo estágio foi adicionado ao pipeline",
+    });
+  };
+
+  const updatePipelineStage = (id: string, updates: Partial<PipelineStage>) => {
+    const newStages = pipelineStages.map(stage => 
+      stage.id === id ? { ...stage, ...updates } : stage
+    );
+    savePipelineStages(newStages);
+    toast({
+      title: "Estágio atualizado",
+      description: "Estágio foi atualizado com sucesso",
+    });
+  };
+
+  const deletePipelineStage = (id: string) => {
+    const newStages = pipelineStages.filter(stage => stage.id !== id);
+    savePipelineStages(newStages);
+    toast({
+      title: "Estágio removido",
+      description: "Estágio foi removido do pipeline",
     });
   };
 
@@ -198,7 +276,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    setPendingActions(prev => [...prev, action]);
+    const newActions = [...pendingActions, action];
+    savePendingActions(newActions);
     toast({
       title: "Solicitação enviada",
       description: "Sua solicitação de edição foi enviada para aprovação",
@@ -221,7 +300,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    setPendingActions(prev => [...prev, action]);
+    const newActions = [...pendingActions, action];
+    savePendingActions(newActions);
     toast({
       title: "Solicitação enviada",
       description: "Sua solicitação de exclusão foi enviada para aprovação",
@@ -249,7 +329,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
 
     // Remove da lista de ações pendentes
-    setPendingActions(prev => prev.filter(a => a.id !== actionId));
+    const newActions = pendingActions.filter(a => a.id !== actionId);
+    savePendingActions(newActions);
     
     toast({
       title: "Ação aprovada",
@@ -258,7 +339,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   };
 
   const rejectAction = (actionId: string) => {
-    setPendingActions(prev => prev.filter(a => a.id !== actionId));
+    const newActions = pendingActions.filter(a => a.id !== actionId);
+    savePendingActions(newActions);
     toast({
       title: "Ação rejeitada",
       description: "A solicitação foi rejeitada",
@@ -282,7 +364,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       approveAction,
       rejectAction,
       requestLeadEdit,
-      requestLeadDelete
+      requestLeadDelete,
+      addPipelineStage,
+      updatePipelineStage,
+      deletePipelineStage
     }}>
       {children}
     </CrmContext.Provider>

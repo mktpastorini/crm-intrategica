@@ -24,6 +24,15 @@ import {
   X
 } from 'lucide-react';
 
+interface ScheduledMessage {
+  id: string;
+  message: string;
+  leads: any[];
+  scheduledFor: string;
+  createdBy: string;
+  mediaFile?: string;
+}
+
 export default function Messages() {
   const { leads } = useCrm();
   const { user } = useAuth();
@@ -38,16 +47,34 @@ export default function Messages() {
   const [showSchedule, setShowSchedule] = useState(false);
   const [mediaFile, setMediaFile] = useState<File | null>(null);
 
-  // Templates
-  const [templates, setTemplates] = useState([
-    { id: '1', name: 'Primeiro Contato', content: 'Olá {nome}, tudo bem? Sou da {empresa} e gostaria de conversar sobre nossos serviços.' },
-    { id: '2', name: 'Follow-up', content: 'Oi {nome}, espero que esteja bem! Queria saber se já teve tempo de analisar nossa proposta.' },
-    { id: '3', name: 'Agradecimento', content: 'Obrigado pelo seu tempo hoje, {nome}! Foi um prazer conhecer a {empresa}.' }
-  ]);
+  // Templates com persistência via localStorage
+  const [templates, setTemplates] = useState(() => {
+    const saved = localStorage.getItem('messageTemplates');
+    return saved ? JSON.parse(saved) : [
+      { id: '1', name: 'Primeiro Contato', content: 'Olá {nome}, tudo bem? Sou da {empresa} e gostaria de conversar sobre nossos serviços.' },
+      { id: '2', name: 'Follow-up', content: 'Oi {nome}, espero que esteja bem! Queria saber se já teve tempo de analisar nossa proposta.' },
+      { id: '3', name: 'Agradecimento', content: 'Obrigado pelo seu tempo hoje, {nome}! Foi um prazer conhecer a {empresa}.' }
+    ];
+  });
   const [templateName, setTemplateName] = useState('');
 
-  // Scheduled messages
-  const [scheduledMessages, setScheduledMessages] = useState<any[]>([]);
+  // Mensagens agendadas com persistência via localStorage
+  const [scheduledMessages, setScheduledMessages] = useState<ScheduledMessage[]>(() => {
+    const saved = localStorage.getItem('scheduledMessages');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // Salvar templates no localStorage sempre que mudarem
+  const saveTemplates = (newTemplates: any[]) => {
+    setTemplates(newTemplates);
+    localStorage.setItem('messageTemplates', JSON.stringify(newTemplates));
+  };
+
+  // Salvar mensagens agendadas no localStorage sempre que mudarem
+  const saveScheduledMessages = (newScheduled: ScheduledMessage[]) => {
+    setScheduledMessages(newScheduled);
+    localStorage.setItem('scheduledMessages', JSON.stringify(newScheduled));
+  };
 
   const filteredLeads = leads.filter(lead => {
     const statusMatch = filterStatus === 'all' || lead.status === filterStatus;
@@ -83,7 +110,6 @@ export default function Messages() {
       return;
     }
 
-    // Simular envio via webhook
     const payload = selectedLeadsData.map(lead => ({
       nome: lead.name,
       telefone: lead.phone,
@@ -112,16 +138,17 @@ export default function Messages() {
       return;
     }
 
-    const newScheduled = {
+    const newScheduled: ScheduledMessage = {
       id: Date.now().toString(),
       message,
       leads: selectedLeadsData,
       scheduledFor: `${scheduledDate} ${scheduledTime}`,
-      createdBy: user?.name,
-      mediaFile: mediaFile?.name || null
+      createdBy: user?.name || 'Usuário',
+      mediaFile: mediaFile?.name || undefined
     };
 
-    setScheduledMessages(prev => [...prev, newScheduled]);
+    const updatedScheduled = [...scheduledMessages, newScheduled];
+    saveScheduledMessages(updatedScheduled);
 
     toast({
       title: "Mensagem agendada",
@@ -152,7 +179,8 @@ export default function Messages() {
       content: message
     };
 
-    setTemplates(prev => [...prev, newTemplate]);
+    const updatedTemplates = [...templates, newTemplate];
+    saveTemplates(updatedTemplates);
     setTemplateName('');
 
     toast({
@@ -171,7 +199,9 @@ export default function Messages() {
 
   const handleDeleteTemplate = (templateId: string) => {
     const template = templates.find(t => t.id === templateId);
-    setTemplates(prev => prev.filter(t => t.id !== templateId));
+    const updatedTemplates = templates.filter(t => t.id !== templateId);
+    saveTemplates(updatedTemplates);
+    
     toast({
       title: "Template excluído",
       description: `Template "${template?.name}" foi excluído`,
@@ -179,7 +209,9 @@ export default function Messages() {
   };
 
   const handleDeleteScheduled = (scheduledId: string) => {
-    setScheduledMessages(prev => prev.filter(s => s.id !== scheduledId));
+    const updatedScheduled = scheduledMessages.filter(s => s.id !== scheduledId);
+    saveScheduledMessages(updatedScheduled);
+    
     toast({
       title: "Agendamento cancelado",
       description: "Mensagem agendada foi cancelada",
@@ -189,7 +221,7 @@ export default function Messages() {
   const handleMediaUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 10 * 1024 * 1024) { // 10MB limit
+      if (file.size > 10 * 1024 * 1024) {
         toast({
           title: "Arquivo muito grande",
           description: "O arquivo deve ter no máximo 10MB",
@@ -312,7 +344,7 @@ export default function Messages() {
                 <Checkbox
                   id="select-all"
                   checked={selectedLeads.length === filteredLeads.length && filteredLeads.length > 0}
-                  onCheckedChange={handleSelectAll}
+                  onCheckedChange={(checked) => handleSelectAll(checked as boolean)}
                 />
                 <Label htmlFor="select-all" className="font-medium">
                   Selecionar todos ({filteredLeads.length})
@@ -413,6 +445,7 @@ export default function Messages() {
                       id="media-upload"
                     />
                     <Button 
+                      type="button"
                       variant="outline" 
                       onClick={() => document.getElementById('media-upload')?.click()}
                       className="w-full"
@@ -442,7 +475,7 @@ export default function Messages() {
               <Checkbox
                 id="schedule"
                 checked={showSchedule}
-                onCheckedChange={setShowSchedule}
+                onCheckedChange={(checked) => setShowSchedule(checked as boolean)}
               />
               <Label htmlFor="schedule">Agendar envio</Label>
             </div>
