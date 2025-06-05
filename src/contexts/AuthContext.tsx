@@ -21,33 +21,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [initialized, setInitialized] = useState(false);
-
-  // Limpar cache antigo na inicialização
-  useEffect(() => {
-    if (!initialized) {
-      // Limpar dados antigos do localStorage que agora estão no Supabase
-      const keysToRemove = [
-        'leads',
-        'events', 
-        'systemSettings',
-        'leadStatuses',
-        'messageTemplates',
-        'scheduledMessages'
-      ];
-      
-      keysToRemove.forEach(key => {
-        const item = localStorage.getItem(key);
-        if (item) {
-          console.log(`Limpando cache antigo: ${key}`);
-          localStorage.removeItem(key);
-        }
-      });
-
-      console.log('Cache limpo com sucesso');
-      setInitialized(true);
-    }
-  }, [initialized]);
 
   const loadUserProfile = async (userId: string) => {
     try {
@@ -61,10 +34,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error('Erro ao carregar perfil:', error);
         return null;
-      } else {
-        console.log('Perfil carregado:', data);
-        return data;
       }
+      
+      console.log('Perfil carregado:', data);
+      return data;
     } catch (error) {
       console.error('Erro ao buscar perfil:', error);
       return null;
@@ -72,74 +45,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    console.log('AuthProvider: Iniciando configuração de autenticação');
+    console.log('AuthProvider: Configurando autenticação');
     
-    let mounted = true;
-
-    // Configurar listener de auth primeiro
+    // Configurar listener de mudanças de auth
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state change:', event, session?.user?.id);
       
-      if (!mounted) return;
-
       if (session?.user) {
         setSession(session);
         setUser(session.user);
         
-        // Carregar perfil do usuário em background
+        // Carregar perfil do usuário
         const userProfile = await loadUserProfile(session.user.id);
-        if (mounted) {
-          setProfile(userProfile);
-          setLoading(false);
-        }
+        setProfile(userProfile);
       } else {
         setSession(null);
         setUser(null);
         setProfile(null);
-        setLoading(false);
       }
+      
+      setLoading(false);
     });
 
-    // Verificar sessão atual
+    // Verificar sessão atual uma única vez
     const initializeAuth = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
           console.error('Erro ao obter sessão:', error);
-          if (mounted) {
-            setLoading(false);
-          }
+          setLoading(false);
           return;
         }
 
-        console.log('Sessão inicial:', session?.user?.id);
-        
-        if (session?.user && mounted) {
-          setSession(session);
-          setUser(session.user);
-          
-          const userProfile = await loadUserProfile(session.user.id);
-          if (mounted) {
-            setProfile(userProfile);
-          }
-        }
-        
-        if (mounted) {
+        // Não definir estado aqui, deixar o onAuthStateChange lidar com isso
+        if (!session) {
           setLoading(false);
         }
       } catch (error) {
-        console.error('Erro na inicialização de auth:', error);
-        if (mounted) {
-          setLoading(false);
-        }
+        console.error('Erro na inicialização:', error);
+        setLoading(false);
       }
     };
 
     initializeAuth();
 
     return () => {
-      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
@@ -178,7 +129,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     try {
-      setLoading(true);
       console.log('Fazendo logout...');
       
       const { error } = await supabase.auth.signOut();
@@ -189,21 +139,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       console.log('Logout bem-sucedido');
-      
-      // Limpar dados locais
-      setUser(null);
-      setSession(null);
-      setProfile(null);
-      
-      // Opcional: limpar localStorage específico se necessário
-      localStorage.removeItem('pendingActions');
-      localStorage.removeItem('pipelineStages');
-      
     } catch (error) {
       console.error('Erro durante o logout:', error);
       throw error;
-    } finally {
-      setLoading(false);
     }
   };
 

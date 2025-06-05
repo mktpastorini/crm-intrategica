@@ -1,6 +1,6 @@
-
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSystemSettings } from '@/hooks/useSystemSettings';
 import { Navigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,35 +8,14 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { BarChart3 } from 'lucide-react';
-import { SystemSettings } from '@/types/settings';
 
 export default function Login() {
   const { isAuthenticated, login, loading } = useAuth();
+  const { settings } = useSystemSettings();
   const { toast } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [settings, setSettings] = useState<SystemSettings | null>(null);
-
-  // Carregar configurações do sistema para aplicar logo
-  useEffect(() => {
-    const savedSettings = localStorage.getItem('systemSettings');
-    if (savedSettings) {
-      const parsedSettings = JSON.parse(savedSettings);
-      setSettings(parsedSettings);
-      
-      // Aplicar favicon se configurado
-      if (parsedSettings.faviconUrl) {
-        let favicon = document.querySelector('link[rel="icon"]') as HTMLLinkElement;
-        if (!favicon) {
-          favicon = document.createElement('link');
-          favicon.rel = 'icon';
-          document.head.appendChild(favicon);
-        }
-        favicon.href = parsedSettings.faviconUrl;
-      }
-    }
-  }, []);
 
   console.log('Login page - Estado:', { loading, isAuthenticated });
 
@@ -107,7 +86,7 @@ export default function Login() {
       <div className="w-full max-w-md space-y-8 p-8">
         <div className="text-center">
           <div className="flex justify-center mb-4">
-            {settings?.logoUrl ? (
+            {settings.logoUrl ? (
               <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-lg">
                 <img 
                   src={settings.logoUrl} 
@@ -123,7 +102,7 @@ export default function Login() {
             )}
           </div>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            {settings?.systemName || 'AgencyCRM'}
+            {settings.systemName}
           </h1>
           <p className="text-slate-600 mt-2">
             Sistema de gestão para agências de marketing

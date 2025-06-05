@@ -1,6 +1,6 @@
-
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSystemSettings } from '@/hooks/useSystemSettings';
 import { Button } from '@/components/ui/button';
 import { 
   LayoutDashboard, 
@@ -15,52 +15,14 @@ import {
   X,
   Route
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
-import { SystemSettings } from '@/types/settings';
+import { useState } from 'react';
 
 export default function Layout() {
   const { user, profile, logout } = useAuth();
+  const { settings } = useSystemSettings();
   const location = useLocation();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [settings, setSettings] = useState<SystemSettings | null>(null);
-
-  // Carregar configurações do sistema
-  useEffect(() => {
-    const savedSettings = localStorage.getItem('systemSettings');
-    if (savedSettings) {
-      const parsedSettings = JSON.parse(savedSettings);
-      setSettings(parsedSettings);
-      
-      // Aplicar logo e favicon se configurados
-      if (parsedSettings.logoUrl) {
-        const logoElements = document.querySelectorAll('[data-logo]');
-        logoElements.forEach(element => {
-          if (element instanceof HTMLImageElement) {
-            element.src = parsedSettings.logoUrl;
-          }
-        });
-      }
-      
-      if (parsedSettings.faviconUrl) {
-        let favicon = document.querySelector('link[rel="icon"]') as HTMLLinkElement;
-        if (!favicon) {
-          favicon = document.createElement('link');
-          favicon.rel = 'icon';
-          document.head.appendChild(favicon);
-        }
-        favicon.href = parsedSettings.faviconUrl;
-      }
-      
-      // Aplicar cores personalizadas
-      if (parsedSettings.primaryColor) {
-        document.documentElement.style.setProperty('--primary-color', parsedSettings.primaryColor);
-      }
-      if (parsedSettings.secondaryColor) {
-        document.documentElement.style.setProperty('--secondary-color', parsedSettings.secondaryColor);
-      }
-    }
-  }, []);
 
   const handleLogout = () => {
     logout();
@@ -87,7 +49,7 @@ export default function Layout() {
       <div className="lg:hidden bg-white shadow-sm border-b px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            {settings?.logoUrl && (
+            {settings.logoUrl && (
               <img 
                 src={settings.logoUrl} 
                 alt="Logo" 
@@ -96,7 +58,7 @@ export default function Layout() {
               />
             )}
             <h1 className="text-xl font-bold text-slate-900">
-              {settings?.systemName || 'CRM System'}
+              {settings.systemName}
             </h1>
           </div>
           <Button
@@ -115,7 +77,7 @@ export default function Layout() {
           <div className="bg-white w-64 h-full shadow-lg">
             <div className="p-4 border-b">
               <div className="flex items-center space-x-3">
-                {settings?.logoUrl && (
+                {settings.logoUrl && (
                   <img 
                     src={settings.logoUrl} 
                     alt="Logo" 
@@ -124,7 +86,7 @@ export default function Layout() {
                   />
                 )}
                 <h2 className="text-lg font-semibold text-slate-900">
-                  {settings?.systemName || 'CRM System'}
+                  {settings.systemName}
                 </h2>
               </div>
             </div>
@@ -164,7 +126,7 @@ export default function Layout() {
         <div className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0">
           <div className="flex flex-col flex-grow pt-5 bg-white overflow-y-auto border-r">
             <div className="flex items-center flex-shrink-0 px-4 pb-5">
-              {settings?.logoUrl && (
+              {settings.logoUrl && (
                 <img 
                   src={settings.logoUrl} 
                   alt="Logo" 
@@ -173,7 +135,7 @@ export default function Layout() {
                 />
               )}
               <h1 className="text-xl font-bold text-slate-900">
-                {settings?.systemName || 'CRM System'}
+                {settings.systemName}
               </h1>
             </div>
             <div className="mt-5 flex-grow flex flex-col">

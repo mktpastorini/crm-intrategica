@@ -4,16 +4,11 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { useSystemSettings } from '@/hooks/useSystemSettings';
 import { Palette, Save, Upload } from 'lucide-react';
-import { SystemSettings } from '@/types/settings';
 
-interface AppearanceSettingsProps {
-  settings: SystemSettings;
-  onInputChange: (field: keyof SystemSettings, value: any) => void;
-  onSave: () => void;
-}
-
-export default function AppearanceSettings({ settings, onInputChange, onSave }: AppearanceSettingsProps) {
+export default function AppearanceSettings() {
+  const { settings, updateSettings } = useSystemSettings();
   const { toast } = useToast();
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -22,16 +17,7 @@ export default function AppearanceSettings({ settings, onInputChange, onSave }: 
       const reader = new FileReader();
       reader.onload = (event) => {
         const logoUrl = event.target?.result as string;
-        onInputChange('logo', file);
-        onInputChange('logoUrl', logoUrl);
-        
-        // Aplicar logo no sistema imediatamente
-        const logoElements = document.querySelectorAll('[data-logo]');
-        logoElements.forEach(element => {
-          if (element instanceof HTMLImageElement) {
-            element.src = logoUrl;
-          }
-        });
+        updateSettings({ logoUrl });
         
         toast({
           title: "Logo atualizado",
@@ -48,17 +34,7 @@ export default function AppearanceSettings({ settings, onInputChange, onSave }: 
       const reader = new FileReader();
       reader.onload = (event) => {
         const faviconUrl = event.target?.result as string;
-        onInputChange('favicon', file);
-        onInputChange('faviconUrl', faviconUrl);
-        
-        // Aplicar favicon imediatamente
-        let favicon = document.querySelector('link[rel="icon"]') as HTMLLinkElement;
-        if (!favicon) {
-          favicon = document.createElement('link');
-          favicon.rel = 'icon';
-          document.head.appendChild(favicon);
-        }
-        favicon.href = faviconUrl;
+        updateSettings({ faviconUrl });
         
         toast({
           title: "Favicon atualizado",
@@ -70,15 +46,14 @@ export default function AppearanceSettings({ settings, onInputChange, onSave }: 
   };
 
   const handleColorChange = (field: 'primaryColor' | 'secondaryColor', value: string) => {
-    onInputChange(field, value);
-    
-    // Aplicar cores CSS customizadas
-    const root = document.documentElement;
-    if (field === 'primaryColor') {
-      root.style.setProperty('--primary-color', value);
-    } else {
-      root.style.setProperty('--secondary-color', value);
-    }
+    updateSettings({ [field]: value });
+  };
+
+  const handleSave = () => {
+    toast({
+      title: "Aparência salva",
+      description: "Configurações de aparência foram salvas",
+    });
   };
 
   return (
@@ -189,7 +164,7 @@ export default function AppearanceSettings({ settings, onInputChange, onSave }: 
           </div>
         </div>
 
-        <Button onClick={onSave} className="w-full">
+        <Button onClick={handleSave} className="w-full">
           <Save className="w-4 h-4 mr-2" />
           Salvar Configurações de Aparência
         </Button>

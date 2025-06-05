@@ -71,13 +71,6 @@ export default function Settings() {
     });
   };
 
-  const handleSaveAppearance = () => {
-    toast({
-      title: "Aparência salva",
-      description: "Configurações de aparência foram salvas",
-    });
-  };
-
   return (
     <div className="space-y-6">
       <div>
@@ -119,11 +112,7 @@ export default function Settings() {
         </TabsContent>
 
         <TabsContent value="appearance">
-          <AppearanceSettings 
-            settings={settings}
-            onInputChange={handleInputChange}
-            onSave={handleSaveAppearance}
-          />
+          <AppearanceSettings />
         </TabsContent>
 
         <TabsContent value="categories">
