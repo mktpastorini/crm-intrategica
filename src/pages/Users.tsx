@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -16,8 +15,8 @@ interface User {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'supervisor' | 'comercial';
-  status: 'active' | 'inactive';
+  role: string; // Changed from specific union type to string
+  status: string; // Changed from specific union type to string
   created_at: string;
   last_login?: string;
 }
@@ -32,8 +31,8 @@ export default function Users() {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    role: 'comercial' as 'admin' | 'supervisor' | 'comercial',
-    status: 'active' as 'active' | 'inactive'
+    role: 'comercial',
+    status: 'active'
   });
 
   useEffect(() => {
