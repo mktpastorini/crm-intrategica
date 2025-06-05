@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
@@ -17,21 +18,21 @@ export default function Login() {
 
   console.log('Login page - loading:', loading, 'isAuthenticated:', isAuthenticated);
 
-  // Aguardar carregamento inicial da autenticação
+  // Mostrar loading enquanto verifica autenticação
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-slate-600">Carregando...</p>
+          <p className="mt-4 text-slate-600">Verificando autenticação...</p>
         </div>
       </div>
     );
   }
 
-  // Redirecionar se já estiver autenticado
+  // Redirecionar se já autenticado
   if (isAuthenticated) {
-    console.log('Usuário autenticado, redirecionando...');
+    console.log('Usuário autenticado, redirecionando para dashboard...');
     return <Navigate to="/" replace />;
   }
 
@@ -47,7 +48,7 @@ export default function Login() {
       return;
     }
 
-    if (isLogging) return; // Evitar múltiplos submits
+    if (isLogging) return;
 
     setIsLogging(true);
 
@@ -67,7 +68,6 @@ export default function Login() {
           title: "Login realizado",
           description: "Bem-vindo ao sistema!",
         });
-        // Não precisa redirecionar manualmente, o Navigate vai fazer isso
       }
     } catch (error) {
       console.error('Erro durante login:', error);

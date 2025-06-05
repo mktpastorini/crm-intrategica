@@ -40,47 +40,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       if (error) {
         console.error('Erro ao carregar perfil:', error);
-        setUser(null);
-        return;
+        return null;
       }
 
       if (profile) {
         console.log('Perfil carregado:', profile);
-        setUser({
+        const userProfile = {
           ...profile,
           role: profile.role as 'admin' | 'supervisor' | 'comercial',
           status: profile.status as 'active' | 'inactive'
-        });
+        };
+        setUser(userProfile);
+        return userProfile;
       }
     } catch (error) {
       console.error('Erro ao carregar perfil:', error);
-      setUser(null);
+      return null;
     }
   };
 
   useEffect(() => {
     let mounted = true;
 
-    // Configurar listener de mudanças de auth primeiro
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state change:', event, session?.user?.id);
-      
-      if (!mounted) return;
-
-      setSession(session);
-      
-      if (session?.user) {
-        await loadUserProfile(session.user.id);
-      } else {
-        setUser(null);
-      }
-      
-      setLoading(false);
-    });
-
-    // Verificar sessão inicial
-    const getInitialSession = async () => {
+    const initAuth = async () => {
       try {
+        // Primeiro, configurar o listener
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+          console.log('Auth state change:', event, session?.user?.id);
+          
+          if (!mounted) return;
+
+          if (session?.user) {
+            setSession(session);
+            await loadUserProfile(session.user.id);
+          } else {
+            setSession(null);
+            setUser(null);
+          }
+          
+          if (mounted) {
+            setLoading(false);
+          }
+        });
+
+        // Depois, verificar sessão inicial
         const { data: { session }, error } = await supabase.auth.getSession();
         console.log('Sessão inicial:', session?.user?.id, error);
         
@@ -92,33 +95,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        setSession(session);
-        
         if (session?.user) {
+          setSession(session);
           await loadUserProfile(session.user.id);
         }
         
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
+
+        return () => {
+          mounted = false;
+          subscription.unsubscribe();
+        };
       } catch (error) {
-        console.error('Erro ao verificar sessão inicial:', error);
+        console.error('Erro ao inicializar auth:', error);
         if (mounted) {
           setLoading(false);
         }
       }
     };
 
-    getInitialSession();
+    initAuth();
 
     return () => {
       mounted = false;
-      subscription.unsubscribe();
     };
   }, []);
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
       console.log('Tentando fazer login com:', email);
-      setLoading(true);
       
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -127,7 +134,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (error) {
         console.error('Erro de login:', error);
-        setLoading(false);
         return { success: false, error: error.message };
       }
 
@@ -144,15 +150,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.error('Erro ao atualizar último login:', updateError);
         }
 
-        // O onAuthStateChange vai lidar com o resto
         return { success: true };
       }
 
-      setLoading(false);
       return { success: false, error: 'Dados de usuário inválidos' };
     } catch (error) {
       console.error('Erro durante login:', error);
-      setLoading(false);
       return { success: false, error: 'Erro interno do servidor' };
     }
   };
@@ -160,14 +163,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     try {
       console.log('Fazendo logout...');
-      setLoading(true);
       await supabase.auth.signOut();
       setUser(null);
       setSession(null);
-      setLoading(false);
     } catch (error) {
       console.error('Erro ao fazer logout:', error);
-      setLoading(false);
     }
   };
 
@@ -177,7 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       login,
       logout,
-      isAuthenticated: !!user && !!session,
+      isAuthenticated: !!user && !!session && user.status === 'active',
       loading
     }}>
       {children}
