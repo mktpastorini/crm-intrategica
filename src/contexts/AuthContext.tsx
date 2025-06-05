@@ -29,16 +29,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Limpar cache do localStorage na inicialização
+  useEffect(() => {
+    const clearCache = () => {
+      try {
+        // Limpar dados antigos que podem estar causando problemas
+        localStorage.removeItem('supabase.auth.token');
+        localStorage.removeItem('sb-auth-token');
+        localStorage.removeItem('user-session');
+        console.log('Cache limpo com sucesso');
+      } catch (error) {
+        console.warn('Erro ao limpar cache:', error);
+      }
+    };
+
+    clearCache();
+  }, []);
+
   useEffect(() => {
     console.log('AuthProvider: Iniciando configuração de autenticação');
     
-    // Configurar listener de mudanças de autenticação
+    let mounted = true;
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       console.log('Auth state change:', event, newSession?.user?.id);
       
+      if (!mounted) return;
+
       setSession(newSession);
       
-      if (newSession?.user) {
+      if (newSession?.user && event !== 'SIGNED_OUT') {
         console.log('Usuário encontrado, buscando perfil...');
         
         try {
@@ -50,52 +70,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           
           if (error) {
             console.error('Erro ao buscar perfil:', error);
-            setUser(null);
-          } else if (profile) {
+            if (mounted) setUser(null);
+          } else if (profile && mounted) {
             console.log('Perfil encontrado:', profile);
             setUser(profile as UserProfile);
-          } else {
+          } else if (mounted) {
             console.log('Perfil não encontrado');
             setUser(null);
           }
         } catch (error) {
           console.error('Erro na busca do perfil:', error);
-          setUser(null);
+          if (mounted) setUser(null);
         }
       } else {
         console.log('Nenhum usuário logado');
-        setUser(null);
+        if (mounted) setUser(null);
       }
       
-      setLoading(false);
+      if (mounted) setLoading(false);
     });
 
-    // Verificar sessão atual
+    // Verificar sessão atual apenas uma vez
     const initializeAuth = async () => {
       try {
         const { data: { session: currentSession }, error } = await supabase.auth.getSession();
         
         if (error) {
           console.error('Erro ao obter sessão:', error);
-          setLoading(false);
+          if (mounted) setLoading(false);
           return;
         }
 
         console.log('Sessão inicial:', currentSession?.user?.id || 'Nenhuma');
         
-        // Se não há sessão, definir loading como false
-        if (!currentSession) {
+        if (!currentSession && mounted) {
           setLoading(false);
         }
       } catch (error) {
         console.error('Erro na inicialização:', error);
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     };
 
     initializeAuth();
 
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
@@ -103,21 +123,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
       console.log('Tentando fazer login com:', email);
+      setLoading(true);
       
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: email.trim(),
         password,
       });
 
       if (error) {
         console.error('Erro de login:', error);
-        return { success: false, error: error.message };
+        setLoading(false);
+        return { success: false, error: 'Email ou senha incorretos' };
       }
 
       if (data.user && data.session) {
         console.log('Login bem-sucedido');
         
-        // Atualizar último login (não crítico se falhar)
         try {
           await supabase
             .from('profiles')
@@ -130,9 +151,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: true };
       }
 
+      setLoading(false);
       return { success: false, error: 'Dados de usuário inválidos' };
     } catch (error) {
       console.error('Erro durante login:', error);
+      setLoading(false);
       return { success: false, error: 'Erro interno do servidor' };
     }
   };
@@ -143,20 +166,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await supabase.auth.signOut();
       setUser(null);
       setSession(null);
+      
+      // Limpar qualquer cache restante
+      localStorage.removeItem('leads');
+      localStorage.removeItem('events');
+      localStorage.removeItem('pipelineStages');
+      localStorage.removeItem('pendingActions');
     } catch (error) {
       console.error('Erro ao fazer logout:', error);
     }
   };
 
   const isAuthenticated = !!user && !!session && user.status === 'active';
-
-  console.log('AuthProvider state:', {
-    hasUser: !!user,
-    hasSession: !!session,
-    userStatus: user?.status,
-    isAuthenticated,
-    loading
-  });
 
   return (
     <AuthContext.Provider value={{
