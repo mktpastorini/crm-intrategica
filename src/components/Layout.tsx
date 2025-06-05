@@ -12,7 +12,8 @@ import {
   UserCheck,
   Target,
   Menu,
-  X
+  X,
+  Route
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { SystemSettings } from '@/types/settings';
@@ -74,6 +75,7 @@ export default function Layout() {
     { icon: Target, label: 'Pipeline', path: '/pipeline' },
     { icon: Calendar, label: 'Agenda', path: '/calendar' },
     { icon: MessageSquare, label: 'Mensagens', path: '/messages' },
+    { icon: Route, label: 'Jornada do Cliente', path: '/customer-journey' },
     { icon: UserCheck, label: 'Usuários', path: '/users' },
     { icon: Users, label: 'Supervisão', path: '/supervision' },
     { icon: Settings, label: 'Configurações', path: '/settings' },

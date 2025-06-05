@@ -18,6 +18,7 @@ export default function Settings() {
       systemName: 'CRM System',
       webhookUrl: '',
       messageWebhookUrl: '',
+      journeyWebhookUrl: '',
       scheduleReminderHours: 2,
       scheduleReminderDays: 1,
       enableImmediateSend: true,

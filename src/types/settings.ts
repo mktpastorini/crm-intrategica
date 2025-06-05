@@ -3,6 +3,7 @@ export interface SystemSettings {
   systemName: string;
   webhookUrl: string;
   messageWebhookUrl: string;
+  journeyWebhookUrl: string;
   scheduleReminderHours: number;
   scheduleReminderDays: number;
   enableImmediateSend: boolean;

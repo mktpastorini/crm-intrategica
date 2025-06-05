@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Webhook, Save } from 'lucide-react';
+import { Save } from 'lucide-react';
 import { SystemSettings } from '@/types/settings';
 
 interface WebhookSettingsProps {
@@ -18,10 +18,7 @@ export default function WebhookSettings({ settings, onInputChange, onSave }: Web
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Webhook className="w-5 h-5" />
-            Webhook da Agenda
-          </CardTitle>
+          <CardTitle>Webhook da Agenda</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
@@ -70,10 +67,7 @@ export default function WebhookSettings({ settings, onInputChange, onSave }: Web
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Webhook className="w-5 h-5" />
-            Webhook de Mensagens
-          </CardTitle>
+          <CardTitle>Webhook de Mensagens</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
@@ -94,8 +88,28 @@ export default function WebhookSettings({ settings, onInputChange, onSave }: Web
             />
             <Label htmlFor="enable-message-webhook">Habilitar webhook para envio de mensagens</Label>
           </div>
+        </CardContent>
+      </Card>
 
-          <Button onClick={onSave}>
+      <Card>
+        <CardHeader>
+          <CardTitle>Webhook da Jornada do Cliente</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label htmlFor="journey-webhook-url">URL do Webhook (Jornada)</Label>
+            <Input
+              id="journey-webhook-url"
+              value={settings.journeyWebhookUrl}
+              onChange={(e) => onInputChange('journeyWebhookUrl', e.target.value)}
+              placeholder="https://sua-url-webhook.com/journey"
+            />
+          </div>
+          <p className="text-sm text-slate-600">
+            Este webhook será usado para enviar as mensagens automáticas da jornada do cliente quando leads mudarem de estágio.
+          </p>
+
+          <Button onClick={onSave} className="w-full">
             <Save className="w-4 h-4 mr-2" />
             Salvar Configurações de Webhooks
           </Button>
