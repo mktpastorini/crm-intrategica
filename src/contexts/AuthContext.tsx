@@ -18,66 +18,40 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
 
   // Limpar cache antigo na inicialização
   useEffect(() => {
-    // Limpar dados antigos do localStorage que agora estão no Supabase
-    const keysToRemove = [
-      'leads',
-      'events', 
-      'systemSettings',
-      'leadStatuses',
-      'messageTemplates',
-      'scheduledMessages'
-    ];
-    
-    keysToRemove.forEach(key => {
-      const item = localStorage.getItem(key);
-      if (item) {
-        console.log(`Limpando cache antigo: ${key}`);
-        localStorage.removeItem(key);
-      }
-    });
-
-    console.log('Cache limpo com sucesso');
-  }, []);
-
-  useEffect(() => {
-    console.log('AuthProvider: Iniciando configuração de autenticação');
-    
-    // Verificar sessão atual
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('Sessão atual:', session);
-      if (session?.user) {
-        setUser(session.user);
-        loadUserProfile(session.user.id);
-      } else {
-        setLoading(false);
-      }
-    });
-
-    // Escutar mudanças de autenticação
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state change:', event, session?.user?.id);
+    if (!initialized) {
+      // Limpar dados antigos do localStorage que agora estão no Supabase
+      const keysToRemove = [
+        'leads',
+        'events', 
+        'systemSettings',
+        'leadStatuses',
+        'messageTemplates',
+        'scheduledMessages'
+      ];
       
-      if (session?.user) {
-        setUser(session.user);
-        await loadUserProfile(session.user.id);
-      } else {
-        setUser(null);
-        setProfile(null);
-        setLoading(false);
-      }
-    });
+      keysToRemove.forEach(key => {
+        const item = localStorage.getItem(key);
+        if (item) {
+          console.log(`Limpando cache antigo: ${key}`);
+          localStorage.removeItem(key);
+        }
+      });
 
-    return () => subscription.unsubscribe();
-  }, []);
+      console.log('Cache limpo com sucesso');
+      setInitialized(true);
+    }
+  }, [initialized]);
 
   const loadUserProfile = async (userId: string) => {
     try {
-      console.log('Usuário encontrado, buscando perfil...');
+      console.log('Buscando perfil do usuário:', userId);
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -86,18 +60,89 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (error) {
         console.error('Erro ao carregar perfil:', error);
-        setProfile(null);
+        return null;
       } else {
         console.log('Perfil carregado:', data);
-        setProfile(data);
+        return data;
       }
     } catch (error) {
       console.error('Erro ao buscar perfil:', error);
-      setProfile(null);
-    } finally {
-      setLoading(false);
+      return null;
     }
   };
+
+  useEffect(() => {
+    console.log('AuthProvider: Iniciando configuração de autenticação');
+    
+    let mounted = true;
+
+    // Configurar listener de auth primeiro
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state change:', event, session?.user?.id);
+      
+      if (!mounted) return;
+
+      if (session?.user) {
+        setSession(session);
+        setUser(session.user);
+        
+        // Carregar perfil do usuário em background
+        const userProfile = await loadUserProfile(session.user.id);
+        if (mounted) {
+          setProfile(userProfile);
+          setLoading(false);
+        }
+      } else {
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
+      }
+    });
+
+    // Verificar sessão atual
+    const initializeAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Erro ao obter sessão:', error);
+          if (mounted) {
+            setLoading(false);
+          }
+          return;
+        }
+
+        console.log('Sessão inicial:', session?.user?.id);
+        
+        if (session?.user && mounted) {
+          setSession(session);
+          setUser(session.user);
+          
+          const userProfile = await loadUserProfile(session.user.id);
+          if (mounted) {
+            setProfile(userProfile);
+          }
+        }
+        
+        if (mounted) {
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('Erro na inicialização de auth:', error);
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    initializeAuth();
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const signIn = async (email: string, password: string) => {
     try {
@@ -147,6 +192,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       // Limpar dados locais
       setUser(null);
+      setSession(null);
       setProfile(null);
       
       // Opcional: limpar localStorage específico se necessário
@@ -165,7 +211,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signOut();
   };
 
-  const isAuthenticated = !!user;
+  const isAuthenticated = !!session && !!user;
 
   const value = {
     user,
