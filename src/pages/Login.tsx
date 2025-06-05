@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSystemSettings } from '@/hooks/useSystemSettings';
@@ -87,11 +88,11 @@ export default function Login() {
         <div className="text-center">
           <div className="flex justify-center mb-4">
             {settings.logoUrl ? (
-              <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-lg">
+              <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center shadow-lg p-2">
                 <img 
                   src={settings.logoUrl} 
                   alt="Logo" 
-                  className="w-14 h-14 object-contain" 
+                  className="max-w-full max-h-full object-contain" 
                   data-logo
                 />
               </div>

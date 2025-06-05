@@ -13,7 +13,8 @@ import {
   Target,
   Menu,
   X,
-  Route
+  Route,
+  BarChart3
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -49,13 +50,17 @@ export default function Layout() {
       <div className="lg:hidden bg-white shadow-sm border-b px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            {settings.logoUrl && (
+            {settings.logoUrl ? (
               <img 
                 src={settings.logoUrl} 
                 alt="Logo" 
                 className="w-8 h-8 object-contain" 
                 data-logo
               />
+            ) : (
+              <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded flex items-center justify-center">
+                <BarChart3 className="w-5 h-5 text-white" />
+              </div>
             )}
             <h1 className="text-xl font-bold text-slate-900">
               {settings.systemName}
@@ -77,13 +82,17 @@ export default function Layout() {
           <div className="bg-white w-64 h-full shadow-lg">
             <div className="p-4 border-b">
               <div className="flex items-center space-x-3">
-                {settings.logoUrl && (
+                {settings.logoUrl ? (
                   <img 
                     src={settings.logoUrl} 
                     alt="Logo" 
                     className="w-8 h-8 object-contain" 
                     data-logo
                   />
+                ) : (
+                  <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded flex items-center justify-center">
+                    <BarChart3 className="w-5 h-5 text-white" />
+                  </div>
                 )}
                 <h2 className="text-lg font-semibold text-slate-900">
                   {settings.systemName}
@@ -126,13 +135,17 @@ export default function Layout() {
         <div className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0">
           <div className="flex flex-col flex-grow pt-5 bg-white overflow-y-auto border-r">
             <div className="flex items-center flex-shrink-0 px-4 pb-5">
-              {settings.logoUrl && (
+              {settings.logoUrl ? (
                 <img 
                   src={settings.logoUrl} 
                   alt="Logo" 
                   className="w-10 h-10 object-contain mr-3" 
                   data-logo
                 />
+              ) : (
+                <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 rounded mr-3 flex items-center justify-center">
+                  <BarChart3 className="w-6 h-6 text-white" />
+                </div>
               )}
               <h1 className="text-xl font-bold text-slate-900">
                 {settings.systemName}
