@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 export interface Lead {
   id: string;
@@ -59,13 +60,14 @@ interface CrmContextType {
   events: Event[];
   pendingActions: PendingAction[];
   users: UserProfile[];
-  addLead: (lead: Omit<Lead, 'id' | 'createdAt'>) => void;
-  updateLead: (id: string, updates: Partial<Lead>) => void;
-  deleteLead: (id: string) => void;
-  moveLead: (leadId: string, newStage: string) => void;
-  addEvent: (event: Omit<Event, 'id'>) => void;
-  updateEvent: (id: string, updates: Partial<Event>) => void;
-  deleteEvent: (id: string) => void;
+  loading: boolean;
+  addLead: (lead: Omit<Lead, 'id' | 'createdAt'>) => Promise<void>;
+  updateLead: (id: string, updates: Partial<Lead>) => Promise<void>;
+  deleteLead: (id: string) => Promise<void>;
+  moveLead: (leadId: string, newStage: string) => Promise<void>;
+  addEvent: (event: Omit<Event, 'id'>) => Promise<void>;
+  updateEvent: (id: string, updates: Partial<Event>) => Promise<void>;
+  deleteEvent: (id: string) => Promise<void>;
   approveAction: (actionId: string) => void;
   rejectAction: (actionId: string) => void;
   requestLeadEdit: (leadId: string, updates: Partial<Lead>, user: string) => void;
@@ -74,49 +76,21 @@ interface CrmContextType {
   updatePipelineStage: (id: string, updates: Partial<PipelineStage>) => void;
   deletePipelineStage: (id: string) => void;
   fetchUsers: () => Promise<void>;
+  refreshData: () => Promise<void>;
 }
 
 const CrmContext = createContext<CrmContextType | undefined>(undefined);
 
 export function CrmProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
+  const { user } = useAuth();
   
+  const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
   
-  // Carregar leads do localStorage com fallback
-  const [leads, setLeads] = useState<Lead[]>(() => {
-    const saved = localStorage.getItem('leads');
-    return saved ? JSON.parse(saved) : [
-      {
-        id: '1',
-        name: 'João Silva',
-        company: 'Tech Solutions Ltda',
-        phone: '47999887766',
-        email: 'joao@techsolutions.com',
-        niche: 'Tecnologia',
-        status: 'Pendente',
-        responsible: 'Administrador',
-        responsible_id: '',
-        createdAt: new Date().toISOString(),
-        pipelineStage: 'aguardando-inicio'
-      },
-      {
-        id: '2',
-        name: 'Maria Santos',
-        company: 'Marketing Pro',
-        phone: '47888777666',
-        email: 'maria@marketingpro.com',
-        niche: 'Marketing',
-        status: 'Follow-up',
-        responsible: 'Administrador',
-        responsible_id: '',
-        createdAt: new Date().toISOString(),
-        pipelineStage: 'primeiro-contato'
-      }
-    ];
-  });
-
-  // Carregar estágios do pipeline do localStorage com fallback
+  // Dados locais que ainda não foram migrados para Supabase
   const [pipelineStages, setPipelineStages] = useState<PipelineStage[]>(() => {
     const saved = localStorage.getItem('pipelineStages');
     return saved ? JSON.parse(saved) : [
@@ -129,29 +103,112 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     ];
   });
 
-  // Carregar eventos do localStorage com fallback
-  const [events, setEvents] = useState<Event[]>(() => {
-    const saved = localStorage.getItem('events');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  // Carregar ações pendentes do localStorage com fallback
   const [pendingActions, setPendingActions] = useState<PendingAction[]>(() => {
     const saved = localStorage.getItem('pendingActions');
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Carregar usuários do Supabase
+  // Função para buscar leads do Supabase
+  const fetchLeads = async () => {
+    try {
+      console.log('Buscando leads do Supabase...');
+      const { data, error } = await supabase
+        .from('leads')
+        .select(`
+          *,
+          profiles:responsible_id (name)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao buscar leads:', error);
+        throw error;
+      }
+
+      console.log('Leads carregados:', data);
+      const formattedLeads = data?.map(lead => ({
+        id: lead.id,
+        name: lead.name,
+        company: lead.company,
+        phone: lead.phone,
+        email: lead.email,
+        niche: lead.niche,
+        status: lead.status,
+        responsible: lead.profiles?.name || 'Não atribuído',
+        responsible_id: lead.responsible_id,
+        createdAt: lead.created_at,
+        pipelineStage: lead.pipeline_stage || 'aguardando-inicio'
+      })) || [];
+
+      setLeads(formattedLeads);
+    } catch (error) {
+      console.error('Erro ao carregar leads:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar leads do banco de dados",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Função para buscar eventos do Supabase
+  const fetchEvents = async () => {
+    try {
+      console.log('Buscando eventos do Supabase...');
+      const { data, error } = await supabase
+        .from('events')
+        .select(`
+          *,
+          profiles:responsible_id (name)
+        `)
+        .order('date', { ascending: true });
+
+      if (error) {
+        console.error('Erro ao buscar eventos:', error);
+        throw error;
+      }
+
+      console.log('Eventos carregados:', data);
+      const formattedEvents = data?.map(event => ({
+        id: event.id,
+        title: event.title,
+        leadName: event.lead_name,
+        company: event.company,
+        date: event.date,
+        time: event.time,
+        responsible: event.profiles?.name || 'Não atribuído',
+        responsible_id: event.responsible_id,
+        type: event.type as 'reunion' | 'call' | 'whatsapp' | 'email',
+        leadId: event.lead_id
+      })) || [];
+
+      setEvents(formattedEvents);
+    } catch (error) {
+      console.error('Erro ao carregar eventos:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar eventos do banco de dados",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Função para buscar usuários do Supabase
   const fetchUsers = async () => {
     try {
+      console.log('Buscando usuários do Supabase...');
       const { data, error } = await supabase
         .from('profiles')
         .select('id, name, email, role')
         .eq('status', 'active')
         .order('name');
       
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao buscar usuários:', error);
+        throw error;
+      }
       
+      console.log('Usuários carregados:', data);
       const typedUsers = (data || []).map(user => ({
         ...user,
         role: user.role as 'admin' | 'supervisor' | 'comercial'
@@ -160,27 +217,41 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       setUsers(typedUsers);
     } catch (error) {
       console.error('Erro ao carregar usuários:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar usuários do banco de dados",
+        variant: "destructive",
+      });
     }
   };
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
-
-  // Salvar no localStorage sempre que os dados mudarem
-  const saveLeads = (newLeads: Lead[]) => {
-    setLeads(newLeads);
-    localStorage.setItem('leads', JSON.stringify(newLeads));
+  // Função para atualizar todos os dados
+  const refreshData = async () => {
+    setLoading(true);
+    try {
+      await Promise.all([
+        fetchLeads(),
+        fetchEvents(),
+        fetchUsers()
+      ]);
+    } catch (error) {
+      console.error('Erro ao atualizar dados:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
+  // Carregar dados iniciais
+  useEffect(() => {
+    if (user) {
+      refreshData();
+    }
+  }, [user]);
+
+  // Salvar dados locais no localStorage (apenas para dados que ainda não estão no Supabase)
   const savePipelineStages = (newStages: PipelineStage[]) => {
     setPipelineStages(newStages);
     localStorage.setItem('pipelineStages', JSON.stringify(newStages));
-  };
-
-  const saveEvents = (newEvents: Event[]) => {
-    setEvents(newEvents);
-    localStorage.setItem('events', JSON.stringify(newEvents));
   };
 
   const savePendingActions = (newActions: PendingAction[]) => {
@@ -188,108 +259,251 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('pendingActions', JSON.stringify(newActions));
   };
 
-  const addLead = (leadData: Omit<Lead, 'id' | 'createdAt'>) => {
-    const responsibleUser = users.find(u => u.id === leadData.responsible_id);
-    const newLead: Lead = {
-      ...leadData,
-      id: Date.now().toString(),
-      createdAt: new Date().toISOString(),
-      pipelineStage: 'aguardando-inicio',
-      responsible: responsibleUser?.name || leadData.responsible
-    };
-    const newLeads = [...leads, newLead];
-    saveLeads(newLeads);
-    toast({
-      title: "Lead adicionado",
-      description: "Lead foi adicionado com sucesso ao pipeline",
-    });
-  };
+  const addLead = async (leadData: Omit<Lead, 'id' | 'createdAt'>) => {
+    try {
+      console.log('Adicionando lead ao Supabase:', leadData);
+      const { data, error } = await supabase
+        .from('leads')
+        .insert({
+          name: leadData.name,
+          company: leadData.company,
+          phone: leadData.phone,
+          email: leadData.email,
+          niche: leadData.niche,
+          status: leadData.status,
+          responsible_id: leadData.responsible_id,
+          pipeline_stage: leadData.pipelineStage || 'aguardando-inicio'
+        })
+        .select()
+        .single();
 
-  const updateLead = (id: string, updates: Partial<Lead>) => {
-    const responsibleUser = updates.responsible_id ? users.find(u => u.id === updates.responsible_id) : null;
-    const updatedData = { 
-      ...updates, 
-      responsible: responsibleUser?.name || updates.responsible 
-    };
-    
-    const newLeads = leads.map(lead => 
-      lead.id === id ? { ...lead, ...updatedData } : lead
-    );
-    saveLeads(newLeads);
-    toast({
-      title: "Lead atualizado",
-      description: "As alterações foram salvas com sucesso",
-    });
-  };
+      if (error) {
+        console.error('Erro ao adicionar lead:', error);
+        throw error;
+      }
 
-  const deleteLead = (id: string) => {
-    const newLeads = leads.filter(lead => lead.id !== id);
-    saveLeads(newLeads);
-    
-    // Remove eventos relacionados ao lead
-    const newEvents = events.filter(event => event.leadId !== id);
-    saveEvents(newEvents);
-    
-    toast({
-      title: "Lead removido",
-      description: "Lead foi removido com sucesso",
-    });
-  };
-
-  const moveLead = (leadId: string, newStage: string) => {
-    const newLeads = leads.map(lead => 
-      lead.id === leadId ? { ...lead, pipelineStage: newStage } : lead
-    );
-    saveLeads(newLeads);
-    
-    // Se o lead for movido para fora do estágio "reuniao", remove eventos relacionados
-    if (newStage !== 'reuniao') {
-      const newEvents = events.filter(event => event.leadId !== leadId);
-      saveEvents(newEvents);
+      console.log('Lead adicionado:', data);
+      await fetchLeads(); // Recarregar leads
+      
+      toast({
+        title: "Lead adicionado",
+        description: "Lead foi adicionado com sucesso ao banco de dados",
+      });
+    } catch (error: any) {
+      console.error('Erro ao adicionar lead:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao adicionar lead",
+        variant: "destructive",
+      });
     }
   };
 
-  const addEvent = (eventData: Omit<Event, 'id'>) => {
-    const responsibleUser = users.find(u => u.id === eventData.responsible_id);
-    const newEvent: Event = {
-      ...eventData,
-      id: Date.now().toString(),
-      responsible: responsibleUser?.name || eventData.responsible
-    };
-    const newEvents = [...events, newEvent];
-    saveEvents(newEvents);
-    toast({
-      title: "Evento adicionado",
-      description: "Evento foi agendado com sucesso",
-    });
+  const updateLead = async (id: string, updates: Partial<Lead>) => {
+    try {
+      console.log('Atualizando lead no Supabase:', id, updates);
+      const { error } = await supabase
+        .from('leads')
+        .update({
+          name: updates.name,
+          company: updates.company,
+          phone: updates.phone,
+          email: updates.email,
+          niche: updates.niche,
+          status: updates.status,
+          responsible_id: updates.responsible_id,
+          pipeline_stage: updates.pipelineStage
+        })
+        .eq('id', id);
+
+      if (error) {
+        console.error('Erro ao atualizar lead:', error);
+        throw error;
+      }
+
+      console.log('Lead atualizado');
+      await fetchLeads(); // Recarregar leads
+      
+      toast({
+        title: "Lead atualizado",
+        description: "As alterações foram salvas no banco de dados",
+      });
+    } catch (error: any) {
+      console.error('Erro ao atualizar lead:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao atualizar lead",
+        variant: "destructive",
+      });
+    }
   };
 
-  const updateEvent = (id: string, updates: Partial<Event>) => {
-    const responsibleUser = updates.responsible_id ? users.find(u => u.id === updates.responsible_id) : null;
-    const updatedData = { 
-      ...updates, 
-      responsible: responsibleUser?.name || updates.responsible 
-    };
-    
-    const newEvents = events.map(event => 
-      event.id === id ? { ...event, ...updatedData } : event
-    );
-    saveEvents(newEvents);
-    toast({
-      title: "Evento atualizado",
-      description: "As alterações foram salvas com sucesso",
-    });
+  const deleteLead = async (id: string) => {
+    try {
+      console.log('Deletando lead do Supabase:', id);
+      const { error } = await supabase
+        .from('leads')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('Erro ao deletar lead:', error);
+        throw error;
+      }
+
+      console.log('Lead deletado');
+      await fetchLeads(); // Recarregar leads
+      await fetchEvents(); // Recarregar eventos (pode ter eventos relacionados)
+      
+      toast({
+        title: "Lead removido",
+        description: "Lead foi removido do banco de dados",
+      });
+    } catch (error: any) {
+      console.error('Erro ao deletar lead:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao remover lead",
+        variant: "destructive",
+      });
+    }
   };
 
-  const deleteEvent = (id: string) => {
-    const newEvents = events.filter(event => event.id !== id);
-    saveEvents(newEvents);
-    toast({
-      title: "Evento removido",
-      description: "Evento foi removido com sucesso",
-    });
+  const moveLead = async (leadId: string, newStage: string) => {
+    try {
+      console.log('Movendo lead no pipeline:', leadId, newStage);
+      const { error } = await supabase
+        .from('leads')
+        .update({ pipeline_stage: newStage })
+        .eq('id', leadId);
+
+      if (error) {
+        console.error('Erro ao mover lead:', error);
+        throw error;
+      }
+
+      console.log('Lead movido');
+      await fetchLeads(); // Recarregar leads
+    } catch (error: any) {
+      console.error('Erro ao mover lead:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao mover lead",
+        variant: "destructive",
+      });
+    }
   };
 
+  const addEvent = async (eventData: Omit<Event, 'id'>) => {
+    try {
+      console.log('Adicionando evento ao Supabase:', eventData);
+      const { data, error } = await supabase
+        .from('events')
+        .insert({
+          title: eventData.title,
+          lead_name: eventData.leadName,
+          company: eventData.company,
+          date: eventData.date,
+          time: eventData.time,
+          responsible_id: eventData.responsible_id,
+          type: eventData.type,
+          lead_id: eventData.leadId
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao adicionar evento:', error);
+        throw error;
+      }
+
+      console.log('Evento adicionado:', data);
+      await fetchEvents(); // Recarregar eventos
+      
+      toast({
+        title: "Evento adicionado",
+        description: "Evento foi agendado no banco de dados",
+      });
+    } catch (error: any) {
+      console.error('Erro ao adicionar evento:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao adicionar evento",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const updateEvent = async (id: string, updates: Partial<Event>) => {
+    try {
+      console.log('Atualizando evento no Supabase:', id, updates);
+      const { error } = await supabase
+        .from('events')
+        .update({
+          title: updates.title,
+          lead_name: updates.leadName,
+          company: updates.company,
+          date: updates.date,
+          time: updates.time,
+          responsible_id: updates.responsible_id,
+          type: updates.type,
+          lead_id: updates.leadId
+        })
+        .eq('id', id);
+
+      if (error) {
+        console.error('Erro ao atualizar evento:', error);
+        throw error;
+      }
+
+      console.log('Evento atualizado');
+      await fetchEvents(); // Recarregar eventos
+      
+      toast({
+        title: "Evento atualizado",
+        description: "As alterações foram salvas no banco de dados",
+      });
+    } catch (error: any) {
+      console.error('Erro ao atualizar evento:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao atualizar evento",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deleteEvent = async (id: string) => {
+    try {
+      console.log('Deletando evento do Supabase:', id);
+      const { error } = await supabase
+        .from('events')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('Erro ao deletar evento:', error);
+        throw error;
+      }
+
+      console.log('Evento deletado');
+      await fetchEvents(); // Recarregar eventos
+      
+      toast({
+        title: "Evento removido",
+        description: "Evento foi removido do banco de dados",
+      });
+    } catch (error: any) {
+      console.error('Erro ao deletar evento:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao remover evento",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // ... keep existing code (pipeline stages management, pending actions, etc.)
   const addPipelineStage = (stage: PipelineStage) => {
     const newStages = [...pipelineStages, stage];
     savePipelineStages(newStages);
@@ -368,23 +582,23 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  const approveAction = (actionId: string) => {
+  const approveAction = async (actionId: string) => {
     const action = pendingActions.find(a => a.id === actionId);
     if (!action) return;
 
     // Execute a ação
     switch (action.type) {
       case 'edit_lead':
-        updateLead(action.data.leadId, action.data.updates);
+        await updateLead(action.data.leadId, action.data.updates);
         break;
       case 'delete_lead':
-        deleteLead(action.data.leadId);
+        await deleteLead(action.data.leadId);
         break;
       case 'edit_event':
-        updateEvent(action.data.eventId, action.data.updates);
+        await updateEvent(action.data.eventId, action.data.updates);
         break;
       case 'delete_event':
-        deleteEvent(action.data.eventId);
+        await deleteEvent(action.data.eventId);
         break;
     }
 
@@ -415,6 +629,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       events,
       pendingActions,
       users,
+      loading,
       addLead,
       updateLead,
       deleteLead,
@@ -429,7 +644,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addPipelineStage,
       updatePipelineStage,
       deletePipelineStage,
-      fetchUsers
+      fetchUsers,
+      refreshData
     }}>
       {children}
     </CrmContext.Provider>

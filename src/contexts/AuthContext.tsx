@@ -1,193 +1,168 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Session, User } from '@supabase/supabase-js';
-
-interface UserProfile {
-  id: string;
-  name: string;
-  email: string;
-  role: 'admin' | 'supervisor' | 'comercial';
-  status: 'active' | 'inactive';
-  created_at: string;
-  last_login?: string;
-}
+import { User, Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
-  user: UserProfile | null;
-  session: Session | null;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  logout: () => void;
-  isAuthenticated: boolean;
+  user: User | null;
+  profile: any;
   loading: boolean;
+  isAuthenticated: boolean;
+  signIn: (email: string, password: string) => Promise<void>;
+  signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  // Limpar cache do localStorage na inicialização
+  // Limpar cache antigo na inicialização
   useEffect(() => {
-    const clearCache = () => {
-      try {
-        // Limpar dados antigos que podem estar causando problemas
-        localStorage.removeItem('supabase.auth.token');
-        localStorage.removeItem('sb-auth-token');
-        localStorage.removeItem('user-session');
-        console.log('Cache limpo com sucesso');
-      } catch (error) {
-        console.warn('Erro ao limpar cache:', error);
+    // Limpar dados antigos do localStorage que agora estão no Supabase
+    const keysToRemove = [
+      'leads',
+      'events', 
+      'systemSettings',
+      'leadStatuses',
+      'messageTemplates',
+      'scheduledMessages'
+    ];
+    
+    keysToRemove.forEach(key => {
+      const item = localStorage.getItem(key);
+      if (item) {
+        console.log(`Limpando cache antigo: ${key}`);
+        localStorage.removeItem(key);
       }
-    };
+    });
 
-    clearCache();
+    console.log('Cache limpo com sucesso');
   }, []);
 
   useEffect(() => {
     console.log('AuthProvider: Iniciando configuração de autenticação');
     
-    let mounted = true;
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
-      console.log('Auth state change:', event, newSession?.user?.id);
-      
-      if (!mounted) return;
-
-      setSession(newSession);
-      
-      if (newSession?.user && event !== 'SIGNED_OUT') {
-        console.log('Usuário encontrado, buscando perfil...');
-        
-        try {
-          const { data: profile, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', newSession.user.id)
-            .single();
-          
-          if (error) {
-            console.error('Erro ao buscar perfil:', error);
-            if (mounted) setUser(null);
-          } else if (profile && mounted) {
-            console.log('Perfil encontrado:', profile);
-            setUser(profile as UserProfile);
-          } else if (mounted) {
-            console.log('Perfil não encontrado');
-            setUser(null);
-          }
-        } catch (error) {
-          console.error('Erro na busca do perfil:', error);
-          if (mounted) setUser(null);
-        }
+    // Verificar sessão atual
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('Sessão atual:', session);
+      if (session?.user) {
+        setUser(session.user);
+        loadUserProfile(session.user.id);
       } else {
-        console.log('Nenhum usuário logado');
-        if (mounted) setUser(null);
+        setLoading(false);
       }
-      
-      if (mounted) setLoading(false);
     });
 
-    // Verificar sessão atual apenas uma vez
-    const initializeAuth = async () => {
-      try {
-        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('Erro ao obter sessão:', error);
-          if (mounted) setLoading(false);
-          return;
-        }
-
-        console.log('Sessão inicial:', currentSession?.user?.id || 'Nenhuma');
-        
-        if (!currentSession && mounted) {
-          setLoading(false);
-        }
-      } catch (error) {
-        console.error('Erro na inicialização:', error);
-        if (mounted) setLoading(false);
+    // Escutar mudanças de autenticação
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state change:', event, session?.user?.id);
+      
+      if (session?.user) {
+        setUser(session.user);
+        await loadUserProfile(session.user.id);
+      } else {
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
       }
-    };
+    });
 
-    initializeAuth();
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
-  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+  const loadUserProfile = async (userId: string) => {
     try {
-      console.log('Tentando fazer login com:', email);
+      console.log('Usuário encontrado, buscando perfil...');
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        console.error('Erro ao carregar perfil:', error);
+        setProfile(null);
+      } else {
+        console.log('Perfil carregado:', data);
+        setProfile(data);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar perfil:', error);
+      setProfile(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signIn = async (email: string, password: string) => {
+    try {
       setLoading(true);
+      console.log('Tentando fazer login com:', email);
       
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
+        email,
         password,
       });
 
       if (error) {
-        console.error('Erro de login:', error);
-        setLoading(false);
-        return { success: false, error: 'Email ou senha incorretos' };
+        console.error('Erro no login:', error);
+        throw error;
       }
 
-      if (data.user && data.session) {
-        console.log('Login bem-sucedido');
-        
-        try {
-          await supabase
-            .from('profiles')
-            .update({ last_login: new Date().toISOString() })
-            .eq('id', data.user.id);
-        } catch (updateError) {
-          console.warn('Erro ao atualizar último login:', updateError);
-        }
-
-        return { success: true };
-      }
-
-      setLoading(false);
-      return { success: false, error: 'Dados de usuário inválidos' };
+      console.log('Login bem-sucedido:', data);
     } catch (error) {
-      console.error('Erro durante login:', error);
+      console.error('Erro durante o login:', error);
       setLoading(false);
-      return { success: false, error: 'Erro interno do servidor' };
+      throw error;
     }
   };
 
-  const logout = async () => {
+  const signOut = async () => {
     try {
+      setLoading(true);
       console.log('Fazendo logout...');
-      await supabase.auth.signOut();
-      setUser(null);
-      setSession(null);
       
-      // Limpar qualquer cache restante
-      localStorage.removeItem('leads');
-      localStorage.removeItem('events');
-      localStorage.removeItem('pipelineStages');
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error('Erro no logout:', error);
+        throw error;
+      }
+
+      console.log('Logout bem-sucedido');
+      
+      // Limpar dados locais
+      setUser(null);
+      setProfile(null);
+      
+      // Opcional: limpar localStorage específico se necessário
       localStorage.removeItem('pendingActions');
+      localStorage.removeItem('pipelineStages');
+      
     } catch (error) {
-      console.error('Erro ao fazer logout:', error);
+      console.error('Erro durante o logout:', error);
+      throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
-  const isAuthenticated = !!user && !!session && user.status === 'active';
+  const isAuthenticated = !!user;
+
+  const value = {
+    user,
+    profile,
+    loading,
+    isAuthenticated,
+    signIn,
+    signOut,
+  };
 
   return (
-    <AuthContext.Provider value={{
-      user,
-      session,
-      login,
-      logout,
-      isAuthenticated,
-      loading
-    }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

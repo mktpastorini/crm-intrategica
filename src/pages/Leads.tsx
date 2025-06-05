@@ -1,5 +1,4 @@
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -10,10 +9,20 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Upload, Search, Edit, Trash2, Phone, Mail } from 'lucide-react';
+import { Plus, Upload, Search, Edit, Trash2, Phone, Mail, RefreshCw } from 'lucide-react';
 
 export default function Leads() {
-  const { leads, addLead, updateLead, deleteLead, requestLeadEdit, requestLeadDelete, users } = useCrm();
+  const { 
+    leads, 
+    addLead, 
+    updateLead, 
+    deleteLead, 
+    requestLeadEdit, 
+    requestLeadDelete, 
+    users, 
+    loading,
+    refreshData
+  } = useCrm();
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
@@ -22,6 +31,7 @@ export default function Leads() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [bulkData, setBulkData] = useState('');
   const [editingLead, setEditingLead] = useState<any>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const [newLead, setNewLead] = useState({
     name: '',
@@ -44,7 +54,7 @@ export default function Leads() {
     lead.email?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleAddLead = () => {
+  const handleAddLead = async () => {
     if (!newLead.name || !newLead.company || !newLead.phone || !newLead.niche) {
       toast({
         title: "Campos obrigatórios",
@@ -54,28 +64,35 @@ export default function Leads() {
       return;
     }
 
-    addLead({
-      name: newLead.name,
-      company: newLead.company,
-      phone: newLead.phone,
-      email: newLead.email,
-      niche: newLead.niche,
-      status: newLead.status,
-      responsible: newLead.responsible,
-      responsible_id: newLead.responsible_id
-    });
-    
-    setNewLead({
-      name: '',
-      company: '',
-      phone: '',
-      email: '',
-      niche: '',
-      status: 'Pendente',
-      responsible: user?.name || '',
-      responsible_id: user?.id || ''
-    });
-    setShowAddDialog(false);
+    setSubmitting(true);
+    try {
+      await addLead({
+        name: newLead.name,
+        company: newLead.company,
+        phone: newLead.phone,
+        email: newLead.email,
+        niche: newLead.niche,
+        status: newLead.status,
+        responsible: newLead.responsible,
+        responsible_id: newLead.responsible_id
+      });
+      
+      setNewLead({
+        name: '',
+        company: '',
+        phone: '',
+        email: '',
+        niche: '',
+        status: 'Pendente',
+        responsible: user?.name || '',
+        responsible_id: user?.id || ''
+      });
+      setShowAddDialog(false);
+    } catch (error) {
+      console.error('Erro ao adicionar lead:', error);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleEditLead = (lead: any) => {
@@ -83,58 +100,82 @@ export default function Leads() {
     setShowEditDialog(true);
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editingLead) return;
 
-    if (user?.role === 'admin' || user?.role === 'supervisor') {
-      updateLead(editingLead.id, editingLead);
-    } else {
-      requestLeadEdit(editingLead.id, editingLead, user?.email || '');
+    setSubmitting(true);
+    try {
+      if (user?.role === 'admin' || user?.role === 'supervisor') {
+        await updateLead(editingLead.id, editingLead);
+      } else {
+        requestLeadEdit(editingLead.id, editingLead, user?.email || '');
+      }
+      
+      setShowEditDialog(false);
+      setEditingLead(null);
+    } catch (error) {
+      console.error('Erro ao salvar lead:', error);
+    } finally {
+      setSubmitting(false);
     }
-    
-    setShowEditDialog(false);
-    setEditingLead(null);
   };
 
-  const handleDeleteLead = (leadId: string) => {
+  const handleDeleteLead = async (leadId: string) => {
+    if (!confirm('Tem certeza que deseja excluir este lead?')) return;
+
     if (user?.role === 'admin' || user?.role === 'supervisor') {
-      deleteLead(leadId);
+      await deleteLead(leadId);
     } else {
       requestLeadDelete(leadId, user?.email || '');
     }
   };
 
-  const handleBulkAdd = () => {
+  const handleBulkAdd = async () => {
     if (!bulkData.trim()) return;
 
     const lines = bulkData.trim().split('\n');
     let addedCount = 0;
+    setSubmitting(true);
 
-    lines.forEach(line => {
-      const parts = line.split(',').map(part => part.trim());
-      if (parts.length >= 3) {
-        const [name, company, phone, email = ''] = parts;
-        if (name && company && phone) {
-          addLead({
-            name,
-            company,
-            phone,
-            email,
-            niche: 'Tecnologia',
-            status: 'Pendente',
-            responsible: user?.name || '',
-            responsible_id: user?.id || ''
-          });
-          addedCount++;
+    try {
+      for (const line of lines) {
+        const parts = line.split(',').map(part => part.trim());
+        if (parts.length >= 3) {
+          const [name, company, phone, email = ''] = parts;
+          if (name && company && phone) {
+            await addLead({
+              name,
+              company,
+              phone,
+              email,
+              niche: 'Tecnologia',
+              status: 'Pendente',
+              responsible: user?.name || '',
+              responsible_id: user?.id || ''
+            });
+            addedCount++;
+          }
         }
       }
-    });
 
-    setBulkData('');
-    setShowBulkDialog(false);
+      setBulkData('');
+      setShowBulkDialog(false);
+      toast({
+        title: "Leads importados",
+        description: `${addedCount} leads foram importados com sucesso`,
+      });
+    } catch (error) {
+      console.error('Erro na importação em massa:', error);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    await refreshData();
     toast({
-      title: "Leads importados",
-      description: `${addedCount} leads foram importados com sucesso`,
+      title: "Dados atualizados",
+      description: "Os dados foram recarregados do banco de dados",
     });
   };
 
@@ -158,6 +199,17 @@ export default function Leads() {
     return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800';
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-2 text-slate-600">Carregando leads do banco de dados...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -167,6 +219,11 @@ export default function Leads() {
           <p className="text-slate-600">Gerencie todos os seus contatos comerciais</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2">
+          <Button variant="outline" onClick={handleRefresh} className="flex items-center gap-2">
+            <RefreshCw className="w-4 h-4" />
+            Atualizar
+          </Button>
+          
           <Dialog open={showBulkDialog} onOpenChange={setShowBulkDialog}>
             <DialogTrigger asChild>
               <Button variant="outline" className="flex items-center gap-2">
@@ -190,14 +247,24 @@ export default function Leads() {
                     placeholder="João Silva,Empresa ABC,47999888777,joao@abc.com&#10;Maria Santos,XYZ Ltda,47888777666,maria@xyz.com"
                     value={bulkData}
                     onChange={(e) => setBulkData(e.target.value)}
+                    disabled={submitting}
                   />
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => setShowBulkDialog(false)} className="flex-1">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setShowBulkDialog(false)} 
+                    className="flex-1"
+                    disabled={submitting}
+                  >
                     Cancelar
                   </Button>
-                  <Button onClick={handleBulkAdd} className="flex-1">
-                    Importar
+                  <Button 
+                    onClick={handleBulkAdd} 
+                    className="flex-1"
+                    disabled={submitting}
+                  >
+                    {submitting ? 'Importando...' : 'Importar'}
                   </Button>
                 </div>
               </div>
@@ -226,6 +293,7 @@ export default function Leads() {
                     value={newLead.name}
                     onChange={(e) => setNewLead(prev => ({ ...prev, name: e.target.value }))}
                     placeholder="Nome completo"
+                    disabled={submitting}
                   />
                 </div>
                 <div>
@@ -235,6 +303,7 @@ export default function Leads() {
                     value={newLead.company}
                     onChange={(e) => setNewLead(prev => ({ ...prev, company: e.target.value }))}
                     placeholder="Nome da empresa"
+                    disabled={submitting}
                   />
                 </div>
                 <div>
@@ -244,6 +313,7 @@ export default function Leads() {
                     value={newLead.phone}
                     onChange={(e) => setNewLead(prev => ({ ...prev, phone: e.target.value }))}
                     placeholder="(47) 99999-9999"
+                    disabled={submitting}
                   />
                 </div>
                 <div>
@@ -254,11 +324,16 @@ export default function Leads() {
                     value={newLead.email}
                     onChange={(e) => setNewLead(prev => ({ ...prev, email: e.target.value }))}
                     placeholder="email@empresa.com"
+                    disabled={submitting}
                   />
                 </div>
                 <div>
                   <Label htmlFor="niche">Nicho *</Label>
-                  <Select value={newLead.niche} onValueChange={(value) => setNewLead(prev => ({ ...prev, niche: value }))}>
+                  <Select 
+                    value={newLead.niche} 
+                    onValueChange={(value) => setNewLead(prev => ({ ...prev, niche: value }))}
+                    disabled={submitting}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione o nicho" />
                     </SelectTrigger>
@@ -271,7 +346,11 @@ export default function Leads() {
                 </div>
                 <div>
                   <Label htmlFor="status">Status</Label>
-                  <Select value={newLead.status} onValueChange={(value) => setNewLead(prev => ({ ...prev, status: value }))}>
+                  <Select 
+                    value={newLead.status} 
+                    onValueChange={(value) => setNewLead(prev => ({ ...prev, status: value }))}
+                    disabled={submitting}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -283,11 +362,20 @@ export default function Leads() {
                   </Select>
                 </div>
                 <div className="flex gap-2 pt-4">
-                  <Button variant="outline" onClick={() => setShowAddDialog(false)} className="flex-1">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setShowAddDialog(false)} 
+                    className="flex-1"
+                    disabled={submitting}
+                  >
                     Cancelar
                   </Button>
-                  <Button onClick={handleAddLead} className="flex-1">
-                    Adicionar
+                  <Button 
+                    onClick={handleAddLead} 
+                    className="flex-1"
+                    disabled={submitting}
+                  >
+                    {submitting ? 'Adicionando...' : 'Adicionar'}
                   </Button>
                 </div>
               </div>
@@ -313,6 +401,7 @@ export default function Leads() {
                   id="edit-name"
                   value={editingLead.name}
                   onChange={(e) => setEditingLead(prev => ({ ...prev, name: e.target.value }))}
+                  disabled={submitting}
                 />
               </div>
               <div>
@@ -321,6 +410,7 @@ export default function Leads() {
                   id="edit-company"
                   value={editingLead.company}
                   onChange={(e) => setEditingLead(prev => ({ ...prev, company: e.target.value }))}
+                  disabled={submitting}
                 />
               </div>
               <div>
@@ -329,6 +419,7 @@ export default function Leads() {
                   id="edit-phone"
                   value={editingLead.phone}
                   onChange={(e) => setEditingLead(prev => ({ ...prev, phone: e.target.value }))}
+                  disabled={submitting}
                 />
               </div>
               <div>
@@ -337,11 +428,16 @@ export default function Leads() {
                   id="edit-email"
                   value={editingLead.email || ''}
                   onChange={(e) => setEditingLead(prev => ({ ...prev, email: e.target.value }))}
+                  disabled={submitting}
                 />
               </div>
               <div>
                 <Label htmlFor="edit-niche">Nicho *</Label>
-                <Select value={editingLead.niche} onValueChange={(value) => setEditingLead(prev => ({ ...prev, niche: value }))}>
+                <Select 
+                  value={editingLead.niche} 
+                  onValueChange={(value) => setEditingLead(prev => ({ ...prev, niche: value }))}
+                  disabled={submitting}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -354,7 +450,11 @@ export default function Leads() {
               </div>
               <div>
                 <Label htmlFor="edit-status">Status</Label>
-                <Select value={editingLead.status} onValueChange={(value) => setEditingLead(prev => ({ ...prev, status: value }))}>
+                <Select 
+                  value={editingLead.status} 
+                  onValueChange={(value) => setEditingLead(prev => ({ ...prev, status: value }))}
+                  disabled={submitting}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -366,11 +466,20 @@ export default function Leads() {
                 </Select>
               </div>
               <div className="flex gap-2 pt-4">
-                <Button variant="outline" onClick={() => setShowEditDialog(false)} className="flex-1">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setShowEditDialog(false)} 
+                  className="flex-1"
+                  disabled={submitting}
+                >
                   Cancelar
                 </Button>
-                <Button onClick={handleSaveEdit} className="flex-1">
-                  Salvar
+                <Button 
+                  onClick={handleSaveEdit} 
+                  className="flex-1"
+                  disabled={submitting}
+                >
+                  {submitting ? 'Salvando...' : 'Salvar'}
                 </Button>
               </div>
             </div>
@@ -483,6 +592,7 @@ export default function Leads() {
                           variant="ghost" 
                           size="sm"
                           onClick={() => handleEditLead(lead)}
+                          disabled={submitting}
                         >
                           <Edit className="w-4 h-4" />
                         </Button>
@@ -491,6 +601,7 @@ export default function Leads() {
                           size="sm" 
                           className="text-red-600 hover:text-red-700"
                           onClick={() => handleDeleteLead(lead.id)}
+                          disabled={submitting}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -503,6 +614,21 @@ export default function Leads() {
           </div>
         </CardContent>
       </Card>
+
+      {filteredLeads.length === 0 && !loading && (
+        <Card>
+          <CardContent className="p-12 text-center">
+            <div className="text-slate-400 mb-4">📊</div>
+            <h3 className="text-lg font-medium text-slate-900 mb-2">Nenhum lead encontrado</h3>
+            <p className="text-slate-600">
+              {searchTerm 
+                ? 'Tente ajustar os filtros de busca.' 
+                : 'Comece adicionando um novo lead ao sistema.'
+              }
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
