@@ -87,7 +87,7 @@ export type Database = {
           phone: string
           pipeline_stage?: string | null
           responsible_id: string
-          status: string
+          status?: string
           updated_at?: string
         }
         Update: {

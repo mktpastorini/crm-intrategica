@@ -29,117 +29,80 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const loadUserProfile = async (userId: string): Promise<UserProfile | null> => {
-    try {
-      console.log('Carregando perfil do usuário:', userId);
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
-      
-      if (error) {
-        console.error('Erro ao carregar perfil:', error);
-        return null;
-      }
-
-      if (profile) {
-        console.log('Perfil carregado com sucesso:', profile);
-        const userProfile = {
-          ...profile,
-          role: profile.role as 'admin' | 'supervisor' | 'comercial',
-          status: profile.status as 'active' | 'inactive'
-        };
-        return userProfile;
-      }
-
-      console.log('Nenhum perfil encontrado para o usuário:', userId);
-      return null;
-    } catch (error) {
-      console.error('Erro ao carregar perfil:', error);
-      return null;
-    }
-  };
-
   useEffect(() => {
-    let mounted = true;
-
-    const initializeAuth = async () => {
-      try {
-        console.log('Inicializando autenticação...');
-
-        // Configurar listener de mudanças de estado
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-          console.log('Auth state change:', event, session?.user?.id);
+    console.log('AuthProvider: Iniciando configuração de autenticação');
+    
+    // Configurar listener de mudanças de autenticação
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      console.log('Auth state change:', event, newSession?.user?.id);
+      
+      setSession(newSession);
+      
+      if (newSession?.user) {
+        console.log('Usuário encontrado, buscando perfil...');
+        
+        try {
+          const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', newSession.user.id)
+            .single();
           
-          if (!mounted) return;
-
-          if (session?.user) {
-            console.log('Usuário logado, carregando perfil...');
-            setSession(session);
-            
-            // Carregar perfil do usuário
-            const profile = await loadUserProfile(session.user.id);
-            if (profile && mounted) {
-              setUser(profile);
-              console.log('Perfil definido:', profile);
-            } else if (mounted) {
-              console.log('Perfil não encontrado, fazendo logout...');
-              setUser(null);
-              setSession(null);
-            }
+          if (error) {
+            console.error('Erro ao buscar perfil:', error);
+            setUser(null);
+          } else if (profile) {
+            console.log('Perfil encontrado:', profile);
+            setUser(profile as UserProfile);
           } else {
-            console.log('Usuário não logado');
-            setSession(null);
+            console.log('Perfil não encontrado');
             setUser(null);
           }
-          
-          if (mounted) {
-            setLoading(false);
-          }
-        });
+        } catch (error) {
+          console.error('Erro na busca do perfil:', error);
+          setUser(null);
+        }
+      } else {
+        console.log('Nenhum usuário logado');
+        setUser(null);
+      }
+      
+      setLoading(false);
+    });
 
-        // Verificar sessão existente
+    // Verificar sessão atual
+    const initializeAuth = async () => {
+      try {
         const { data: { session: currentSession }, error } = await supabase.auth.getSession();
         
         if (error) {
           console.error('Erro ao obter sessão:', error);
-          if (mounted) {
-            setLoading(false);
-          }
+          setLoading(false);
           return;
         }
 
-        console.log('Sessão atual:', currentSession?.user?.id || 'Nenhuma');
-
-        // Se não há sessão, apenas definir loading como false
-        if (!currentSession && mounted) {
+        console.log('Sessão inicial:', currentSession?.user?.id || 'Nenhuma');
+        
+        // Se não há sessão, definir loading como false
+        if (!currentSession) {
           setLoading(false);
         }
-
-        return () => {
-          console.log('Limpando subscription');
-          subscription.unsubscribe();
-        };
       } catch (error) {
-        console.error('Erro ao inicializar autenticação:', error);
-        if (mounted) {
-          setLoading(false);
-        }
+        console.error('Erro na inicialização:', error);
+        setLoading(false);
       }
     };
 
     initializeAuth();
 
     return () => {
-      mounted = false;
+      subscription.unsubscribe();
     };
   }, []);
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      console.log('Tentativa de login para:', email);
-      setLoading(true);
+      console.log('Tentando fazer login com:', email);
       
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -147,33 +110,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (error) {
-        console.error('Erro de autenticação:', error);
-        setLoading(false);
+        console.error('Erro de login:', error);
         return { success: false, error: error.message };
       }
 
       if (data.user && data.session) {
-        console.log('Login bem-sucedido para usuário:', data.user.id);
+        console.log('Login bem-sucedido');
         
-        // Tentar atualizar último login (não bloquear se falhar)
+        // Atualizar último login (não crítico se falhar)
         try {
           await supabase
             .from('profiles')
             .update({ last_login: new Date().toISOString() })
             .eq('id', data.user.id);
         } catch (updateError) {
-          console.error('Erro ao atualizar último login (não crítico):', updateError);
+          console.warn('Erro ao atualizar último login:', updateError);
         }
 
-        // O estado será atualizado pelo onAuthStateChange
         return { success: true };
       }
 
-      setLoading(false);
       return { success: false, error: 'Dados de usuário inválidos' };
     } catch (error) {
       console.error('Erro durante login:', error);
-      setLoading(false);
       return { success: false, error: 'Erro interno do servidor' };
     }
   };
@@ -181,21 +140,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     try {
       console.log('Fazendo logout...');
-      setLoading(true);
-      
-      const { error } = await supabase.auth.signOut();
-      
-      if (error) {
-        console.error('Erro ao fazer logout:', error);
-      }
-      
-      // Limpar estado local
+      await supabase.auth.signOut();
       setUser(null);
       setSession(null);
-      setLoading(false);
     } catch (error) {
       console.error('Erro ao fazer logout:', error);
-      setLoading(false);
     }
   };
 

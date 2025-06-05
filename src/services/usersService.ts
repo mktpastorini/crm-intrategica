@@ -40,9 +40,8 @@ export const usersService = {
 
     if (authError) throw authError;
 
-    // O perfil será criado automaticamente via trigger
-    // Vamos aguardar um pouco e buscar o perfil criado
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Aguardar e buscar o perfil criado pelo trigger
+    await new Promise(resolve => setTimeout(resolve, 1500));
     
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
@@ -50,7 +49,7 @@ export const usersService = {
       .eq('id', authData.user.id)
       .single();
 
-    if (profileError) {
+    if (profileError || !profile) {
       // Se não encontrou o perfil, criar manualmente
       const { data: newProfile, error: createError } = await supabase
         .from('profiles')
@@ -66,6 +65,22 @@ export const usersService = {
 
       if (createError) throw createError;
       return newProfile;
+    }
+
+    // Atualizar dados se necessário
+    if (profile.name !== userData.name || profile.role !== userData.role) {
+      const { data: updatedProfile, error: updateError } = await supabase
+        .from('profiles')
+        .update({
+          name: userData.name,
+          role: userData.role
+        })
+        .eq('id', authData.user.id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+      return updatedProfile;
     }
 
     return profile;

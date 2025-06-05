@@ -14,13 +14,13 @@ export default function Login() {
   const { toast } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isLogging, setIsLogging] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  console.log('Login page - Estado atual:', { loading, isAuthenticated, isLogging });
+  console.log('Login page - Estado:', { loading, isAuthenticated });
 
   // Se já autenticado, redirecionar
-  if (!loading && isAuthenticated) {
-    console.log('Usuário já autenticado, redirecionando...');
+  if (isAuthenticated) {
+    console.log('Usuário autenticado, redirecionando...');
     return <Navigate to="/" replace />;
   }
 
@@ -48,12 +48,12 @@ export default function Login() {
       return;
     }
 
-    if (isLogging) return;
+    if (isSubmitting) return;
 
-    setIsLogging(true);
+    setIsSubmitting(true);
 
     try {
-      console.log('Iniciando processo de login...');
+      console.log('Iniciando login...');
       const result = await login(email, password);
       
       if (!result.success) {
@@ -62,15 +62,11 @@ export default function Login() {
           description: result.error || "Email ou senha incorretos",
           variant: "destructive",
         });
-        setIsLogging(false);
       } else {
-        console.log('Login realizado com sucesso');
         toast({
           title: "Login realizado",
           description: "Bem-vindo ao sistema!",
         });
-        // Não precisa setar isLogging como false aqui, 
-        // pois o componente será desmontado após o redirect
       }
     } catch (error) {
       console.error('Erro durante login:', error);
@@ -79,7 +75,8 @@ export default function Login() {
         description: "Ocorreu um erro ao fazer login",
         variant: "destructive",
       });
-      setIsLogging(false);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -119,7 +116,7 @@ export default function Login() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   className="h-11"
-                  disabled={isLogging}
+                  disabled={isSubmitting}
                 />
               </div>
               <div className="space-y-2">
@@ -132,15 +129,15 @@ export default function Login() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   className="h-11"
-                  disabled={isLogging}
+                  disabled={isSubmitting}
                 />
               </div>
               <Button 
                 type="submit" 
                 className="w-full h-11 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium"
-                disabled={isLogging}
+                disabled={isSubmitting}
               >
-                {isLogging ? 'Entrando...' : 'Entrar'}
+                {isSubmitting ? 'Entrando...' : 'Entrar'}
               </Button>
             </form>
 
