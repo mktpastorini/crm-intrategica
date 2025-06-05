@@ -23,7 +23,7 @@ export default function Leads() {
     loading,
     refreshData
   } = useCrm();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -40,7 +40,7 @@ export default function Leads() {
     email: '',
     niche: '',
     status: 'Pendente',
-    responsible: user?.name || '',
+    responsible: profile?.name || user?.email || '',
     responsible_id: user?.id || ''
   });
 
@@ -84,7 +84,7 @@ export default function Leads() {
         email: '',
         niche: '',
         status: 'Pendente',
-        responsible: user?.name || '',
+        responsible: profile?.name || user?.email || '',
         responsible_id: user?.id || ''
       });
       setShowAddDialog(false);
@@ -105,7 +105,7 @@ export default function Leads() {
 
     setSubmitting(true);
     try {
-      if (user?.role === 'admin' || user?.role === 'supervisor') {
+      if (profile?.role === 'admin' || profile?.role === 'supervisor') {
         await updateLead(editingLead.id, editingLead);
       } else {
         requestLeadEdit(editingLead.id, editingLead, user?.email || '');
@@ -123,7 +123,7 @@ export default function Leads() {
   const handleDeleteLead = async (leadId: string) => {
     if (!confirm('Tem certeza que deseja excluir este lead?')) return;
 
-    if (user?.role === 'admin' || user?.role === 'supervisor') {
+    if (profile?.role === 'admin' || profile?.role === 'supervisor') {
       await deleteLead(leadId);
     } else {
       requestLeadDelete(leadId, user?.email || '');
@@ -150,7 +150,7 @@ export default function Leads() {
               email,
               niche: 'Tecnologia',
               status: 'Pendente',
-              responsible: user?.name || '',
+              responsible: profile?.name || user?.email || '',
               responsible_id: user?.id || ''
             });
             addedCount++;

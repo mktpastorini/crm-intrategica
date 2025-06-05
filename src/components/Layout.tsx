@@ -19,7 +19,7 @@ import { useState, useEffect } from 'react';
 import { SystemSettings } from '@/types/settings';
 
 export default function Layout() {
-  const { user, logout } = useAuth();
+  const { user, profile, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -202,15 +202,15 @@ export default function Layout() {
                     <div className="flex items-center">
                       <div className="inline-block h-8 w-8 rounded-full bg-gradient-to-r from-blue-400 to-purple-500">
                         <span className="flex h-full w-full items-center justify-center text-white text-sm font-medium">
-                          {user?.name?.charAt(0).toUpperCase() || 'U'}
+                          {profile?.name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || 'U'}
                         </span>
                       </div>
                       <div className="ml-3">
                         <p className="text-sm font-medium text-slate-700 group-hover:text-slate-900">
-                          {user?.name || 'Usuário'}
+                          {profile?.name || user?.email || 'Usuário'}
                         </p>
                         <p className="text-xs font-medium text-slate-500 group-hover:text-slate-700">
-                          {user?.role || 'Usuário'}
+                          {profile?.role || 'Usuário'}
                         </p>
                       </div>
                     </div>

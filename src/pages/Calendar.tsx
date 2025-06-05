@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -41,7 +40,7 @@ const eventTypeIcons = {
 
 export default function Calendar() {
   const { leads, events, addEvent, updateEvent, deleteEvent, users } = useCrm();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { toast } = useToast();
 
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -207,7 +206,7 @@ export default function Calendar() {
       company: selectedLead?.company || newEvent.company,
       date: newEvent.date,
       time: newEvent.time,
-      responsible: user?.name || 'Sistema',
+      responsible: profile?.name || user?.email || 'Sistema',
       type: newEvent.type,
       leadId: selectedLead ? newEvent.leadId : undefined,
       responsible_id: newEvent.responsible_id

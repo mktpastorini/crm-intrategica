@@ -10,6 +10,8 @@ interface AuthContextType {
   isAuthenticated: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -120,6 +122,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const login = async (email: string, password: string) => {
+    try {
+      await signIn(email, password);
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  };
+
   const signOut = async () => {
     try {
       setLoading(true);
@@ -150,6 +161,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const logout = async () => {
+    await signOut();
+  };
+
   const isAuthenticated = !!user;
 
   const value = {
@@ -159,6 +174,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAuthenticated,
     signIn,
     signOut,
+    login,
+    logout,
   };
 
   return (
