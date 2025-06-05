@@ -16,9 +16,15 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [isLogging, setIsLogging] = useState(false);
 
-  console.log('Login page - loading:', loading, 'isAuthenticated:', isAuthenticated);
+  console.log('Login page - Estado atual:', { loading, isAuthenticated, isLogging });
 
-  // Mostrar loading enquanto verifica autenticação
+  // Se já autenticado, redirecionar
+  if (!loading && isAuthenticated) {
+    console.log('Usuário já autenticado, redirecionando...');
+    return <Navigate to="/" replace />;
+  }
+
+  // Mostrar tela de carregamento apenas durante verificação inicial
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50">
@@ -28,12 +34,6 @@ export default function Login() {
         </div>
       </div>
     );
-  }
-
-  // Redirecionar se já autenticado
-  if (isAuthenticated) {
-    console.log('Usuário autenticado, redirecionando para dashboard...');
-    return <Navigate to="/" replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -62,12 +62,15 @@ export default function Login() {
           description: result.error || "Email ou senha incorretos",
           variant: "destructive",
         });
+        setIsLogging(false);
       } else {
         console.log('Login realizado com sucesso');
         toast({
           title: "Login realizado",
           description: "Bem-vindo ao sistema!",
         });
+        // Não precisa setar isLogging como false aqui, 
+        // pois o componente será desmontado após o redirect
       }
     } catch (error) {
       console.error('Erro durante login:', error);
@@ -76,7 +79,6 @@ export default function Login() {
         description: "Ocorreu um erro ao fazer login",
         variant: "destructive",
       });
-    } finally {
       setIsLogging(false);
     }
   };
