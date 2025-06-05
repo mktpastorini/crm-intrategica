@@ -14,7 +14,7 @@ import { Phone, Mail, Calendar, User, Building, Archive } from 'lucide-react';
 
 export default function Pipeline() {
   const { leads, pipelineStages, moveLead, addEvent, users } = useCrm();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { toast } = useToast();
   const [showEventDialog, setShowEventDialog] = useState(false);
   const [selectedLead, setSelectedLead] = useState<string | null>(null);
@@ -22,7 +22,7 @@ export default function Pipeline() {
     type: 'reunion' as 'reunion' | 'call' | 'whatsapp' | 'email',
     date: '',
     time: '',
-    responsible: user?.name || '',
+    responsible: profile?.name || '',
     responsible_id: user?.id || ''
   });
 
@@ -91,7 +91,7 @@ export default function Pipeline() {
       type: 'reunion',
       date: '',
       time: '',
-      responsible: user?.name || '',
+      responsible: profile?.name || '',
       responsible_id: user?.id || ''
     });
     setSelectedLead(null);

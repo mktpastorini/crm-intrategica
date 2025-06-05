@@ -35,7 +35,7 @@ interface ScheduledMessage {
 
 export default function Messages() {
   const { leads } = useCrm();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { toast } = useToast();
 
   // Carregar configurações do sistema
@@ -131,7 +131,7 @@ export default function Messages() {
           body: JSON.stringify({
             messages: payload,
             timestamp: new Date().toISOString(),
-            user: user?.name || 'Sistema'
+            user: profile?.name || 'Sistema'
           })
         });
 
@@ -180,7 +180,7 @@ export default function Messages() {
       message,
       leads: selectedLeadsData,
       scheduledFor: `${scheduledDate} ${scheduledTime}`,
-      createdBy: user?.name || 'Usuário',
+      createdBy: profile?.name || 'Usuário',
       mediaFile: mediaFile?.name || undefined
     };
 
