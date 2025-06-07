@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 
 interface SystemSettings {
   systemName: string;
@@ -20,11 +20,8 @@ const defaultSettings: SystemSettings = {
 export function useSystemSettings() {
   const [settings, setSettings] = useState<SystemSettings>(defaultSettings);
   const [loading, setLoading] = useState(true);
-  const initialized = useRef(false);
 
   useEffect(() => {
-    if (initialized.current) return;
-
     const loadSettings = () => {
       try {
         const savedSettings = localStorage.getItem('systemSettings');
@@ -32,17 +29,15 @@ export function useSystemSettings() {
           const parsedSettings = JSON.parse(savedSettings);
           const mergedSettings = { ...defaultSettings, ...parsedSettings };
           setSettings(mergedSettings);
-          
-          // Aplicar configurações visuais sem loops
-          setTimeout(() => {
-            applyVisualSettings(mergedSettings);
-          }, 0);
+          applyVisualSettings(mergedSettings);
+        } else {
+          applyVisualSettings(defaultSettings);
         }
       } catch (error) {
         console.error('Erro ao carregar configurações:', error);
+        applyVisualSettings(defaultSettings);
       } finally {
         setLoading(false);
-        initialized.current = true;
       }
     };
 
@@ -85,11 +80,7 @@ export function useSystemSettings() {
     const updatedSettings = { ...settings, ...newSettings };
     setSettings(updatedSettings);
     localStorage.setItem('systemSettings', JSON.stringify(updatedSettings));
-    
-    // Aplicar configurações visuais imediatamente
-    setTimeout(() => {
-      applyVisualSettings(updatedSettings);
-    }, 0);
+    applyVisualSettings(updatedSettings);
   };
 
   return { settings, loading, updateSettings };

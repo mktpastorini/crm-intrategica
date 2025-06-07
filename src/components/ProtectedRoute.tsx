@@ -11,7 +11,7 @@ interface ProtectedRouteProps {
 export default function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
   const { isAuthenticated, profile, loading } = useAuth();
 
-  console.log('ProtectedRoute - Estado:', { loading, isAuthenticated, profile: profile?.role });
+  console.log('ProtectedRoute - Estado:', { loading, isAuthenticated, profileRole: profile?.role });
 
   // Mostrar loading apenas durante verificação inicial
   if (loading) {
