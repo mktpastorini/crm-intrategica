@@ -507,6 +507,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const deleteEvent = async (id: string) => {
     try {
       console.log('Deletando evento do Supabase:', id);
+      
+      // First delete from Supabase
       const { error } = await supabase
         .from('events')
         .delete()
@@ -514,12 +516,17 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
       if (error) {
         console.error('Erro ao deletar evento:', error);
-        throw error;
+        toast({
+          title: "Erro",
+          description: error.message || "Erro ao remover evento",
+          variant: "destructive",
+        });
+        return;
       }
 
-      console.log('Evento deletado com sucesso');
+      console.log('Evento deletado do banco de dados com sucesso');
       
-      // Update local state immediately
+      // Only update local state after successful deletion
       setEvents(prev => prev.filter(event => event.id !== id));
       
       toast({
@@ -536,7 +543,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // ... keep existing code (pipeline stages management, pending actions, etc.)
   const addPipelineStage = (stage: PipelineStage) => {
     const newStages = [...pipelineStages, stage];
     savePipelineStages(newStages);
