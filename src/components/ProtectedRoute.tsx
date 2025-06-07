@@ -11,14 +11,14 @@ interface ProtectedRouteProps {
 export default function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
   const { user, profile, loading } = useAuth();
 
-  console.log('ProtectedRoute - Estado final:', { 
+  console.log('ProtectedRoute - Estado:', { 
     user: !!user, 
     profile: !!profile, 
     loading,
     userRole: profile?.role
   });
 
-  // Mostrar loading apenas enquanto ainda está carregando
+  // Se ainda está carregando, mostrar loading
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50">

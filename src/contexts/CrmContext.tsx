@@ -89,9 +89,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
-  const [dataLoaded, setDataLoaded] = useState(false);
+  const [initialized, setInitialized] = useState(false);
   
-  // Dados locais que ainda não foram migrados para Supabase
+  // Dados locais
   const [pipelineStages, setPipelineStages] = useState<PipelineStage[]>(() => {
     const saved = localStorage.getItem('pipelineStages');
     return saved ? JSON.parse(saved) : [
@@ -109,27 +109,25 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Carregar dados apenas quando usuário estiver autenticado e auth não estiver carregando
+  // Carregar dados quando auth estiver pronto e usuário logado
   useEffect(() => {
-    if (!authLoading && user && !dataLoaded) {
-      console.log('Usuário disponível, carregando dados do CRM...');
+    if (!authLoading && user && !initialized) {
+      console.log('Usuário autenticado, carregando dados...');
       refreshData();
-      setDataLoaded(true);
-    } else if (!user) {
-      // Limpar dados quando usuário não estiver autenticado
-      console.log('Usuário não autenticado, limpando dados...');
+      setInitialized(true);
+    } else if (!user && initialized) {
+      // Limpar dados quando usuário deslogar
+      console.log('Usuário deslogado, limpando dados...');
       setLeads([]);
       setEvents([]);
       setUsers([]);
-      setDataLoaded(false);
+      setInitialized(false);
     }
-  }, [user, authLoading, dataLoaded]);
+  }, [user, authLoading, initialized]);
 
   const fetchLeads = async () => {
-    if (!user) return;
-    
     try {
-      console.log('Buscando leads...');
+      console.log('Buscando leads do Supabase...');
       const { data, error } = await supabase
         .from('leads')
         .select(`
@@ -140,7 +138,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
       if (error) {
         console.error('Erro ao buscar leads:', error);
-        return;
+        throw error;
       }
 
       const formattedLeads = data?.map(lead => ({
@@ -165,10 +163,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   };
 
   const fetchEvents = async () => {
-    if (!user) return;
-    
     try {
-      console.log('Buscando eventos...');
+      console.log('Buscando eventos do Supabase...');
       const { data, error } = await supabase
         .from('events')
         .select(`
@@ -179,7 +175,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
       if (error) {
         console.error('Erro ao buscar eventos:', error);
-        return;
+        throw error;
       }
 
       const formattedEvents = data?.map(event => ({
@@ -203,10 +199,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   };
 
   const fetchUsers = async () => {
-    if (!user) return;
-    
     try {
-      console.log('Buscando usuários...');
+      console.log('Buscando usuários do Supabase...');
       const { data, error } = await supabase
         .from('profiles')
         .select('id, name, email, role')
@@ -215,7 +209,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       
       if (error) {
         console.error('Erro ao buscar usuários:', error);
-        return;
+        throw error;
       }
       
       const typedUsers = (data || []).map(user => ({
@@ -244,6 +238,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       console.log('Dados atualizados com sucesso');
     } catch (error) {
       console.error('Erro ao atualizar dados:', error);
+      toast({
+        title: "Erro ao carregar dados",
+        description: "Não foi possível conectar ao banco de dados",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -593,31 +592,33 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const value = {
+    leads,
+    pipelineStages,
+    events,
+    pendingActions,
+    users,
+    loading,
+    addLead,
+    updateLead,
+    deleteLead,
+    moveLead,
+    addEvent,
+    updateEvent,
+    deleteEvent,
+    approveAction,
+    rejectAction,
+    requestLeadEdit,
+    requestLeadDelete,
+    addPipelineStage,
+    updatePipelineStage,
+    deletePipelineStage,
+    fetchUsers,
+    refreshData
+  };
+
   return (
-    <CrmContext.Provider value={{
-      leads,
-      pipelineStages,
-      events,
-      pendingActions,
-      users,
-      loading,
-      addLead,
-      updateLead,
-      deleteLead,
-      moveLead,
-      addEvent,
-      updateEvent,
-      deleteEvent,
-      approveAction,
-      rejectAction,
-      requestLeadEdit,
-      requestLeadDelete,
-      addPipelineStage,
-      updatePipelineStage,
-      deletePipelineStage,
-      fetchUsers,
-      refreshData
-    }}>
+    <CrmContext.Provider value={value}>
       {children}
     </CrmContext.Provider>
   );
