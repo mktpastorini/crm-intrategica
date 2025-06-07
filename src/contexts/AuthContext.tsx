@@ -22,12 +22,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    console.log('AuthProvider: Inicializando autenticação');
     let mounted = true;
+
+    const loadUserProfile = async (userId: string) => {
+      try {
+        console.log('Buscando perfil do usuário:', userId);
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
+
+        if (error) {
+          console.error('Erro ao carregar perfil:', error);
+          return;
+        }
+        
+        if (mounted) {
+          setProfile(data);
+        }
+      } catch (error) {
+        console.error('Erro ao buscar perfil:', error);
+      }
+    };
 
     const initializeAuth = async () => {
       try {
-        // Get current session
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Erro ao obter sessão:', error);
+        }
         
         if (mounted) {
           setUser(session?.user || null);
@@ -36,34 +62,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             await loadUserProfile(session.user.id);
           }
           
+          // IMPORTANTE: Sempre definir loading como false após a inicialização
           setLoading(false);
         }
       } catch (error) {
-        console.error('Error initializing auth:', error);
+        console.error('Erro na inicialização da autenticação:', error);
         if (mounted) {
           setLoading(false);
         }
       }
     };
 
-    // Set up auth state listener
+    // Configurar listener de mudanças de autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state change:', event);
+      console.log('Auth state change:', event, session?.user?.id);
       
       if (!mounted) return;
 
       setUser(session?.user || null);
       
-      if (session?.user && event === 'SIGNED_IN') {
+      if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
         await loadUserProfile(session.user.id);
       } else if (event === 'SIGNED_OUT') {
         setProfile(null);
       }
       
-      if (!loading) {
-        // Only set loading false after initial load
-        setLoading(false);
-      }
+      // Definir loading como false após processar mudança de estado
+      setLoading(false);
     });
 
     initializeAuth();
@@ -73,25 +98,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       subscription.unsubscribe();
     };
   }, []);
-
-  const loadUserProfile = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (error) {
-        console.error('Error loading profile:', error);
-        return;
-      }
-      
-      setProfile(data);
-    } catch (error) {
-      console.error('Error fetching profile:', error);
-    }
-  };
 
   const signIn = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({
