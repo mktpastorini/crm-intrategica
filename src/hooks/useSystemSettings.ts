@@ -29,33 +29,24 @@ export function useSystemSettings() {
           const parsedSettings = JSON.parse(savedSettings);
           const mergedSettings = { ...defaultSettings, ...parsedSettings };
           setSettings(mergedSettings);
-          
-          // Aplicar configurações visuais uma única vez
-          setTimeout(() => {
-            applyVisualSettings(mergedSettings);
-          }, 100);
+          applyVisualSettings(mergedSettings);
         } else {
-          // Aplicar configurações padrão
-          setTimeout(() => {
-            applyVisualSettings(defaultSettings);
-          }, 100);
+          applyVisualSettings(defaultSettings);
         }
       } catch (error) {
-        console.error('Erro ao carregar configurações:', error);
-        setTimeout(() => {
-          applyVisualSettings(defaultSettings);
-        }, 100);
+        console.error('Error loading settings:', error);
+        applyVisualSettings(defaultSettings);
       } finally {
         setLoading(false);
       }
     };
 
     loadSettings();
-  }, []); // Array vazio - executar apenas uma vez
+  }, []);
 
   const applyVisualSettings = (settings: Partial<SystemSettings>) => {
     try {
-      // Aplicar logo
+      // Apply logo
       if (settings.logoUrl) {
         const logoElements = document.querySelectorAll('[data-logo]');
         logoElements.forEach(element => {
@@ -65,7 +56,7 @@ export function useSystemSettings() {
         });
       }
       
-      // Aplicar favicon
+      // Apply favicon
       if (settings.faviconUrl) {
         let favicon = document.querySelector('link[rel="icon"]') as HTMLLinkElement;
         if (!favicon) {
@@ -76,7 +67,7 @@ export function useSystemSettings() {
         favicon.href = settings.faviconUrl;
       }
       
-      // Aplicar cores
+      // Apply colors
       const root = document.documentElement;
       if (settings.primaryColor) {
         root.style.setProperty('--primary-color', settings.primaryColor);
@@ -85,7 +76,7 @@ export function useSystemSettings() {
         root.style.setProperty('--secondary-color', settings.secondaryColor);
       }
     } catch (error) {
-      console.error('Erro ao aplicar configurações visuais:', error);
+      console.error('Error applying visual settings:', error);
     }
   };
 
@@ -94,15 +85,9 @@ export function useSystemSettings() {
       const updatedSettings = { ...settings, ...newSettings };
       setSettings(updatedSettings);
       localStorage.setItem('systemSettings', JSON.stringify(updatedSettings));
-      
-      // Aplicar as novas configurações visuais
-      setTimeout(() => {
-        applyVisualSettings(updatedSettings);
-      }, 100);
-      
-      console.log('Configurações atualizadas e salvas:', updatedSettings);
+      applyVisualSettings(updatedSettings);
     } catch (error) {
-      console.error('Erro ao salvar configurações:', error);
+      console.error('Error saving settings:', error);
     }
   };
 

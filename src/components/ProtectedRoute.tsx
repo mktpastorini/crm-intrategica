@@ -1,7 +1,7 @@
 
-import { useAuth } from '@/contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -9,11 +9,57 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
-  const { isAuthenticated, profile, loading } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userProfile, setUserProfile] = useState<any>(null);
 
-  console.log('ProtectedRoute - Estado:', { loading, isAuthenticated, profileRole: profile?.role });
+  useEffect(() => {
+    let mounted = true;
 
-  // Mostrar loading apenas durante verificação inicial
+    const checkAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!mounted) return;
+
+        if (session?.user) {
+          setIsAuthenticated(true);
+          
+          // Load user profile for role checking
+          if (requiredRole) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', session.user.id)
+              .single();
+            
+            if (mounted) {
+              setUserProfile(profile);
+            }
+          }
+        } else {
+          setIsAuthenticated(false);
+        }
+        
+        if (mounted) {
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('Error checking auth:', error);
+        if (mounted) {
+          setLoading(false);
+          setIsAuthenticated(false);
+        }
+      }
+    };
+
+    checkAuth();
+
+    return () => {
+      mounted = false;
+    };
+  }, [requiredRole]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50">
@@ -25,15 +71,12 @@ export default function ProtectedRoute({ children, requiredRole }: ProtectedRout
     );
   }
 
-  // Se não autenticado, redirecionar para login
   if (!isAuthenticated) {
-    console.log('Usuário não autenticado, redirecionando para login');
     return <Navigate to="/login" replace />;
   }
 
-  // Verificar permissões de role se necessário
-  if (requiredRole && profile && !requiredRole.includes(profile.role || '')) {
-    console.log('Usuário sem permissão para esta rota, redirecionando');
+  // Check role permissions
+  if (requiredRole && userProfile && !requiredRole.includes(userProfile.role || '')) {
     return <Navigate to="/" replace />;
   }
 

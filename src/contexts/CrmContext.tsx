@@ -1,7 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
 
 export interface Lead {
   id: string;
@@ -83,7 +82,6 @@ const CrmContext = createContext<CrmContextType | undefined>(undefined);
 
 export function CrmProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
-  const { user, isAuthenticated } = useAuth();
   
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -109,9 +107,40 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     return saved ? JSON.parse(saved) : [];
   });
 
+  // Check if user is authenticated by checking session directly
+  const [isUserAuthenticated, setIsUserAuthenticated] = useState(false);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setIsUserAuthenticated(!!session);
+    };
+    
+    checkAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setIsUserAuthenticated(!!session);
+      if (!session) {
+        setLeads([]);
+        setEvents([]);
+        setUsers([]);
+        setDataLoaded(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Load data when user becomes authenticated
+  useEffect(() => {
+    if (isUserAuthenticated && !dataLoaded) {
+      refreshData();
+    }
+  }, [isUserAuthenticated, dataLoaded]);
+
   // Função para buscar leads do Supabase
   const fetchLeads = async () => {
-    if (!isAuthenticated) return;
+    if (!isUserAuthenticated) return;
     
     try {
       console.log('Buscando leads do Supabase...');
@@ -151,7 +180,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   // Função para buscar eventos do Supabase
   const fetchEvents = async () => {
-    if (!isAuthenticated) return;
+    if (!isUserAuthenticated) return;
     
     try {
       console.log('Buscando eventos do Supabase...');
@@ -190,7 +219,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   // Função para buscar usuários do Supabase
   const fetchUsers = async () => {
-    if (!isAuthenticated) return;
+    if (!isUserAuthenticated) return;
     
     try {
       console.log('Buscando usuários do Supabase...');
@@ -219,15 +248,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   // Função para atualizar todos os dados
   const refreshData = async () => {
-    if (!isAuthenticated) {
-      console.log('Usuário não autenticado, pulando carregamento de dados');
-      return;
-    }
-
-    if (dataLoaded) {
-      console.log('Dados já carregados, evitando recarregamento');
-      return;
-    }
+    if (!isUserAuthenticated || dataLoaded) return;
 
     setLoading(true);
     try {
@@ -238,7 +259,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       ]);
       setDataLoaded(true);
     } catch (error) {
-      console.error('Erro ao atualizar dados:', error);
+      console.error('Error refreshing data:', error);
     } finally {
       setLoading(false);
     }
@@ -246,17 +267,17 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   // Carregar dados quando usuário está autenticado
   useEffect(() => {
-    if (isAuthenticated && !dataLoaded) {
+    if (isUserAuthenticated && !dataLoaded) {
       console.log('Usuário autenticado, carregando dados...');
       refreshData();
-    } else if (!isAuthenticated) {
+    } else if (!isUserAuthenticated) {
       // Limpar dados quando usuário não autenticado
       setLeads([]);
       setEvents([]);
       setUsers([]);
       setDataLoaded(false);
     }
-  }, [isAuthenticated, dataLoaded]);
+  }, [isUserAuthenticated, dataLoaded]);
 
   // Salvar dados locais no localStorage (apenas para dados que ainda não estão no Supabase)
   const savePipelineStages = (newStages: PipelineStage[]) => {
@@ -496,8 +517,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         throw error;
       }
 
-      console.log('Evento deletado');
-      await fetchEvents(); // Recarregar eventos
+      console.log('Evento deletado com sucesso');
+      
+      // Update local state immediately
+      setEvents(prev => prev.filter(event => event.id !== id));
       
       toast({
         title: "Evento removido",
