@@ -11,7 +11,9 @@ interface ProtectedRouteProps {
 export default function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
   const { isAuthenticated, profile, loading } = useAuth();
 
-  // Mostrar loading enquanto verifica autenticação
+  console.log('ProtectedRoute - Estado:', { loading, isAuthenticated, profile: profile?.role });
+
+  // Mostrar loading apenas durante verificação inicial
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50">
@@ -23,11 +25,15 @@ export default function ProtectedRoute({ children, requiredRole }: ProtectedRout
     );
   }
 
+  // Se não autenticado, redirecionar para login
   if (!isAuthenticated) {
+    console.log('Usuário não autenticado, redirecionando para login');
     return <Navigate to="/login" replace />;
   }
 
-  if (requiredRole && !requiredRole.includes(profile?.role || '')) {
+  // Verificar permissões de role se necessário
+  if (requiredRole && profile && !requiredRole.includes(profile.role || '')) {
+    console.log('Usuário sem permissão para esta rota, redirecionando');
     return <Navigate to="/" replace />;
   }
 

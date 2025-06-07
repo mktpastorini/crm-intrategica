@@ -21,6 +21,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
 
   const loadUserProfile = async (userId: string) => {
     try {
@@ -45,59 +46,83 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    if (initialized) return;
+
     console.log('AuthProvider: Configurando autenticação');
     
-    // Configurar listener de mudanças de auth
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state change:', event, session?.user?.id);
-      
-      if (session?.user) {
-        setSession(session);
-        setUser(session.user);
+    let mounted = true;
+
+    const initializeAuth = async () => {
+      try {
+        // Primeiro, verificar sessão atual
+        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
         
-        // Carregar perfil do usuário
-        const userProfile = await loadUserProfile(session.user.id);
-        setProfile(userProfile);
+        if (error) {
+          console.error('Erro ao obter sessão:', error);
+        }
+
+        if (mounted) {
+          if (currentSession?.user) {
+            setSession(currentSession);
+            setUser(currentSession.user);
+            
+            // Carregar perfil
+            const userProfile = await loadUserProfile(currentSession.user.id);
+            if (mounted) {
+              setProfile(userProfile);
+            }
+          }
+          setLoading(false);
+          setInitialized(true);
+        }
+      } catch (error) {
+        console.error('Erro na inicialização:', error);
+        if (mounted) {
+          setLoading(false);
+          setInitialized(true);
+        }
+      }
+    };
+
+    // Configurar listener de mudanças de auth
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      console.log('Auth state change:', event, newSession?.user?.id);
+      
+      if (!mounted) return;
+
+      if (newSession?.user) {
+        setSession(newSession);
+        setUser(newSession.user);
+        
+        // Carregar perfil apenas se mudou o usuário
+        if (!profile || profile.id !== newSession.user.id) {
+          const userProfile = await loadUserProfile(newSession.user.id);
+          if (mounted) {
+            setProfile(userProfile);
+          }
+        }
       } else {
         setSession(null);
         setUser(null);
         setProfile(null);
       }
       
-      setLoading(false);
-    });
-
-    // Verificar sessão atual uma única vez
-    const initializeAuth = async () => {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('Erro ao obter sessão:', error);
-          setLoading(false);
-          return;
-        }
-
-        // Não definir estado aqui, deixar o onAuthStateChange lidar com isso
-        if (!session) {
-          setLoading(false);
-        }
-      } catch (error) {
-        console.error('Erro na inicialização:', error);
+      if (mounted && !initialized) {
         setLoading(false);
+        setInitialized(true);
       }
-    };
+    });
 
     initializeAuth();
 
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [initialized, profile]);
 
   const signIn = async (email: string, password: string) => {
     try {
-      setLoading(true);
       console.log('Tentando fazer login com:', email);
       
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -113,7 +138,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('Login bem-sucedido:', data);
     } catch (error) {
       console.error('Erro durante o login:', error);
-      setLoading(false);
       throw error;
     }
   };

@@ -1,6 +1,5 @@
 
-import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { useState, useEffect, useRef } from 'react';
 
 interface SystemSettings {
   systemName: string;
@@ -21,24 +20,29 @@ const defaultSettings: SystemSettings = {
 export function useSystemSettings() {
   const [settings, setSettings] = useState<SystemSettings>(defaultSettings);
   const [loading, setLoading] = useState(true);
+  const initialized = useRef(false);
 
   useEffect(() => {
-    const loadSettings = async () => {
+    if (initialized.current) return;
+
+    const loadSettings = () => {
       try {
-        // Primeiro tenta carregar do Supabase (implementar tabela system_settings)
-        // Por enquanto, usa localStorage como fallback
         const savedSettings = localStorage.getItem('systemSettings');
         if (savedSettings) {
           const parsedSettings = JSON.parse(savedSettings);
-          setSettings({ ...defaultSettings, ...parsedSettings });
+          const mergedSettings = { ...defaultSettings, ...parsedSettings };
+          setSettings(mergedSettings);
           
-          // Aplicar configurações visuais
-          applyVisualSettings(parsedSettings);
+          // Aplicar configurações visuais sem loops
+          setTimeout(() => {
+            applyVisualSettings(mergedSettings);
+          }, 0);
         }
       } catch (error) {
         console.error('Erro ao carregar configurações:', error);
       } finally {
         setLoading(false);
+        initialized.current = true;
       }
     };
 
@@ -81,7 +85,11 @@ export function useSystemSettings() {
     const updatedSettings = { ...settings, ...newSettings };
     setSettings(updatedSettings);
     localStorage.setItem('systemSettings', JSON.stringify(updatedSettings));
-    applyVisualSettings(updatedSettings);
+    
+    // Aplicar configurações visuais imediatamente
+    setTimeout(() => {
+      applyVisualSettings(updatedSettings);
+    }, 0);
   };
 
   return { settings, loading, updateSettings };
