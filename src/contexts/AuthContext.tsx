@@ -20,14 +20,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    console.log('AuthProvider: Inicializando autenticação');
     let mounted = true;
-
+    
     const loadUserProfile = async (userId: string) => {
       try {
-        console.log('Buscando perfil do usuário:', userId);
+        console.log('Carregando perfil para usuário:', userId);
         const { data, error } = await supabase
           .from('profiles')
           .select('*')
@@ -36,19 +36,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (error) {
           console.error('Erro ao carregar perfil:', error);
+          if (mounted) {
+            setProfile(null);
+          }
           return;
         }
         
-        if (mounted) {
+        if (mounted && data) {
+          console.log('Perfil carregado:', data);
           setProfile(data);
         }
       } catch (error) {
-        console.error('Erro ao buscar perfil:', error);
+        console.error('Erro inesperado ao buscar perfil:', error);
+        if (mounted) {
+          setProfile(null);
+        }
       }
     };
 
     const initializeAuth = async () => {
+      if (initialized) return;
+      
       try {
+        console.log('Inicializando autenticação...');
+        
+        // Obter sessão atual
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
@@ -56,18 +68,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         
         if (mounted) {
-          setUser(session?.user || null);
+          const currentUser = session?.user || null;
+          console.log('Usuário da sessão:', currentUser?.id || 'nenhum');
           
-          if (session?.user) {
-            await loadUserProfile(session.user.id);
+          setUser(currentUser);
+          
+          // Carregar perfil se houver usuário
+          if (currentUser) {
+            await loadUserProfile(currentUser.id);
+          } else {
+            setProfile(null);
           }
           
-          // IMPORTANTE: Sempre definir loading como false após a inicialização
+          setInitialized(true);
           setLoading(false);
         }
       } catch (error) {
-        console.error('Erro na inicialização da autenticação:', error);
+        console.error('Erro na inicialização:', error);
         if (mounted) {
+          setInitialized(true);
           setLoading(false);
         }
       }
@@ -75,29 +94,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Configurar listener de mudanças de autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state change:', event, session?.user?.id);
+      console.log('Mudança de estado auth:', event, session?.user?.id || 'sem usuário');
       
       if (!mounted) return;
 
-      setUser(session?.user || null);
+      const currentUser = session?.user || null;
+      setUser(currentUser);
       
-      if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
-        await loadUserProfile(session.user.id);
+      if (currentUser && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
+        await loadUserProfile(currentUser.id);
       } else if (event === 'SIGNED_OUT') {
         setProfile(null);
       }
       
-      // Definir loading como false após processar mudança de estado
-      setLoading(false);
+      // Garantir que loading seja false após processar evento
+      if (initialized) {
+        setLoading(false);
+      }
     });
 
+    // Inicializar
     initializeAuth();
 
     return () => {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, []); // Dependências vazias para evitar re-execução
 
   const signIn = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({

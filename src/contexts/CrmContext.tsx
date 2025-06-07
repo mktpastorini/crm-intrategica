@@ -83,12 +83,13 @@ const CrmContext = createContext<CrmContextType | undefined>(undefined);
 
 export function CrmProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
+  const [dataLoaded, setDataLoaded] = useState(false);
   
   // Dados locais que ainda não foram migrados para Supabase
   const [pipelineStages, setPipelineStages] = useState<PipelineStage[]>(() => {
@@ -108,24 +109,27 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Carregar dados quando usuário estiver autenticado
+  // Carregar dados apenas quando usuário estiver autenticado e auth não estiver carregando
   useEffect(() => {
-    if (user) {
-      console.log('Usuário autenticado, carregando dados...');
+    if (!authLoading && user && !dataLoaded) {
+      console.log('Usuário disponível, carregando dados do CRM...');
       refreshData();
-    } else {
+      setDataLoaded(true);
+    } else if (!user) {
       // Limpar dados quando usuário não estiver autenticado
+      console.log('Usuário não autenticado, limpando dados...');
       setLeads([]);
       setEvents([]);
       setUsers([]);
+      setDataLoaded(false);
     }
-  }, [user]);
+  }, [user, authLoading, dataLoaded]);
 
   const fetchLeads = async () => {
     if (!user) return;
     
     try {
-      console.log('Buscando leads do Supabase...');
+      console.log('Buscando leads...');
       const { data, error } = await supabase
         .from('leads')
         .select(`
@@ -164,7 +168,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     
     try {
-      console.log('Buscando eventos do Supabase...');
+      console.log('Buscando eventos...');
       const { data, error } = await supabase
         .from('events')
         .select(`
@@ -202,7 +206,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     
     try {
-      console.log('Buscando usuários do Supabase...');
+      console.log('Buscando usuários...');
       const { data, error } = await supabase
         .from('profiles')
         .select('id, name, email, role')
@@ -231,13 +235,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
     setLoading(true);
     try {
+      console.log('Atualizando todos os dados...');
       await Promise.all([
         fetchLeads(),
         fetchEvents(),
         fetchUsers()
       ]);
+      console.log('Dados atualizados com sucesso');
     } catch (error) {
-      console.error('Error refreshing data:', error);
+      console.error('Erro ao atualizar dados:', error);
     } finally {
       setLoading(false);
     }
@@ -256,7 +262,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const addLead = async (leadData: Omit<Lead, 'id' | 'createdAt'>) => {
     try {
-      console.log('Adicionando lead ao Supabase:', leadData);
+      console.log('Adicionando lead:', leadData);
       const { data, error } = await supabase
         .from('leads')
         .insert({
@@ -272,17 +278,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         .select()
         .single();
 
-      if (error) {
-        console.error('Erro ao adicionar lead:', error);
-        throw error;
-      }
+      if (error) throw error;
 
-      console.log('Lead adicionado:', data);
       await fetchLeads();
       
       toast({
         title: "Lead adicionado",
-        description: "Lead foi adicionado com sucesso ao banco de dados",
+        description: "Lead foi adicionado com sucesso",
       });
     } catch (error: any) {
       console.error('Erro ao adicionar lead:', error);
@@ -296,7 +298,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const updateLead = async (id: string, updates: Partial<Lead>) => {
     try {
-      console.log('Atualizando lead no Supabase:', id, updates);
       const { error } = await supabase
         .from('leads')
         .update({
@@ -311,17 +312,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         })
         .eq('id', id);
 
-      if (error) {
-        console.error('Erro ao atualizar lead:', error);
-        throw error;
-      }
+      if (error) throw error;
 
-      console.log('Lead atualizado');
       await fetchLeads();
       
       toast({
         title: "Lead atualizado",
-        description: "As alterações foram salvas no banco de dados",
+        description: "As alterações foram salvas",
       });
     } catch (error: any) {
       console.error('Erro ao atualizar lead:', error);
@@ -335,24 +332,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const deleteLead = async (id: string) => {
     try {
-      console.log('Deletando lead do Supabase:', id);
       const { error } = await supabase
         .from('leads')
         .delete()
         .eq('id', id);
 
-      if (error) {
-        console.error('Erro ao deletar lead:', error);
-        throw error;
-      }
+      if (error) throw error;
 
-      console.log('Lead deletado');
-      await fetchLeads();
-      await fetchEvents();
+      await Promise.all([fetchLeads(), fetchEvents()]);
       
       toast({
         title: "Lead removido",
-        description: "Lead foi removido do banco de dados",
+        description: "Lead foi removido com sucesso",
       });
     } catch (error: any) {
       console.error('Erro ao deletar lead:', error);
@@ -366,18 +357,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const moveLead = async (leadId: string, newStage: string) => {
     try {
-      console.log('Movendo lead no pipeline:', leadId, newStage);
       const { error } = await supabase
         .from('leads')
         .update({ pipeline_stage: newStage })
         .eq('id', leadId);
 
-      if (error) {
-        console.error('Erro ao mover lead:', error);
-        throw error;
-      }
+      if (error) throw error;
 
-      console.log('Lead movido');
       await fetchLeads();
     } catch (error: any) {
       console.error('Erro ao mover lead:', error);
@@ -391,7 +377,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const addEvent = async (eventData: Omit<Event, 'id'>) => {
     try {
-      console.log('Adicionando evento ao Supabase:', eventData);
       const { data, error } = await supabase
         .from('events')
         .insert({
@@ -407,17 +392,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         .select()
         .single();
 
-      if (error) {
-        console.error('Erro ao adicionar evento:', error);
-        throw error;
-      }
+      if (error) throw error;
 
-      console.log('Evento adicionado:', data);
       await fetchEvents();
       
       toast({
         title: "Evento adicionado",
-        description: "Evento foi agendado no banco de dados",
+        description: "Evento foi agendado com sucesso",
       });
     } catch (error: any) {
       console.error('Erro ao adicionar evento:', error);
@@ -431,7 +412,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const updateEvent = async (id: string, updates: Partial<Event>) => {
     try {
-      console.log('Atualizando evento no Supabase:', id, updates);
       const { error } = await supabase
         .from('events')
         .update({
@@ -446,17 +426,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         })
         .eq('id', id);
 
-      if (error) {
-        console.error('Erro ao atualizar evento:', error);
-        throw error;
-      }
+      if (error) throw error;
 
-      console.log('Evento atualizado');
       await fetchEvents();
       
       toast({
         title: "Evento atualizado",
-        description: "As alterações foram salvas no banco de dados",
+        description: "As alterações foram salvas",
       });
     } catch (error: any) {
       console.error('Erro ao atualizar evento:', error);
@@ -470,7 +446,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const deleteEvent = async (id: string) => {
     try {
-      console.log('Deletando evento do Supabase:', id);
+      console.log('Deletando evento:', id);
       
       const { error } = await supabase
         .from('events')
@@ -479,22 +455,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
       if (error) {
         console.error('Erro ao deletar evento:', error);
-        toast({
-          title: "Erro",
-          description: error.message || "Erro ao remover evento",
-          variant: "destructive",
-        });
-        return;
+        throw error;
       }
 
-      console.log('Evento deletado do banco de dados');
-      
-      // Recarregar eventos após exclusão
+      console.log('Evento deletado, atualizando lista...');
       await fetchEvents();
       
       toast({
         title: "Evento removido",
-        description: "Evento foi removido do banco de dados",
+        description: "Evento foi removido com sucesso",
       });
     } catch (error: any) {
       console.error('Erro ao deletar evento:', error);
