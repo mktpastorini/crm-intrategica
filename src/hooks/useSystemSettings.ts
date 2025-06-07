@@ -29,58 +29,81 @@ export function useSystemSettings() {
           const parsedSettings = JSON.parse(savedSettings);
           const mergedSettings = { ...defaultSettings, ...parsedSettings };
           setSettings(mergedSettings);
-          applyVisualSettings(mergedSettings);
+          
+          // Aplicar configurações visuais uma única vez
+          setTimeout(() => {
+            applyVisualSettings(mergedSettings);
+          }, 100);
         } else {
-          applyVisualSettings(defaultSettings);
+          // Aplicar configurações padrão
+          setTimeout(() => {
+            applyVisualSettings(defaultSettings);
+          }, 100);
         }
       } catch (error) {
         console.error('Erro ao carregar configurações:', error);
-        applyVisualSettings(defaultSettings);
+        setTimeout(() => {
+          applyVisualSettings(defaultSettings);
+        }, 100);
       } finally {
         setLoading(false);
       }
     };
 
     loadSettings();
-  }, []);
+  }, []); // Array vazio - executar apenas uma vez
 
   const applyVisualSettings = (settings: Partial<SystemSettings>) => {
-    // Aplicar logo
-    if (settings.logoUrl) {
-      const logoElements = document.querySelectorAll('[data-logo]');
-      logoElements.forEach(element => {
-        if (element instanceof HTMLImageElement) {
-          element.src = settings.logoUrl;
-        }
-      });
-    }
-    
-    // Aplicar favicon
-    if (settings.faviconUrl) {
-      let favicon = document.querySelector('link[rel="icon"]') as HTMLLinkElement;
-      if (!favicon) {
-        favicon = document.createElement('link');
-        favicon.rel = 'icon';
-        document.head.appendChild(favicon);
+    try {
+      // Aplicar logo
+      if (settings.logoUrl) {
+        const logoElements = document.querySelectorAll('[data-logo]');
+        logoElements.forEach(element => {
+          if (element instanceof HTMLImageElement) {
+            element.src = settings.logoUrl;
+          }
+        });
       }
-      favicon.href = settings.faviconUrl;
-    }
-    
-    // Aplicar cores
-    const root = document.documentElement;
-    if (settings.primaryColor) {
-      root.style.setProperty('--primary-color', settings.primaryColor);
-    }
-    if (settings.secondaryColor) {
-      root.style.setProperty('--secondary-color', settings.secondaryColor);
+      
+      // Aplicar favicon
+      if (settings.faviconUrl) {
+        let favicon = document.querySelector('link[rel="icon"]') as HTMLLinkElement;
+        if (!favicon) {
+          favicon = document.createElement('link');
+          favicon.rel = 'icon';
+          document.head.appendChild(favicon);
+        }
+        favicon.href = settings.faviconUrl;
+      }
+      
+      // Aplicar cores
+      const root = document.documentElement;
+      if (settings.primaryColor) {
+        root.style.setProperty('--primary-color', settings.primaryColor);
+      }
+      if (settings.secondaryColor) {
+        root.style.setProperty('--secondary-color', settings.secondaryColor);
+      }
+    } catch (error) {
+      console.error('Erro ao aplicar configurações visuais:', error);
     }
   };
 
   const updateSettings = (newSettings: Partial<SystemSettings>) => {
-    const updatedSettings = { ...settings, ...newSettings };
-    setSettings(updatedSettings);
-    localStorage.setItem('systemSettings', JSON.stringify(updatedSettings));
-    applyVisualSettings(updatedSettings);
+    try {
+      const updatedSettings = { ...settings, ...newSettings };
+      setSettings(updatedSettings);
+      localStorage.setItem('systemSettings', JSON.stringify(updatedSettings));
+      
+      // Aplicar as novas configurações visuais
+      setTimeout(() => {
+        applyVisualSettings(updatedSettings);
+      }, 100);
+      
+      console.log('Configurações atualizadas e salvas:', updatedSettings);
+    } catch (error) {
+      console.error('Erro ao salvar configurações:', error);
+    }
   };
 
   return { settings, loading, updateSettings };
