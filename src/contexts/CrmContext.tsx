@@ -87,7 +87,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
-  const [dataLoaded, setDataLoaded] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   
   // Dados locais que ainda não foram migrados para Supabase
   const [pipelineStages, setPipelineStages] = useState<PipelineStage[]>(() => {
@@ -107,40 +107,36 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Check if user is authenticated by checking session directly
-  const [isUserAuthenticated, setIsUserAuthenticated] = useState(false);
-
+  // Verificar autenticação
   useEffect(() => {
     const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      setIsUserAuthenticated(!!session);
+      setIsAuthenticated(!!session);
     };
     
     checkAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setIsUserAuthenticated(!!session);
+      setIsAuthenticated(!!session);
       if (!session) {
         setLeads([]);
         setEvents([]);
         setUsers([]);
-        setDataLoaded(false);
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  // Load data when user becomes authenticated
+  // Carregar dados quando autenticado
   useEffect(() => {
-    if (isUserAuthenticated && !dataLoaded) {
+    if (isAuthenticated) {
       refreshData();
     }
-  }, [isUserAuthenticated, dataLoaded]);
+  }, [isAuthenticated]);
 
-  // Função para buscar leads do Supabase
   const fetchLeads = async () => {
-    if (!isUserAuthenticated) return;
+    if (!isAuthenticated) return;
     
     try {
       console.log('Buscando leads do Supabase...');
@@ -157,7 +153,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      console.log('Leads carregados:', data?.length);
       const formattedLeads = data?.map(lead => ({
         id: lead.id,
         name: lead.name,
@@ -173,14 +168,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       })) || [];
 
       setLeads(formattedLeads);
+      console.log('Leads carregados:', formattedLeads.length);
     } catch (error) {
       console.error('Erro ao carregar leads:', error);
     }
   };
 
-  // Função para buscar eventos do Supabase
   const fetchEvents = async () => {
-    if (!isUserAuthenticated) return;
+    if (!isAuthenticated) return;
     
     try {
       console.log('Buscando eventos do Supabase...');
@@ -197,7 +192,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      console.log('Eventos carregados:', data?.length);
       const formattedEvents = data?.map(event => ({
         id: event.id,
         title: event.title,
@@ -212,14 +206,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       })) || [];
 
       setEvents(formattedEvents);
+      console.log('Eventos carregados:', formattedEvents.length);
     } catch (error) {
       console.error('Erro ao carregar eventos:', error);
     }
   };
 
-  // Função para buscar usuários do Supabase
   const fetchUsers = async () => {
-    if (!isUserAuthenticated) return;
+    if (!isAuthenticated) return;
     
     try {
       console.log('Buscando usuários do Supabase...');
@@ -234,21 +228,20 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         return;
       }
       
-      console.log('Usuários carregados:', data?.length);
       const typedUsers = (data || []).map(user => ({
         ...user,
         role: user.role as 'admin' | 'supervisor' | 'comercial'
       }));
       
       setUsers(typedUsers);
+      console.log('Usuários carregados:', typedUsers.length);
     } catch (error) {
       console.error('Erro ao carregar usuários:', error);
     }
   };
 
-  // Função para atualizar todos os dados
   const refreshData = async () => {
-    if (!isUserAuthenticated || dataLoaded) return;
+    if (!isAuthenticated) return;
 
     setLoading(true);
     try {
@@ -257,7 +250,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         fetchEvents(),
         fetchUsers()
       ]);
-      setDataLoaded(true);
     } catch (error) {
       console.error('Error refreshing data:', error);
     } finally {
@@ -265,21 +257,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Carregar dados quando usuário está autenticado
-  useEffect(() => {
-    if (isUserAuthenticated && !dataLoaded) {
-      console.log('Usuário autenticado, carregando dados...');
-      refreshData();
-    } else if (!isUserAuthenticated) {
-      // Limpar dados quando usuário não autenticado
-      setLeads([]);
-      setEvents([]);
-      setUsers([]);
-      setDataLoaded(false);
-    }
-  }, [isUserAuthenticated, dataLoaded]);
-
-  // Salvar dados locais no localStorage (apenas para dados que ainda não estão no Supabase)
+  // Salvar dados locais no localStorage
   const savePipelineStages = (newStages: PipelineStage[]) => {
     setPipelineStages(newStages);
     localStorage.setItem('pipelineStages', JSON.stringify(newStages));
@@ -314,7 +292,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
 
       console.log('Lead adicionado:', data);
-      await fetchLeads(); // Recarregar leads
+      await fetchLeads();
       
       toast({
         title: "Lead adicionado",
@@ -353,7 +331,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
 
       console.log('Lead atualizado');
-      await fetchLeads(); // Recarregar leads
+      await fetchLeads();
       
       toast({
         title: "Lead atualizado",
@@ -383,8 +361,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
 
       console.log('Lead deletado');
-      await fetchLeads(); // Recarregar leads
-      await fetchEvents(); // Recarregar eventos (pode ter eventos relacionados)
+      await fetchLeads();
+      await fetchEvents();
       
       toast({
         title: "Lead removido",
@@ -414,7 +392,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
 
       console.log('Lead movido');
-      await fetchLeads(); // Recarregar leads
+      await fetchLeads();
     } catch (error: any) {
       console.error('Erro ao mover lead:', error);
       toast({
@@ -449,7 +427,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
 
       console.log('Evento adicionado:', data);
-      await fetchEvents(); // Recarregar eventos
+      await fetchEvents();
       
       toast({
         title: "Evento adicionado",
@@ -488,7 +466,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
 
       console.log('Evento atualizado');
-      await fetchEvents(); // Recarregar eventos
+      await fetchEvents();
       
       toast({
         title: "Evento atualizado",
@@ -508,7 +486,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     try {
       console.log('Deletando evento do Supabase:', id);
       
-      // First delete from Supabase
       const { error } = await supabase
         .from('events')
         .delete()
@@ -524,10 +501,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      console.log('Evento deletado do banco de dados com sucesso');
+      console.log('Evento deletado do banco de dados');
       
-      // Only update local state after successful deletion
-      setEvents(prev => prev.filter(event => event.id !== id));
+      // Recarregar eventos após exclusão
+      await fetchEvents();
       
       toast({
         title: "Evento removido",

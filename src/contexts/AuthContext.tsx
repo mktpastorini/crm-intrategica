@@ -18,7 +18,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -28,38 +27,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const initializeAuth = async () => {
       try {
         // Get current session
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        const { data: { session } } = await supabase.auth.getSession();
         
         if (mounted) {
-          setSession(currentSession);
-          setUser(currentSession?.user || null);
+          setUser(session?.user || null);
           
-          if (currentSession?.user) {
-            await loadUserProfile(currentSession.user.id);
+          if (session?.user) {
+            await loadUserProfile(session.user.id);
           }
           
           setLoading(false);
         }
-
-        // Set up auth state listener
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
-          console.log('Auth state change:', event);
-          
-          if (!mounted) return;
-
-          setSession(newSession);
-          setUser(newSession?.user || null);
-          
-          if (newSession?.user && event === 'SIGNED_IN') {
-            await loadUserProfile(newSession.user.id);
-          } else if (event === 'SIGNED_OUT') {
-            setProfile(null);
-          }
-        });
-
-        return () => {
-          subscription.unsubscribe();
-        };
       } catch (error) {
         console.error('Error initializing auth:', error);
         if (mounted) {
@@ -68,10 +46,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
 
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state change:', event);
+      
+      if (!mounted) return;
+
+      setUser(session?.user || null);
+      
+      if (session?.user && event === 'SIGNED_IN') {
+        await loadUserProfile(session.user.id);
+      } else if (event === 'SIGNED_OUT') {
+        setProfile(null);
+      }
+      
+      if (!loading) {
+        // Only set loading false after initial load
+        setLoading(false);
+      }
+    });
+
     initializeAuth();
 
     return () => {
       mounted = false;
+      subscription.unsubscribe();
     };
   }, []);
 
@@ -121,7 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signOut();
   };
 
-  const isAuthenticated = !!session && !!user;
+  const isAuthenticated = !!user;
 
   const value = {
     user,
