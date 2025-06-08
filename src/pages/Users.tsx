@@ -38,10 +38,6 @@ export default function Users() {
     status: 'active'
   });
 
-  useEffect(() => {
-    loadUsers();
-  }, []);
-
   const loadUsers = async () => {
     try {
       console.log('Carregando usuários...');
@@ -54,27 +50,26 @@ export default function Users() {
 
       if (error) {
         console.error('Erro ao carregar usuários:', error);
-        toast({
-          title: "Erro",
-          description: "Erro ao carregar usuários",
-          variant: "destructive",
-        });
-        return;
+        throw error;
       }
 
-      console.log('Usuários carregados:', data);
+      console.log('Usuários carregados:', data?.length || 0);
       setUsers(data || []);
-    } catch (error) {
-      console.error('Erro:', error);
+    } catch (error: any) {
+      console.error('Erro ao carregar usuários:', error);
       toast({
         title: "Erro",
-        description: "Erro ao conectar com o banco de dados",
+        description: "Erro ao carregar usuários",
         variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,24 +78,32 @@ export default function Users() {
       setActionLoading('submit');
       
       if (editingUser) {
-        // Atualizar usuário existente
-        const { error } = await supabase
+        console.log('Atualizando usuário:', editingUser.id, formData);
+        
+        const { data, error } = await supabase
           .from('profiles')
           .update({
             name: formData.name,
             role: formData.role,
             status: formData.status
           })
-          .eq('id', editingUser.id);
+          .eq('id', editingUser.id)
+          .select()
+          .single();
 
-        if (error) throw error;
+        if (error) {
+          console.error('Erro ao atualizar usuário:', error);
+          throw error;
+        }
+
+        console.log('Usuário atualizado:', data);
+        setUsers(prev => prev.map(u => u.id === editingUser.id ? data : u));
 
         toast({
           title: "Usuário atualizado",
           description: "Usuário foi atualizado com sucesso",
         });
       } else {
-        // Criar novo usuário - apenas inserir no profiles
         toast({
           title: "Funcionalidade em desenvolvimento",
           description: "A criação de novos usuários será implementada em breve",
@@ -109,15 +112,7 @@ export default function Users() {
         return;
       }
 
-      setFormData({
-        name: '',
-        email: '',
-        role: 'comercial',
-        status: 'active'
-      });
-      setEditingUser(null);
-      setShowAddDialog(false);
-      await loadUsers(); // Recarregar a lista
+      handleCloseDialog();
     } catch (error: any) {
       console.error('Erro ao salvar usuário:', error);
       toast({
@@ -131,6 +126,7 @@ export default function Users() {
   };
 
   const handleEdit = (user: User) => {
+    console.log('Editando usuário:', user);
     setEditingUser(user);
     setFormData({
       name: user.name,
@@ -148,23 +144,25 @@ export default function Users() {
       console.log('Desativando usuário:', userId);
       setActionLoading(userId);
       
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .update({ status: 'inactive' })
-        .eq('id', userId);
+        .eq('id', userId)
+        .select()
+        .single();
 
       if (error) {
         console.error('Erro ao desativar usuário:', error);
         throw error;
       }
 
+      console.log('Usuário desativado:', data);
+      setUsers(prev => prev.map(u => u.id === userId ? data : u));
+
       toast({
         title: "Usuário desativado",
         description: "Usuário foi desativado com sucesso",
       });
-      
-      // Recarregar a lista imediatamente
-      await loadUsers();
     } catch (error: any) {
       console.error('Erro ao desativar usuário:', error);
       toast({
@@ -175,6 +173,17 @@ export default function Users() {
     } finally {
       setActionLoading(null);
     }
+  };
+
+  const handleCloseDialog = () => {
+    setShowAddDialog(false);
+    setEditingUser(null);
+    setFormData({
+      name: '',
+      email: '',
+      role: 'comercial',
+      status: 'active'
+    });
   };
 
   const getRoleBadgeColor = (role: string) => {
@@ -273,16 +282,7 @@ export default function Users() {
                     editingUser ? 'Atualizar' : 'Criar Usuário'
                   )}
                 </Button>
-                <Button type="button" variant="outline" onClick={() => {
-                  setShowAddDialog(false);
-                  setEditingUser(null);
-                  setFormData({
-                    name: '',
-                    email: '',
-                    role: 'comercial',
-                    status: 'active'
-                  });
-                }} className="flex-1">
+                <Button type="button" variant="outline" onClick={handleCloseDialog} className="flex-1">
                   Cancelar
                 </Button>
               </div>
