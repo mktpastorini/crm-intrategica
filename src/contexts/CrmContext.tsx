@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -91,7 +92,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const [events, setEvents] = useState<Event[]>([]);
   const [dataLoaded, setDataLoaded] = useState(false);
   
-  // Dados locais
+  // Dados locais com otimização
   const [pipelineStages, setPipelineStages] = useState<PipelineStage[]>(() => {
     const saved = localStorage.getItem('pipelineStages');
     return saved ? JSON.parse(saved) : [
@@ -116,7 +117,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       refreshData();
       setDataLoaded(true);
     } else if (!user && dataLoaded) {
-      // Limpar dados quando usuário deslogar
       console.log('Usuário deslogado, limpando dados...');
       setLeads([]);
       setEvents([]);
@@ -125,7 +125,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
   }, [user, authLoading, dataLoaded]);
 
-  const fetchLeads = async () => {
+  // Otimizar funções de busca com useCallback
+  const fetchLeads = useCallback(async () => {
+    if (!user) return;
+    
     try {
       console.log('Buscando leads do Supabase...');
       const { data, error } = await supabase
@@ -160,9 +163,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Erro ao carregar leads:', error);
     }
-  };
+  }, [user]);
 
-  const fetchEvents = async () => {
+  const fetchEvents = useCallback(async () => {
+    if (!user) return;
+    
     try {
       console.log('Buscando eventos do Supabase...');
       const { data, error } = await supabase
@@ -196,9 +201,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Erro ao carregar eventos:', error);
     }
-  };
+  }, [user]);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
+    if (!user) return;
+    
     try {
       console.log('Buscando usuários do Supabase...');
       const { data, error } = await supabase
@@ -222,9 +229,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Erro ao carregar usuários:', error);
     }
-  };
+  }, [user]);
 
-  const refreshData = async () => {
+  const refreshData = useCallback(async () => {
     if (!user) return;
 
     setLoading(true);
@@ -246,22 +253,24 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, fetchLeads, fetchEvents, fetchUsers, toast]);
 
   // Funções para salvar dados locais no localStorage
-  const savePipelineStages = (newStages: PipelineStage[]) => {
+  const savePipelineStages = useCallback((newStages: PipelineStage[]) => {
     setPipelineStages(newStages);
     localStorage.setItem('pipelineStages', JSON.stringify(newStages));
-  };
+  }, []);
 
-  const savePendingActions = (newActions: PendingAction[]) => {
+  const savePendingActions = useCallback((newActions: PendingAction[]) => {
     setPendingActions(newActions);
     localStorage.setItem('pendingActions', JSON.stringify(newActions));
-  };
+  }, []);
 
-  const addLead = async (leadData: Omit<Lead, 'id' | 'createdAt'>) => {
+  const addLead = useCallback(async (leadData: Omit<Lead, 'id' | 'createdAt'>) => {
     try {
       console.log('Adicionando lead:', leadData);
+      setLoading(true);
+      
       const { data, error } = await supabase
         .from('leads')
         .insert({
@@ -279,6 +288,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
       if (error) throw error;
 
+      // Atualizar estado local imediatamente
       await fetchLeads();
       
       toast({
@@ -292,11 +302,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         description: error.message || "Erro ao adicionar lead",
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [fetchLeads, toast]);
 
-  const updateLead = async (id: string, updates: Partial<Lead>) => {
+  const updateLead = useCallback(async (id: string, updates: Partial<Lead>) => {
     try {
+      console.log('Atualizando lead:', id, updates);
+      setLoading(true);
+      
       const { error } = await supabase
         .from('leads')
         .update({
@@ -313,6 +328,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
       if (error) throw error;
 
+      // Atualizar estado local imediatamente
       await fetchLeads();
       
       toast({
@@ -326,11 +342,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         description: error.message || "Erro ao atualizar lead",
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [fetchLeads, toast]);
 
-  const deleteLead = async (id: string) => {
+  const deleteLead = useCallback(async (id: string) => {
     try {
+      console.log('Deletando lead:', id);
+      setLoading(true);
+      
       const { error } = await supabase
         .from('leads')
         .delete()
@@ -338,6 +359,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
       if (error) throw error;
 
+      // Atualizar estado local imediatamente
       await Promise.all([fetchLeads(), fetchEvents()]);
       
       toast({
@@ -351,11 +373,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         description: error.message || "Erro ao remover lead",
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [fetchLeads, fetchEvents, toast]);
 
-  const moveLead = async (leadId: string, newStage: string) => {
+  const moveLead = useCallback(async (leadId: string, newStage: string) => {
     try {
+      console.log('Movendo lead:', leadId, 'para:', newStage);
+      
       const { error } = await supabase
         .from('leads')
         .update({ pipeline_stage: newStage })
@@ -363,6 +389,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
       if (error) throw error;
 
+      // Atualizar estado local imediatamente
       await fetchLeads();
     } catch (error: any) {
       console.error('Erro ao mover lead:', error);
@@ -372,10 +399,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         variant: "destructive",
       });
     }
-  };
+  }, [fetchLeads, toast]);
 
-  const addEvent = async (eventData: Omit<Event, 'id'>) => {
+  const addEvent = useCallback(async (eventData: Omit<Event, 'id'>) => {
     try {
+      console.log('Adicionando evento:', eventData);
+      setLoading(true);
+      
       const { data, error } = await supabase
         .from('events')
         .insert({
@@ -393,6 +423,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
       if (error) throw error;
 
+      // Atualizar estado local imediatamente
       await fetchEvents();
       
       toast({
@@ -406,11 +437,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         description: error.message || "Erro ao adicionar evento",
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [fetchEvents, toast]);
 
-  const updateEvent = async (id: string, updates: Partial<Event>) => {
+  const updateEvent = useCallback(async (id: string, updates: Partial<Event>) => {
     try {
+      console.log('Atualizando evento:', id, updates);
+      setLoading(true);
+      
       const { error } = await supabase
         .from('events')
         .update({
@@ -427,6 +463,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
       if (error) throw error;
 
+      // Atualizar estado local imediatamente
       await fetchEvents();
       
       toast({
@@ -440,12 +477,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         description: error.message || "Erro ao atualizar evento",
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [fetchEvents, toast]);
 
-  const deleteEvent = async (id: string) => {
+  const deleteEvent = useCallback(async (id: string) => {
     try {
       console.log('Deletando evento:', id);
+      setLoading(true);
       
       const { error } = await supabase
         .from('events')
@@ -458,6 +498,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
 
       console.log('Evento deletado, atualizando lista...');
+      // Atualizar estado local imediatamente
       await fetchEvents();
       
       toast({
@@ -471,19 +512,21 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         description: error.message || "Erro ao remover evento",
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [fetchEvents, toast]);
 
-  const addPipelineStage = (stage: PipelineStage) => {
+  const addPipelineStage = useCallback((stage: PipelineStage) => {
     const newStages = [...pipelineStages, stage];
     savePipelineStages(newStages);
     toast({
       title: "Estágio adicionado",
       description: "Novo estágio foi adicionado ao pipeline",
     });
-  };
+  }, [pipelineStages, savePipelineStages, toast]);
 
-  const updatePipelineStage = (id: string, updates: Partial<PipelineStage>) => {
+  const updatePipelineStage = useCallback((id: string, updates: Partial<PipelineStage>) => {
     const newStages = pipelineStages.map(stage => 
       stage.id === id ? { ...stage, ...updates } : stage
     );
@@ -492,18 +535,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       title: "Estágio atualizado",
       description: "Estágio foi atualizado com sucesso",
     });
-  };
+  }, [pipelineStages, savePipelineStages, toast]);
 
-  const deletePipelineStage = (id: string) => {
+  const deletePipelineStage = useCallback((id: string) => {
     const newStages = pipelineStages.filter(stage => stage.id !== id);
     savePipelineStages(newStages);
     toast({
       title: "Estágio removido",
       description: "Estágio foi removido do pipeline",
     });
-  };
+  }, [pipelineStages, savePipelineStages, toast]);
 
-  const requestLeadEdit = (leadId: string, updates: Partial<Lead>, user: string) => {
+  const requestLeadEdit = useCallback((leadId: string, updates: Partial<Lead>, user: string) => {
     const lead = leads.find(l => l.id === leadId);
     if (!lead) return;
 
@@ -526,9 +569,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       title: "Solicitação enviada",
       description: "Sua solicitação de edição foi enviada para aprovação",
     });
-  };
+  }, [leads, pendingActions, savePendingActions, toast]);
 
-  const requestLeadDelete = (leadId: string, user: string) => {
+  const requestLeadDelete = useCallback((leadId: string, user: string) => {
     const lead = leads.find(l => l.id === leadId);
     if (!lead) return;
 
@@ -550,39 +593,51 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       title: "Solicitação enviada",
       description: "Sua solicitação de exclusão foi enviada para aprovação",
     });
-  };
+  }, [leads, pendingActions, savePendingActions, toast]);
 
-  const approveAction = async (actionId: string) => {
+  const approveAction = useCallback(async (actionId: string) => {
     const action = pendingActions.find(a => a.id === actionId);
     if (!action) return;
 
-    // Execute a ação
-    switch (action.type) {
-      case 'edit_lead':
-        await updateLead(action.data.leadId, action.data.updates);
-        break;
-      case 'delete_lead':
-        await deleteLead(action.data.leadId);
-        break;
-      case 'edit_event':
-        await updateEvent(action.data.eventId, action.data.updates);
-        break;
-      case 'delete_event':
-        await deleteEvent(action.data.eventId);
-        break;
+    setLoading(true);
+    try {
+      // Execute a ação
+      switch (action.type) {
+        case 'edit_lead':
+          await updateLead(action.data.leadId, action.data.updates);
+          break;
+        case 'delete_lead':
+          await deleteLead(action.data.leadId);
+          break;
+        case 'edit_event':
+          await updateEvent(action.data.eventId, action.data.updates);
+          break;
+        case 'delete_event':
+          await deleteEvent(action.data.eventId);
+          break;
+      }
+
+      // Remove da lista de ações pendentes
+      const newActions = pendingActions.filter(a => a.id !== actionId);
+      savePendingActions(newActions);
+      
+      toast({
+        title: "Ação aprovada",
+        description: "A solicitação foi aprovada e executada com sucesso",
+      });
+    } catch (error) {
+      console.error('Erro ao aprovar ação:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao executar a ação aprovada",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
+  }, [pendingActions, updateLead, deleteLead, updateEvent, deleteEvent, savePendingActions, toast]);
 
-    // Remove da lista de ações pendentes
-    const newActions = pendingActions.filter(a => a.id !== actionId);
-    savePendingActions(newActions);
-    
-    toast({
-      title: "Ação aprovada",
-      description: "A solicitação foi aprovada e executada com sucesso",
-    });
-  };
-
-  const rejectAction = (actionId: string) => {
+  const rejectAction = useCallback((actionId: string) => {
     const newActions = pendingActions.filter(a => a.id !== actionId);
     savePendingActions(newActions);
     toast({
@@ -590,7 +645,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       description: "A solicitação foi rejeitada",
       variant: "destructive"
     });
-  };
+  }, [pendingActions, savePendingActions, toast]);
 
   const value = {
     leads,

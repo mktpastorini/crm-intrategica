@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -10,13 +11,14 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { UserPlus, Edit, Trash2, Users as UsersIcon } from 'lucide-react';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 interface User {
   id: string;
   name: string;
   email: string;
-  role: string; // Changed from specific union type to string
-  status: string; // Changed from specific union type to string
+  role: string;
+  status: string;
   created_at: string;
   last_login?: string;
 }
@@ -26,6 +28,7 @@ export default function Users() {
   const { toast } = useToast();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [formData, setFormData] = useState({
@@ -42,6 +45,8 @@ export default function Users() {
   const loadUsers = async () => {
     try {
       console.log('Carregando usuários...');
+      setLoading(true);
+      
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -75,6 +80,8 @@ export default function Users() {
     e.preventDefault();
     
     try {
+      setActionLoading('submit');
+      
       if (editingUser) {
         // Atualizar usuário existente
         const { error } = await supabase
@@ -94,7 +101,6 @@ export default function Users() {
         });
       } else {
         // Criar novo usuário - apenas inserir no profiles
-        // O usuário deve ser criado via Auth primeiro
         toast({
           title: "Funcionalidade em desenvolvimento",
           description: "A criação de novos usuários será implementada em breve",
@@ -111,7 +117,7 @@ export default function Users() {
       });
       setEditingUser(null);
       setShowAddDialog(false);
-      loadUsers();
+      await loadUsers(); // Recarregar a lista
     } catch (error: any) {
       console.error('Erro ao salvar usuário:', error);
       toast({
@@ -119,6 +125,8 @@ export default function Users() {
         description: error.message || "Erro ao salvar usuário",
         variant: "destructive",
       });
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -134,21 +142,29 @@ export default function Users() {
   };
 
   const handleDelete = async (userId: string) => {
-    if (!confirm('Tem certeza que deseja excluir este usuário?')) return;
+    if (!confirm('Tem certeza que deseja desativar este usuário?')) return;
 
     try {
+      console.log('Desativando usuário:', userId);
+      setActionLoading(userId);
+      
       const { error } = await supabase
         .from('profiles')
         .update({ status: 'inactive' })
         .eq('id', userId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao desativar usuário:', error);
+        throw error;
+      }
 
       toast({
         title: "Usuário desativado",
         description: "Usuário foi desativado com sucesso",
       });
-      loadUsers();
+      
+      // Recarregar a lista imediatamente
+      await loadUsers();
     } catch (error: any) {
       console.error('Erro ao desativar usuário:', error);
       toast({
@@ -156,6 +172,8 @@ export default function Users() {
         description: error.message || "Erro ao desativar usuário",
         variant: "destructive",
       });
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -175,10 +193,7 @@ export default function Users() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-slate-600">Carregando usuários...</p>
-        </div>
+        <LoadingSpinner size="lg" text="Carregando usuários..." />
       </div>
     );
   }
@@ -227,7 +242,7 @@ export default function Users() {
               </div>
               <div>
                 <Label htmlFor="role">Função</Label>
-                <Select value={formData.role} onValueChange={(value: any) => setFormData(prev => ({ ...prev, role: value }))}>
+                <Select value={formData.role} onValueChange={(value) => setFormData(prev => ({ ...prev, role: value }))}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -240,7 +255,7 @@ export default function Users() {
               </div>
               <div>
                 <Label htmlFor="status">Status</Label>
-                <Select value={formData.status} onValueChange={(value: any) => setFormData(prev => ({ ...prev, status: value }))}>
+                <Select value={formData.status} onValueChange={(value) => setFormData(prev => ({ ...prev, status: value }))}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -251,8 +266,12 @@ export default function Users() {
                 </Select>
               </div>
               <div className="flex gap-2 pt-4">
-                <Button type="submit" className="flex-1">
-                  {editingUser ? 'Atualizar' : 'Criar Usuário'}
+                <Button type="submit" className="flex-1" disabled={actionLoading === 'submit'}>
+                  {actionLoading === 'submit' ? (
+                    <LoadingSpinner size="sm" />
+                  ) : (
+                    editingUser ? 'Atualizar' : 'Criar Usuário'
+                  )}
                 </Button>
                 <Button type="button" variant="outline" onClick={() => {
                   setShowAddDialog(false);
@@ -306,8 +325,13 @@ export default function Users() {
                     size="sm" 
                     onClick={() => handleDelete(user.id)}
                     className="text-red-600 hover:text-red-700"
+                    disabled={actionLoading === user.id}
                   >
-                    <Trash2 className="w-4 h-4" />
+                    {actionLoading === user.id ? (
+                      <LoadingSpinner size="sm" />
+                    ) : (
+                      <Trash2 className="w-4 h-4" />
+                    )}
                   </Button>
                 </div>
               </div>
