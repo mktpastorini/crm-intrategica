@@ -4,12 +4,88 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { useSystemSettings } from '@/hooks/useSystemSettings';
 import { Palette, Save, Upload } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 export default function AppearanceSettings() {
-  const { settings, updateSettings } = useSystemSettings();
   const { toast } = useToast();
+  const [settings, setSettings] = useState({
+    systemName: 'CRM System',
+    logoUrl: '',
+    faviconUrl: '',
+    primaryColor: '#3b82f6',
+    secondaryColor: '#8b5cf6'
+  });
+
+  // Carregar configurações do localStorage
+  useEffect(() => {
+    try {
+      const savedSettings = localStorage.getItem('systemSettings');
+      if (savedSettings) {
+        const parsedSettings = JSON.parse(savedSettings);
+        setSettings({
+          systemName: parsedSettings.systemName || 'CRM System',
+          logoUrl: parsedSettings.logoUrl || '',
+          faviconUrl: parsedSettings.faviconUrl || '',
+          primaryColor: parsedSettings.primaryColor || '#3b82f6',
+          secondaryColor: parsedSettings.secondaryColor || '#8b5cf6'
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao carregar configurações:', error);
+    }
+  }, []);
+
+  const updateSettings = (newSettings: Partial<typeof settings>) => {
+    try {
+      const updatedSettings = { ...settings, ...newSettings };
+      setSettings(updatedSettings);
+      
+      // Salvar no localStorage
+      const currentSettings = JSON.parse(localStorage.getItem('systemSettings') || '{}');
+      const mergedSettings = { ...currentSettings, ...updatedSettings };
+      localStorage.setItem('systemSettings', JSON.stringify(mergedSettings));
+      
+      // Aplicar mudanças visuais imediatamente
+      applyVisualSettings(updatedSettings);
+      
+      // Disparar evento customizado para notificar outros componentes
+      window.dispatchEvent(new Event('systemSettingsChanged'));
+    } catch (error) {
+      console.error('Erro ao salvar configurações:', error);
+    }
+  };
+
+  const applyVisualSettings = (settings: Partial<typeof settings>) => {
+    try {
+      // Aplicar favicon
+      if (settings.faviconUrl) {
+        let favicon = document.querySelector('link[rel="icon"]') as HTMLLinkElement;
+        if (!favicon) {
+          favicon = document.createElement('link');
+          favicon.rel = 'icon';
+          document.head.appendChild(favicon);
+        }
+        favicon.href = settings.faviconUrl;
+      }
+      
+      // Aplicar título do sistema
+      if (settings.systemName) {
+        document.title = settings.systemName;
+      }
+      
+      // Aplicar cores
+      const root = document.documentElement;
+      if (settings.primaryColor) {
+        root.style.setProperty('--primary-color', settings.primaryColor);
+      }
+      if (settings.secondaryColor) {
+        root.style.setProperty('--secondary-color', settings.secondaryColor);
+      }
+    } catch (error) {
+      console.error('Erro ao aplicar configurações visuais:', error);
+    }
+  };
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

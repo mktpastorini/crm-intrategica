@@ -1,7 +1,6 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useSystemSettings } from '@/hooks/useSystemSettings';
 import { Navigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,11 +11,48 @@ import { BarChart3 } from 'lucide-react';
 
 export default function Login() {
   const { isAuthenticated, login, loading } = useAuth();
-  const { settings } = useSystemSettings();
   const { toast } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [systemSettings, setSystemSettings] = useState({
+    systemName: 'CRM System',
+    logoUrl: '',
+    faviconUrl: ''
+  });
+
+  // Carregar configurações do sistema do localStorage
+  useEffect(() => {
+    try {
+      const savedSettings = localStorage.getItem('systemSettings');
+      if (savedSettings) {
+        const parsedSettings = JSON.parse(savedSettings);
+        setSystemSettings({
+          systemName: parsedSettings.systemName || 'CRM System',
+          logoUrl: parsedSettings.logoUrl || '',
+          faviconUrl: parsedSettings.faviconUrl || ''
+        });
+
+        // Aplicar favicon se disponível
+        if (parsedSettings.faviconUrl) {
+          let favicon = document.querySelector('link[rel="icon"]') as HTMLLinkElement;
+          if (!favicon) {
+            favicon = document.createElement('link');
+            favicon.rel = 'icon';
+            document.head.appendChild(favicon);
+          }
+          favicon.href = parsedSettings.faviconUrl;
+        }
+
+        // Aplicar título do sistema
+        if (parsedSettings.systemName) {
+          document.title = parsedSettings.systemName;
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao carregar configurações do sistema:', error);
+    }
+  }, []);
 
   console.log('Login page - Estado:', { loading, isAuthenticated });
 
@@ -87,10 +123,10 @@ export default function Login() {
       <div className="w-full max-w-md space-y-8 p-8">
         <div className="text-center">
           <div className="flex justify-center mb-4">
-            {settings.logoUrl ? (
+            {systemSettings.logoUrl ? (
               <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center shadow-lg p-2">
                 <img 
-                  src={settings.logoUrl} 
+                  src={systemSettings.logoUrl} 
                   alt="Logo" 
                   className="max-w-full max-h-full object-contain" 
                   data-logo
@@ -103,7 +139,7 @@ export default function Login() {
             )}
           </div>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            {settings.systemName}
+            {systemSettings.systemName}
           </h1>
           <p className="text-slate-600 mt-2">
             Sistema de gestão para agências de marketing

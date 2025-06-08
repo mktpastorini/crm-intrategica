@@ -1,6 +1,6 @@
+
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { useSystemSettings } from '@/hooks/useSystemSettings';
 import { Button } from '@/components/ui/button';
 import { 
   LayoutDashboard, 
@@ -16,14 +16,94 @@ import {
   Route,
   BarChart3
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function Layout() {
   const { user, profile, logout } = useAuth();
-  const { settings } = useSystemSettings();
   const location = useLocation();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [systemSettings, setSystemSettings] = useState({
+    systemName: 'CRM System',
+    logoUrl: '',
+    faviconUrl: ''
+  });
+
+  // Carregar configurações do sistema do localStorage
+  useEffect(() => {
+    try {
+      const savedSettings = localStorage.getItem('systemSettings');
+      if (savedSettings) {
+        const parsedSettings = JSON.parse(savedSettings);
+        setSystemSettings({
+          systemName: parsedSettings.systemName || 'CRM System',
+          logoUrl: parsedSettings.logoUrl || '',
+          faviconUrl: parsedSettings.faviconUrl || ''
+        });
+
+        // Aplicar favicon se disponível
+        if (parsedSettings.faviconUrl) {
+          let favicon = document.querySelector('link[rel="icon"]') as HTMLLinkElement;
+          if (!favicon) {
+            favicon = document.createElement('link');
+            favicon.rel = 'icon';
+            document.head.appendChild(favicon);
+          }
+          favicon.href = parsedSettings.faviconUrl;
+        }
+
+        // Aplicar título do sistema
+        if (parsedSettings.systemName) {
+          document.title = parsedSettings.systemName;
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao carregar configurações do sistema:', error);
+    }
+
+    // Listener para mudanças no localStorage
+    const handleStorageChange = () => {
+      try {
+        const savedSettings = localStorage.getItem('systemSettings');
+        if (savedSettings) {
+          const parsedSettings = JSON.parse(savedSettings);
+          setSystemSettings({
+            systemName: parsedSettings.systemName || 'CRM System',
+            logoUrl: parsedSettings.logoUrl || '',
+            faviconUrl: parsedSettings.faviconUrl || ''
+          });
+
+          // Aplicar favicon se disponível
+          if (parsedSettings.faviconUrl) {
+            let favicon = document.querySelector('link[rel="icon"]') as HTMLLinkElement;
+            if (!favicon) {
+              favicon = document.createElement('link');
+              favicon.rel = 'icon';
+              document.head.appendChild(favicon);
+            }
+            favicon.href = parsedSettings.faviconUrl;
+          }
+
+          // Aplicar título do sistema
+          if (parsedSettings.systemName) {
+            document.title = parsedSettings.systemName;
+          }
+        }
+      } catch (error) {
+        console.error('Erro ao carregar configurações do sistema:', error);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Custom event para mudanças internas
+    window.addEventListener('systemSettingsChanged', handleStorageChange);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('systemSettingsChanged', handleStorageChange);
+    };
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -50,9 +130,9 @@ export default function Layout() {
       <div className="lg:hidden bg-white shadow-sm border-b px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            {settings.logoUrl ? (
+            {systemSettings.logoUrl ? (
               <img 
-                src={settings.logoUrl} 
+                src={systemSettings.logoUrl} 
                 alt="Logo" 
                 className="w-8 h-8 object-contain" 
                 data-logo
@@ -63,7 +143,7 @@ export default function Layout() {
               </div>
             )}
             <h1 className="text-xl font-bold text-slate-900">
-              {settings.systemName}
+              {systemSettings.systemName}
             </h1>
           </div>
           <Button
@@ -82,9 +162,9 @@ export default function Layout() {
           <div className="bg-white w-64 h-full shadow-lg">
             <div className="p-4 border-b">
               <div className="flex items-center space-x-3">
-                {settings.logoUrl ? (
+                {systemSettings.logoUrl ? (
                   <img 
-                    src={settings.logoUrl} 
+                    src={systemSettings.logoUrl} 
                     alt="Logo" 
                     className="w-8 h-8 object-contain" 
                     data-logo
@@ -95,7 +175,7 @@ export default function Layout() {
                   </div>
                 )}
                 <h2 className="text-lg font-semibold text-slate-900">
-                  {settings.systemName}
+                  {systemSettings.systemName}
                 </h2>
               </div>
             </div>
@@ -135,9 +215,9 @@ export default function Layout() {
         <div className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0">
           <div className="flex flex-col flex-grow pt-5 bg-white overflow-y-auto border-r">
             <div className="flex items-center flex-shrink-0 px-4 pb-5">
-              {settings.logoUrl ? (
+              {systemSettings.logoUrl ? (
                 <img 
-                  src={settings.logoUrl} 
+                  src={systemSettings.logoUrl} 
                   alt="Logo" 
                   className="w-10 h-10 object-contain mr-3" 
                   data-logo
@@ -148,7 +228,7 @@ export default function Layout() {
                 </div>
               )}
               <h1 className="text-xl font-bold text-slate-900">
-                {settings.systemName}
+                {systemSettings.systemName}
               </h1>
             </div>
             <div className="mt-5 flex-grow flex flex-col">
