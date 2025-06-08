@@ -179,7 +179,7 @@ export default function Messages() {
     const updatedTemplates = [...templates, newTemplate];
     saveTemplates(updatedTemplates);
 
-    setTemplateeName('');
+    setTemplateName('');
     setShowTemplateDialog(false);
 
     toast({

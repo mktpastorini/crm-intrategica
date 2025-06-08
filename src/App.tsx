@@ -1,8 +1,9 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { CrmProvider } from "./contexts/CrmContext";
 import Dashboard from "./pages/Dashboard";
@@ -20,6 +21,12 @@ import CustomerJourney from "./pages/CustomerJourney";
 
 const queryClient = new QueryClient();
 
+const LayoutWrapper = () => (
+  <Layout>
+    <Outlet />
+  </Layout>
+);
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -32,7 +39,7 @@ const App = () => (
               <Route path="/login" element={<Login />} />
               <Route path="/" element={
                 <ProtectedRoute>
-                  <Layout />
+                  <LayoutWrapper />
                 </ProtectedRoute>
               }>
                 <Route index element={<Dashboard />} />
