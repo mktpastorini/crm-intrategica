@@ -39,7 +39,7 @@ export default function Pipeline() {
     const leadId = e.dataTransfer.getData('leadId');
     const lead = leads.find(l => l.id === leadId);
     
-    if (lead && lead.pipelineStage !== newStage) {
+    if (lead && lead.pipeline_stage !== newStage) {
       // Se movendo para estágio "reunião", abrir modal de agendamento
       if (newStage === 'reuniao') {
         setSelectedLead(leadId);
@@ -73,14 +73,14 @@ export default function Pipeline() {
       title: `${eventData.type === 'reunion' ? 'Reunião' : 
               eventData.type === 'call' ? 'Telefonema' :
               eventData.type === 'whatsapp' ? 'WhatsApp' : 'E-mail'} - ${lead.name}`,
-      leadName: lead.name,
+      lead_name: lead.name,
       company: lead.company,
       date: eventData.date,
       time: eventData.time,
       responsible: eventData.responsible,
       responsible_id: eventData.responsible_id,
       type: eventData.type,
-      leadId: selectedLead
+      lead_id: selectedLead
     });
 
     // Mover lead para estágio reunião
@@ -104,7 +104,7 @@ export default function Pipeline() {
   };
 
   const getLeadsByStage = (stageId: string) => {
-    return leads.filter(lead => lead.pipelineStage === stageId);
+    return leads.filter(lead => lead.pipeline_stage === stageId);
   };
 
   const eventTypes = [
@@ -198,7 +198,7 @@ export default function Pipeline() {
                         </Badge>
                         <div className="flex items-center text-xs text-slate-500">
                           <User className="w-3 h-3 mr-1" />
-                          {lead.responsible.split('@')[0]}
+                          {lead.responsible_id}
                         </div>
                       </div>
                       <div className="flex justify-end pt-2">

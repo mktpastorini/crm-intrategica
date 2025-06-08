@@ -9,8 +9,8 @@ export default function Dashboard() {
   const { leads, pipelineStages, events } = useCrm();
 
   const totalLeads = leads.length;
-  const leadsInPipeline = leads.filter(lead => lead.pipelineStage !== 'contrato-assinado').length;
-  const proposalsSent = leads.filter(lead => lead.pipelineStage === 'proposta-enviada').length;
+  const leadsInPipeline = leads.filter(lead => lead.pipeline_stage !== 'contrato-assinado').length;
+  const proposalsSent = leads.filter(lead => lead.pipeline_stage === 'proposta-enviada').length;
   const meetingsScheduled = events.filter(event => 
     event.type === 'reunion' && 
     new Date(event.date + 'T' + event.time) >= new Date() &&
@@ -20,7 +20,7 @@ export default function Dashboard() {
   // Dados reais para gráficos baseados nos dados atuais
   const statusData = pipelineStages.map(stage => ({
     name: stage.name,
-    value: leads.filter(lead => lead.pipelineStage === stage.id).length,
+    value: leads.filter(lead => lead.pipeline_stage === stage.id).length,
     color: stage.color
   })).filter(item => item.value > 0); // Só mostrar estágios com leads
 
@@ -29,7 +29,7 @@ export default function Dashboard() {
     const monthlyData: { [key: string]: { leads: number, fechamentos: number } } = {};
     
     leads.forEach(lead => {
-      const date = new Date(lead.createdAt);
+      const date = new Date(lead.created_at);
       const monthKey = date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
       
       if (!monthlyData[monthKey]) {
@@ -37,7 +37,7 @@ export default function Dashboard() {
       }
       
       monthlyData[monthKey].leads++;
-      if (lead.pipelineStage === 'contrato-assinado') {
+      if (lead.pipeline_stage === 'contrato-assinado') {
         monthlyData[monthKey].fechamentos++;
       }
     });
@@ -54,12 +54,12 @@ export default function Dashboard() {
     const userStats: { [key: string]: { leads: number, fechamentos: number } } = {};
     
     leads.forEach(lead => {
-      const user = lead.responsible || 'Não atribuído';
+      const user = lead.responsible_id || 'Não atribuído';
       if (!userStats[user]) {
         userStats[user] = { leads: 0, fechamentos: 0 };
       }
       userStats[user].leads++;
-      if (lead.pipelineStage === 'contrato-assinado') {
+      if (lead.pipeline_stage === 'contrato-assinado') {
         userStats[user].fechamentos++;
       }
     });
@@ -77,14 +77,14 @@ export default function Dashboard() {
     
     // Últimos leads adicionados
     const recentLeads = leads
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       .slice(0, 3);
     
     recentLeads.forEach(lead => {
       activities.push({
         type: 'lead',
         message: `Novo lead adicionado: ${lead.company}`,
-        time: new Date(lead.createdAt).toLocaleDateString('pt-BR')
+        time: new Date(lead.created_at).toLocaleDateString('pt-BR')
       });
     });
 
@@ -97,7 +97,7 @@ export default function Dashboard() {
     upcomingEvents.forEach(event => {
       activities.push({
         type: 'event',
-        message: `${event.type === 'reunion' ? 'Reunião agendada' : 'Evento agendado'} com ${event.leadName || 'cliente'}`,
+        message: `${event.type === 'reunion' ? 'Reunião agendada' : 'Evento agendado'} com ${event.lead_name || 'cliente'}`,
         time: new Date(event.date).toLocaleDateString('pt-BR')
       });
     });
