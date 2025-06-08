@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -249,7 +248,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Salvar dados locais no localStorage
+  // Funções para salvar dados locais no localStorage
   const savePipelineStages = (newStages: PipelineStage[]) => {
     setPipelineStages(newStages);
     localStorage.setItem('pipelineStages', JSON.stringify(newStages));
