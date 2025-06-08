@@ -2,6 +2,7 @@
 import { Navigate } from 'react-router-dom';
 import { ReactNode } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -21,11 +22,8 @@ export default function ProtectedRoute({ children, requiredRole }: ProtectedRout
   // Se ainda está carregando, mostrar loading
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#1d0029' }}>
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-white border-t-transparent mx-auto"></div>
-          <p className="mt-4 text-white text-lg">Carregando...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <LoadingSpinner size="lg" text="Carregando..." />
       </div>
     );
   }

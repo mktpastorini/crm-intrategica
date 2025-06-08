@@ -2,7 +2,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { useNavigate } from 'react-router-dom';
 
 interface AuthContextType {
   user: User | null;
@@ -21,7 +20,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
 
   const loadProfile = async (userId: string) => {
     try {
@@ -110,17 +108,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       if (session?.user) {
         await loadProfile(session.user.id);
-        // Redirecionar para dashboard após login bem-sucedido
-        if (event === 'SIGNED_IN') {
-          console.log('Login bem-sucedido, redirecionando...');
-          navigate('/', { replace: true });
-        }
       } else {
         setProfile(null);
-        // Redirecionar para login se não houver sessão
-        if (event === 'SIGNED_OUT') {
-          navigate('/login', { replace: true });
-        }
       }
       
       setLoading(false);
@@ -130,7 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [navigate]);
+  }, []);
 
   const signIn = async (email: string, password: string) => {
     console.log('Tentando fazer login...');

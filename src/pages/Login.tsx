@@ -1,7 +1,7 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useSystemSettings } from '@/hooks/useSystemSettings';
+import { useSystemSettingsDB } from '@/hooks/useSystemSettingsDB';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 
 export default function Login() {
   const { signIn } = useAuth();
-  const { settings } = useSystemSettings();
+  const { settings } = useSystemSettingsDB();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [email, setEmail] = useState('admin@admin.com');
@@ -29,16 +29,19 @@ export default function Login() {
     console.log('Iniciando processo de login...');
 
     try {
-      const result = await signIn(email, password);
-      console.log('Login realizado:', result);
+      await signIn(email, password);
+      console.log('Login realizado com sucesso');
       
       toast({
         title: "Login realizado",
         description: "Bem-vindo ao sistema!",
       });
       
-      // Redirecionar para dashboard
-      navigate('/', { replace: true });
+      // Aguardar um pouco antes de redirecionar
+      setTimeout(() => {
+        navigate('/', { replace: true });
+      }, 1000);
+      
     } catch (err: any) {
       console.error('Erro no login:', err);
       const errorMessage = err.message || 'Erro ao fazer login';

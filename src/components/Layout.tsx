@@ -27,7 +27,7 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
   const { user, profile, logout } = useAuth();
-  const { settings } = useSystemSettingsDB();
+  const { settings, loading: settingsLoading } = useSystemSettingsDB();
   const location = useLocation();
 
   const navigation = [
@@ -52,6 +52,9 @@ export default function Layout({ children }: LayoutProps) {
   const handleLogout = () => {
     logout();
   };
+
+  // Use default color if settings are still loading
+  const primaryColor = settings.primaryColor || '#1d0029';
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#faf9fb' }}>
@@ -87,7 +90,7 @@ export default function Layout({ children }: LayoutProps) {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="flex items-center space-x-2">
                     <Avatar className="w-8 h-8">
-                      <AvatarFallback style={{ backgroundColor: settings.primaryColor, color: 'white' }}>
+                      <AvatarFallback style={{ backgroundColor: primaryColor, color: 'white' }}>
                         {profile?.name?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || 'U'}
                       </AvatarFallback>
                     </Avatar>
@@ -136,8 +139,8 @@ export default function Layout({ children }: LayoutProps) {
                         : 'text-slate-700 hover:bg-slate-100'
                     }`}
                     style={active ? { 
-                      backgroundColor: settings.primaryColor,
-                      borderColor: settings.primaryColor 
+                      backgroundColor: primaryColor,
+                      borderColor: primaryColor 
                     } : {}}
                   >
                     <Icon className="w-5 h-5" />
