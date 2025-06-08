@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -446,9 +445,13 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
       console.log('Criando usuário:', userData);
       setActionLoading('create-user');
       
+      // Para criar um usuário no profiles, precisamos fornecer um ID
+      const userId = crypto.randomUUID();
+      const userWithId = { ...userData, id: userId };
+      
       const { data, error } = await supabase
         .from('profiles')
-        .insert([userData])
+        .insert([userWithId])
         .select()
         .single();
 

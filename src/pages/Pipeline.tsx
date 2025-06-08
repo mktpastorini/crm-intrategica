@@ -22,7 +22,6 @@ export default function Pipeline() {
     type: 'reunion' as 'reunion' | 'call' | 'whatsapp' | 'email',
     date: '',
     time: '',
-    responsible: profile?.name || '',
     responsible_id: user?.id || ''
   });
 
@@ -77,7 +76,6 @@ export default function Pipeline() {
       company: lead.company,
       date: eventData.date,
       time: eventData.time,
-      responsible: eventData.responsible,
       responsible_id: eventData.responsible_id,
       type: eventData.type,
       lead_id: selectedLead
@@ -91,7 +89,6 @@ export default function Pipeline() {
       type: 'reunion',
       date: '',
       time: '',
-      responsible: profile?.name || '',
       responsible_id: user?.id || ''
     });
     setSelectedLead(null);
@@ -267,11 +264,9 @@ export default function Pipeline() {
             <div>
               <Label htmlFor="event-responsible">Responsável</Label>
               <Select value={eventData.responsible_id} onValueChange={(value) => {
-                const selectedUser = users.find(u => u.id === value);
                 setEventData(prev => ({ 
                   ...prev, 
-                  responsible_id: value,
-                  responsible: selectedUser?.name || ''
+                  responsible_id: value
                 }));
               }}>
                 <SelectTrigger>
