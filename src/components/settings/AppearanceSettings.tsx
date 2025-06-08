@@ -1,3 +1,4 @@
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -43,26 +44,6 @@ export default function AppearanceSettings() {
     }
   }, []);
 
-  const updateSettings = (newSettings: Partial<AppearanceSettingsType>) => {
-    try {
-      const updatedSettings = { ...settings, ...newSettings };
-      setSettings(updatedSettings);
-      
-      // Salvar no localStorage
-      const currentSettings = JSON.parse(localStorage.getItem('systemSettings') || '{}');
-      const mergedSettings = { ...currentSettings, ...updatedSettings };
-      localStorage.setItem('systemSettings', JSON.stringify(mergedSettings));
-      
-      // Aplicar mudanças visuais imediatamente
-      applyVisualSettings(updatedSettings);
-      
-      // Disparar evento customizado para notificar outros componentes
-      window.dispatchEvent(new Event('systemSettingsChanged'));
-    } catch (error) {
-      console.error('Erro ao salvar configurações:', error);
-    }
-  };
-
   const applyVisualSettings = (settings: Partial<AppearanceSettingsType>) => {
     try {
       // Aplicar favicon
@@ -91,6 +72,26 @@ export default function AppearanceSettings() {
       }
     } catch (error) {
       console.error('Erro ao aplicar configurações visuais:', error);
+    }
+  };
+
+  const updateSettings = (newSettings: Partial<AppearanceSettingsType>) => {
+    try {
+      const updatedSettings = { ...settings, ...newSettings };
+      setSettings(updatedSettings);
+      
+      // Salvar no localStorage
+      const currentSettings = JSON.parse(localStorage.getItem('systemSettings') || '{}');
+      const mergedSettings = { ...currentSettings, ...updatedSettings };
+      localStorage.setItem('systemSettings', JSON.stringify(mergedSettings));
+      
+      // Aplicar mudanças visuais imediatamente
+      applyVisualSettings(updatedSettings);
+      
+      // Disparar evento customizado para notificar outros componentes
+      window.dispatchEvent(new Event('systemSettingsChanged'));
+    } catch (error) {
+      console.error('Erro ao salvar configurações:', error);
     }
   };
 
