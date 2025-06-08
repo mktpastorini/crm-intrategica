@@ -1,4 +1,3 @@
-
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -24,7 +23,7 @@ export default function Layout() {
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [systemSettings, setSystemSettings] = useState({
-    systemName: 'CRM System',
+    systemName: '',
     logoUrl: '',
     faviconUrl: ''
   });
@@ -142,9 +141,11 @@ export default function Layout() {
                 <BarChart3 className="w-5 h-5 text-white" />
               </div>
             )}
-            <h1 className="text-xl font-bold text-slate-900">
-              {systemSettings.systemName}
-            </h1>
+            {systemSettings.systemName && (
+              <h1 className="text-xl font-bold text-slate-900">
+                {systemSettings.systemName}
+              </h1>
+            )}
           </div>
           <Button
             variant="ghost"
@@ -174,9 +175,11 @@ export default function Layout() {
                     <BarChart3 className="w-5 h-5 text-white" />
                   </div>
                 )}
-                <h2 className="text-lg font-semibold text-slate-900">
-                  {systemSettings.systemName}
-                </h2>
+                {systemSettings.systemName && (
+                  <h2 className="text-lg font-semibold text-slate-900">
+                    {systemSettings.systemName}
+                  </h2>
+                )}
               </div>
             </div>
             <nav className="p-4 space-y-2">
@@ -227,9 +230,11 @@ export default function Layout() {
                   <BarChart3 className="w-6 h-6 text-white" />
                 </div>
               )}
-              <h1 className="text-xl font-bold text-slate-900">
-                {systemSettings.systemName}
-              </h1>
+              {systemSettings.systemName && (
+                <h1 className="text-xl font-bold text-slate-900">
+                  {systemSettings.systemName}
+                </h1>
+              )}
             </div>
             <div className="mt-5 flex-grow flex flex-col">
               <nav className="flex-1 px-2 space-y-1">

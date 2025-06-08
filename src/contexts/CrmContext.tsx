@@ -96,12 +96,13 @@ const CrmContext = createContext<CrmContextType | undefined>(undefined);
 
 // Default pipeline stages
 const defaultPipelineStages: PipelineStage[] = [
-  { id: 'novo', name: 'Novo', color: '#3b82f6', order: 1 },
-  { id: 'contato-inicial', name: 'Contato Inicial', color: '#f59e0b', order: 2 },
-  { id: 'qualificacao', name: 'Qualificação', color: '#8b5cf6', order: 3 },
-  { id: 'reuniao', name: 'Reunião', color: '#06b6d4', order: 4 },
-  { id: 'proposta-enviada', name: 'Proposta Enviada', color: '#ef4444', order: 5 },
-  { id: 'contrato-assinado', name: 'Contrato Assinado', color: '#10b981', order: 6 }
+  { id: 'aguardando-inicio', name: 'Aguardando Início', color: '#94a3b8', order: 1 },
+  { id: 'novo', name: 'Novo', color: '#3b82f6', order: 2 },
+  { id: 'contato-inicial', name: 'Contato Inicial', color: '#f59e0b', order: 3 },
+  { id: 'qualificacao', name: 'Qualificação', color: '#8b5cf6', order: 4 },
+  { id: 'reuniao', name: 'Reunião', color: '#06b6d4', order: 5 },
+  { id: 'proposta-enviada', name: 'Proposta Enviada', color: '#ef4444', order: 6 },
+  { id: 'contrato-assinado', name: 'Contrato Assinado', color: '#10b981', order: 7 }
 ];
 
 export function CrmProvider({ children }: { children: React.ReactNode }) {
@@ -150,9 +151,15 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
       console.log('Criando lead:', leadData);
       setActionLoading('create-lead');
       
+      // Garantir que o lead seja inserido no primeiro estágio
+      const leadWithStage = {
+        ...leadData,
+        pipeline_stage: 'aguardando-inicio'
+      };
+      
       const { data, error } = await supabase
         .from('leads')
-        .insert([leadData])
+        .insert([leadWithStage])
         .select()
         .single();
 
@@ -166,7 +173,7 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
       
       toast({
         title: "Lead criado",
-        description: "Lead foi criado com sucesso",
+        description: "Lead foi criado com sucesso e inserido no pipeline",
       });
     } catch (error: any) {
       console.error('Erro ao criar lead:', error);

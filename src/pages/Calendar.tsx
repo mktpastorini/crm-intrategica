@@ -2,17 +2,15 @@
 import { useState, useEffect } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Edit, Trash2, Calendar as CalendarIcon, Clock, User } from 'lucide-react';
+import { Plus, Calendar as CalendarIcon } from 'lucide-react';
 import LoadingSpinner from '@/components/LoadingSpinner';
-import { format, parseISO } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import WeeklyCalendar from '@/components/calendar/WeeklyCalendar';
+import UpcomingEvents from '@/components/calendar/UpcomingEvents';
 
 export default function Calendar() {
   const { user } = useAuth();
@@ -21,7 +19,6 @@ export default function Calendar() {
     leads,
     loading, 
     actionLoading,
-    loadEvents,
     createEvent, 
     updateEvent, 
     deleteEvent 
@@ -65,7 +62,6 @@ export default function Calendar() {
   };
 
   const handleEdit = (event: any) => {
-    console.log('Editando evento:', event);
     setEditingEvent(event);
     setFormData({
       title: event.title,
@@ -105,25 +101,6 @@ export default function Calendar() {
     });
   };
 
-  const getEventTypeBadgeColor = (type: string) => {
-    switch (type) {
-      case 'reuniao': return 'bg-blue-100 text-blue-800';
-      case 'ligacao': return 'bg-green-100 text-green-800';
-      case 'email': return 'bg-purple-100 text-purple-800';
-      case 'visita': return 'bg-orange-100 text-orange-800';
-      case 'followup': return 'bg-yellow-100 text-yellow-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const formatEventDate = (date: string) => {
-    try {
-      return format(parseISO(date), 'dd/MM/yyyy', { locale: ptBR });
-    } catch {
-      return date;
-    }
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -136,8 +113,8 @@ export default function Calendar() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">Calendário</h2>
-          <p className="text-slate-600">Gerencie seus eventos e compromissos</p>
+          <h2 className="text-2xl font-bold text-slate-900">Agenda</h2>
+          <p className="text-slate-600">Visualização semanal dos eventos</p>
         </div>
         <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
           <DialogTrigger asChild>
@@ -253,73 +230,23 @@ export default function Calendar() {
         </Dialog>
       </div>
 
-      <div className="grid gap-4">
-        {events.map((event) => (
-          <Card key={event.id}>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 bg-gradient-to-r from-purple-400 to-pink-500 rounded-full flex items-center justify-center">
-                    <CalendarIcon className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-medium text-slate-900">{event.title}</h3>
-                    <div className="flex items-center space-x-4 text-sm text-slate-600 mt-1">
-                      <div className="flex items-center">
-                        <Clock className="w-4 h-4 mr-1" />
-                        {formatEventDate(event.date)} às {event.time}
-                      </div>
-                      {event.company && (
-                        <div className="flex items-center">
-                          <User className="w-4 h-4 mr-1" />
-                          {event.lead_name} - {event.company}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex space-x-2 mt-2">
-                      <Badge className={getEventTypeBadgeColor(event.type)}>
-                        {event.type === 'reuniao' ? 'Reunião' :
-                         event.type === 'ligacao' ? 'Ligação' :
-                         event.type === 'email' ? 'E-mail' :
-                         event.type === 'visita' ? 'Visita' :
-                         event.type === 'followup' ? 'Follow-up' : event.type}
-                      </Badge>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex space-x-2">
-                  <Button variant="outline" size="sm" onClick={() => handleEdit(event)}>
-                    <Edit className="w-4 h-4" />
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => handleDelete(event.id)}
-                    className="text-red-600 hover:text-red-700"
-                    disabled={actionLoading === event.id}
-                  >
-                    {actionLoading === event.id ? (
-                      <LoadingSpinner size="sm" />
-                    ) : (
-                      <Trash2 className="w-4 h-4" />
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
+        <div className="xl:col-span-3">
+          <WeeklyCalendar
+            events={events}
+            onEditEvent={handleEdit}
+            onDeleteEvent={handleDelete}
+            onAddEvent={() => setShowAddDialog(true)}
+          />
+        </div>
+        <div className="xl:col-span-1">
+          <UpcomingEvents
+            events={events}
+            onEditEvent={handleEdit}
+            onDeleteEvent={handleDelete}
+          />
+        </div>
       </div>
-
-      {events.length === 0 && (
-        <Card>
-          <CardContent className="p-12 text-center">
-            <CalendarIcon className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-slate-900 mb-2">Nenhum evento encontrado</h3>
-            <p className="text-slate-600">Comece adicionando um novo evento ao calendário.</p>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

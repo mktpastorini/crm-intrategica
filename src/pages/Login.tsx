@@ -16,7 +16,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [systemSettings, setSystemSettings] = useState({
-    systemName: 'CRM System',
+    systemName: '',
     logoUrl: '',
     faviconUrl: ''
   });
@@ -138,9 +138,15 @@ export default function Login() {
               </div>
             )}
           </div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            {systemSettings.systemName}
-          </h1>
+          {systemSettings.systemName ? (
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              {systemSettings.systemName}
+            </h1>
+          ) : (
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              Sistema CRM
+            </h1>
+          )}
           <p className="text-slate-600 mt-2">
             Sistema de gestão para agências de marketing
           </p>
