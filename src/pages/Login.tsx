@@ -2,18 +2,22 @@
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSystemSettings } from '@/hooks/useSystemSettings';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, LogIn } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 export default function Login() {
-  const { signIn, loading } = useAuth();
+  const { signIn } = useAuth();
   const { settings } = useSystemSettings();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [email, setEmail] = useState('admin@admin.com');
+  const [password, setPassword] = useState('admin123');
   const [error, setError] = useState('');
   const [isLogging, setIsLogging] = useState(false);
 
@@ -22,20 +26,33 @@ export default function Login() {
     setError('');
     setIsLogging(true);
 
-    console.log('Tentando fazer login...');
+    console.log('Iniciando processo de login...');
 
     try {
-      await signIn(email, password);
-      console.log('Login realizado com sucesso');
+      const result = await signIn(email, password);
+      console.log('Login realizado:', result);
+      
+      toast({
+        title: "Login realizado",
+        description: "Bem-vindo ao sistema!",
+      });
+      
+      // Redirecionar para dashboard
+      navigate('/', { replace: true });
     } catch (err: any) {
       console.error('Erro no login:', err);
-      setError(err.message || 'Erro ao fazer login');
+      const errorMessage = err.message || 'Erro ao fazer login';
+      setError(errorMessage);
+      
+      toast({
+        title: "Erro no login",
+        description: errorMessage,
+        variant: "destructive",
+      });
     } finally {
       setIsLogging(false);
     }
   };
-
-  const isSubmitting = loading || isLogging;
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -68,9 +85,9 @@ export default function Login() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="seu@email.com"
+                placeholder="admin@admin.com"
                 required
-                disabled={isSubmitting}
+                disabled={isLogging}
               />
             </div>
             <div className="space-y-2">
@@ -80,9 +97,9 @@ export default function Login() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Sua senha"
+                placeholder="admin123"
                 required
-                disabled={isSubmitting}
+                disabled={isLogging}
               />
             </div>
             {error && (
@@ -90,23 +107,21 @@ export default function Login() {
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
-            <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? (
+            <Button type="submit" className="w-full" disabled={isLogging}>
+              {isLogging ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               ) : (
                 <LogIn className="w-4 h-4 mr-2" />
               )}
-              {isSubmitting ? 'Entrando...' : 'Entrar'}
+              {isLogging ? 'Entrando...' : 'Entrar'}
             </Button>
           </form>
           
-          {/* Informações de debug em desenvolvimento */}
-          {process.env.NODE_ENV === 'development' && (
-            <div className="mt-4 p-2 bg-gray-100 rounded text-xs">
-              <p>Debug: URL Supabase: {import.meta.env.VITE_SUPABASE_URL || 'Não configurada'}</p>
-              <p>Debug: Anon Key presente: {import.meta.env.VITE_SUPABASE_ANON_KEY ? 'Sim' : 'Não'}</p>
-            </div>
-          )}
+          <div className="mt-4 p-3 bg-blue-50 rounded-lg text-sm">
+            <p className="font-medium text-blue-900">Credenciais de teste:</p>
+            <p className="text-blue-700">Email: admin@admin.com</p>
+            <p className="text-blue-700">Senha: admin123</p>
+          </div>
         </CardContent>
       </Card>
     </div>
