@@ -1,4 +1,3 @@
-
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,9 +6,17 @@ import { useToast } from '@/hooks/use-toast';
 import { Palette, Save, Upload } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
+interface AppearanceSettingsType {
+  systemName: string;
+  logoUrl: string;
+  faviconUrl: string;
+  primaryColor: string;
+  secondaryColor: string;
+}
+
 export default function AppearanceSettings() {
   const { toast } = useToast();
-  const [settings, setSettings] = useState({
+  const [settings, setSettings] = useState<AppearanceSettingsType>({
     systemName: 'CRM System',
     logoUrl: '',
     faviconUrl: '',
@@ -36,7 +43,7 @@ export default function AppearanceSettings() {
     }
   }, []);
 
-  const updateSettings = (newSettings: Partial<typeof settings>) => {
+  const updateSettings = (newSettings: Partial<AppearanceSettingsType>) => {
     try {
       const updatedSettings = { ...settings, ...newSettings };
       setSettings(updatedSettings);
@@ -56,7 +63,7 @@ export default function AppearanceSettings() {
     }
   };
 
-  const applyVisualSettings = (settings: Partial<typeof settings>) => {
+  const applyVisualSettings = (settings: Partial<AppearanceSettingsType>) => {
     try {
       // Aplicar favicon
       if (settings.faviconUrl) {
