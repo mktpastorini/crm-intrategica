@@ -46,7 +46,8 @@ export default function Calendar() {
         ...formData,
         lead_name: selectedLead?.name || formData.lead_name,
         company: selectedLead?.company || formData.company,
-        responsible_id: user?.id || ''
+        responsible_id: user?.id || '',
+        lead_id: formData.lead_id === 'none' ? '' : formData.lead_id
       };
 
       if (editingEvent) {
@@ -69,7 +70,7 @@ export default function Calendar() {
       date: event.date,
       time: event.time,
       company: event.company || '',
-      lead_id: event.lead_id || '',
+      lead_id: event.lead_id || 'none',
       lead_name: event.lead_name || '',
       responsible_id: event.responsible_id
     });
@@ -95,7 +96,7 @@ export default function Calendar() {
       date: '',
       time: '',
       company: '',
-      lead_id: '',
+      lead_id: 'none',
       lead_name: '',
       responsible_id: user?.id || ''
     });
@@ -184,7 +185,7 @@ export default function Calendar() {
                     <SelectValue placeholder="Selecione um lead" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Nenhum lead</SelectItem>
+                    <SelectItem value="none">Nenhum lead</SelectItem>
                     {leads.map((lead) => (
                       <SelectItem key={lead.id} value={lead.id}>
                         {lead.name} - {lead.company}
@@ -193,7 +194,7 @@ export default function Calendar() {
                   </SelectContent>
                 </Select>
               </div>
-              {!formData.lead_id && (
+              {formData.lead_id === 'none' && (
                 <>
                   <div>
                     <Label htmlFor="lead_name">Nome do Contato</Label>

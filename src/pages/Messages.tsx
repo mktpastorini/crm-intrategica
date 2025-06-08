@@ -23,13 +23,13 @@ interface MessageTemplate {
 export default function Messages() {
   const { leads, users } = useCrm();
   const { toast } = useToast();
-  const [selectedLead, setSelectedLead] = useState<string>('');
+  const [selectedLead, setSelectedLead] = useState<string>('none');
   const [messageType, setMessageType] = useState<'whatsapp' | 'email' | 'sms'>('whatsapp');
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [messageHistory, setMessageHistory] = useState<any[]>([]);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
-  const [selectedTemplate, setSelectedTemplate] = useState<string>('');
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('none');
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -64,7 +64,7 @@ export default function Messages() {
   };
 
   const handleSendMessage = async () => {
-    if (!selectedLead || !message.trim()) {
+    if (selectedLead === 'none' || !message.trim()) {
       toast({
         title: "Campos obrigatórios",
         description: "Selecione um lead e digite uma mensagem",
@@ -139,8 +139,8 @@ export default function Messages() {
       // Reset form
       setMessage('');
       setSubject('');
-      setSelectedLead('');
-      setSelectedTemplate('');
+      setSelectedLead('none');
+      setSelectedTemplate('none');
 
       toast({
         title: "Mensagem enviada",
@@ -257,6 +257,7 @@ export default function Messages() {
                   <SelectValue placeholder="Selecione um lead" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="none">Selecione um lead</SelectItem>
                   {availableLeads.map(lead => (
                     <SelectItem key={lead.id} value={lead.id}>
                       {lead.name} - {lead.company}
@@ -285,12 +286,13 @@ export default function Messages() {
               <div className="flex gap-2">
                 <Select value={selectedTemplate} onValueChange={(value) => {
                   setSelectedTemplate(value);
-                  if (value) handleLoadTemplate(value);
+                  if (value !== 'none') handleLoadTemplate(value);
                 }}>
                   <SelectTrigger className="flex-1">
                     <SelectValue placeholder="Selecione um template" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">Selecione um template</SelectItem>
                     {templates
                       .filter(t => t.type === messageType)
                       .map(template => (
@@ -361,7 +363,7 @@ export default function Messages() {
 
             <Button 
               onClick={handleSendMessage}
-              disabled={!selectedLead || !message.trim() || isSending}
+              disabled={selectedLead === 'none' || !message.trim() || isSending}
               className="w-full"
             >
               <Send className="w-4 h-4 mr-2" />
