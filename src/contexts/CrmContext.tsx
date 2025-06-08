@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -115,6 +116,57 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const { toast } = useToast();
 
+  // Helper function to send webhook
+  const sendWebhook = async (webhookUrl: string, data: any) => {
+    if (!webhookUrl) return;
+    
+    try {
+      await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        mode: 'no-cors',
+        body: JSON.stringify(data),
+      });
+    } catch (error) {
+      console.error('Erro ao enviar webhook:', error);
+    }
+  };
+
+  // Helper function to send journey message
+  const sendJourneyMessage = async (leadId: string, newStage: string) => {
+    try {
+      const settings = localStorage.getItem('systemSettings');
+      if (!settings) return;
+      
+      const { journeyWebhookUrl } = JSON.parse(settings);
+      if (!journeyWebhookUrl) return;
+
+      const lead = leads.find(l => l.id === leadId);
+      if (!lead) return;
+
+      const journeyData = localStorage.getItem('journeyTemplates');
+      if (!journeyData) return;
+
+      const templates = JSON.parse(journeyData);
+      const template = templates.find((t: any) => t.stage === newStage);
+      if (!template) return;
+
+      await sendWebhook(journeyWebhookUrl, {
+        lead_name: lead.name,
+        lead_email: lead.email,
+        lead_phone: lead.phone,
+        company: lead.company,
+        stage: newStage,
+        message: template.message,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Erro ao enviar mensagem da jornada:', error);
+    }
+  };
+
   // Load Leads
   const loadLeads = useCallback(async () => {
     try {
@@ -151,7 +203,6 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
       console.log('Criando lead:', leadData);
       setActionLoading('create-lead');
       
-      // Garantir que o lead seja inserido no primeiro estágio
       const leadWithStage = {
         ...leadData,
         pipeline_stage: 'aguardando-inicio'
@@ -171,6 +222,9 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
       console.log('Lead criado:', data);
       setLeads(prev => [data, ...prev]);
       
+      // Send journey message for new lead
+      await sendJourneyMessage(data.id, 'aguardando-inicio');
+      
       toast({
         title: "Lead criado",
         description: "Lead foi criado com sucesso e inserido no pipeline",
@@ -186,7 +240,7 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setActionLoading(null);
     }
-  }, [toast]);
+  }, [toast, leads]);
 
   // Update Lead
   const updateLead = useCallback(async (id: string, leadData: Partial<Lead>) => {
@@ -266,10 +320,12 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
   const moveLead = useCallback(async (leadId: string, newStage: string) => {
     try {
       await updateLead(leadId, { pipeline_stage: newStage });
+      // Send journey message when lead moves to new stage
+      await sendJourneyMessage(leadId, newStage);
     } catch (error) {
       console.error('Erro ao mover lead:', error);
     }
-  }, [updateLead]);
+  }, [updateLead, leads]);
 
   // Load Events
   const loadEvents = useCallback(async () => {
@@ -320,6 +376,30 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
 
       console.log('Evento criado:', data);
       setEvents(prev => [...prev, data].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+      
+      // Send agenda webhook
+      try {
+        const settings = localStorage.getItem('systemSettings');
+        if (settings) {
+          const { webhookUrl, enableImmediateSend } = JSON.parse(settings);
+          if (webhookUrl && enableImmediateSend) {
+            await sendWebhook(webhookUrl, {
+              event_id: data.id,
+              title: data.title,
+              type: data.type,
+              date: data.date,
+              time: data.time,
+              company: data.company,
+              lead_name: data.lead_name,
+              responsible_id: data.responsible_id,
+              action: 'created',
+              timestamp: new Date().toISOString()
+            });
+          }
+        }
+      } catch (webhookError) {
+        console.error('Erro ao enviar webhook da agenda:', webhookError);
+      }
       
       toast({
         title: "Evento criado",
@@ -452,7 +532,6 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
       console.log('Criando usuário:', userData);
       setActionLoading('create-user');
       
-      // Para criar um usuário no profiles, precisamos fornecer um ID
       const userId = crypto.randomUUID();
       const userWithId = { ...userData, id: userId };
       

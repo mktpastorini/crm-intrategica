@@ -16,11 +16,13 @@ export default function Leads() {
   const { user } = useAuth();
   const { 
     leads, 
+    users,
     loading, 
     actionLoading,
     createLead, 
     updateLead, 
-    deleteLead 
+    deleteLead,
+    loadLeads 
   } = useCrm();
   
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -59,6 +61,12 @@ export default function Leads() {
     return { total, active, conversionRate };
   }, [leads]);
 
+  // Get user name by ID
+  const getUserName = (userId: string) => {
+    const foundUser = users.find(u => u.id === userId);
+    return foundUser ? foundUser.name : 'Usuário não encontrado';
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -66,7 +74,6 @@ export default function Leads() {
       if (editingLead) {
         await updateLead(editingLead.id, formData);
       } else {
-        // Sempre adicionar no primeiro estágio do pipeline
         await createLead({ 
           ...formData, 
           responsible_id: user?.id || '',
@@ -105,6 +112,19 @@ export default function Leads() {
     }
   };
 
+  const handleRefresh = async () => {
+    try {
+      await loadLeads();
+    } catch (error) {
+      console.error('Erro ao atualizar leads:', error);
+    }
+  };
+
+  const handleMassImport = () => {
+    // Placeholder for mass import functionality
+    alert('Funcionalidade de importação em massa será implementada em breve');
+  };
+
   const handleCloseDialog = () => {
     setShowAddDialog(false);
     setEditingLead(null);
@@ -136,11 +156,11 @@ export default function Leads() {
           <p className="text-slate-600">Gerencie todos os seus contatos comerciais</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
+          <Button variant="outline" onClick={handleRefresh} disabled={loading}>
             <RefreshCw className="w-4 h-4 mr-2" />
             Atualizar
           </Button>
-          <Button variant="outline">
+          <Button variant="outline" onClick={handleMassImport}>
             <Upload className="w-4 h-4 mr-2" />
             Importar em Massa
           </Button>
@@ -295,6 +315,7 @@ export default function Leads() {
           onEditLead={handleEdit}
           onDeleteLead={handleDelete}
           actionLoading={actionLoading}
+          getUserName={getUserName}
         />
       </div>
     </div>

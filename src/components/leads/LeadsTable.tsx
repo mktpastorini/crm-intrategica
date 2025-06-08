@@ -23,9 +23,10 @@ interface LeadsTableProps {
   onEditLead: (lead: Lead) => void;
   onDeleteLead: (leadId: string) => void;
   actionLoading: string | null;
+  getUserName: (userId: string) => string;
 }
 
-export default function LeadsTable({ leads, onEditLead, onDeleteLead, actionLoading }: LeadsTableProps) {
+export default function LeadsTable({ leads, onEditLead, onDeleteLead, actionLoading, getUserName }: LeadsTableProps) {
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
       case 'novo': return 'bg-blue-100 text-blue-800';
@@ -125,7 +126,7 @@ export default function LeadsTable({ leads, onEditLead, onDeleteLead, actionLoad
                     </Badge>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-slate-900">admin</div>
+                    <div className="text-sm text-slate-900">{getUserName(lead.responsible_id)}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex space-x-2">
