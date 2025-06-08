@@ -475,17 +475,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Salvar dados locais no localStorage
-  const savePipelineStages = (newStages: PipelineStage[]) => {
-    setPipelineStages(newStages);
-    localStorage.setItem('pipelineStages', JSON.stringify(newStages));
-  };
-
-  const savePendingActions = (newActions: PendingAction[]) => {
-    setPendingActions(newActions);
-    localStorage.setItem('pendingActions', JSON.stringify(newActions));
-  };
-
   const addPipelineStage = (stage: PipelineStage) => {
     const newStages = [...pipelineStages, stage];
     savePipelineStages(newStages);
