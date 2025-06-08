@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -112,110 +111,116 @@ export default function Pipeline() {
   ];
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold text-slate-900">Pipeline de Atendimento</h2>
-        <p className="text-slate-600">Gerencie o fluxo de leads através do processo de vendas</p>
-      </div>
+    <div className="h-full flex flex-col">
+      {/* Header fixo */}
+      <div className="flex-shrink-0 space-y-6 p-6 bg-white border-b">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900">Pipeline de Atendimento</h2>
+          <p className="text-slate-600">Gerencie o fluxo de leads através do processo de vendas</p>
+        </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-        {pipelineStages.map(stage => {
-          const leadsInStage = getLeadsByStage(stage.id);
-          return (
-            <Card key={stage.id} className="bg-white shadow-sm border-l-4" style={{ borderLeftColor: stage.color }}>
-              <CardContent className="p-4">
-                <div className="text-2xl font-bold" style={{ color: stage.color }}>
-                  {leadsInStage.length}
-                </div>
-                <div className="text-sm text-slate-600 mt-1">{stage.name}</div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* Pipeline Kanban */}
-      <div className="flex gap-6 overflow-x-auto pb-4">
-        {pipelineStages.map(stage => {
-          const leadsInStage = getLeadsByStage(stage.id);
-          
-          return (
-            <div
-              key={stage.id}
-              className="flex-shrink-0 w-80 bg-slate-50 rounded-lg p-4"
-              onDragOver={handleDragOver}
-              onDrop={(e) => handleDrop(e, stage.id)}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-2">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: stage.color }}
-                  />
-                  <h3 className="font-semibold text-slate-900">{stage.name}</h3>
-                  <Badge variant="secondary" className="text-xs">
+        {/* Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+          {pipelineStages.map(stage => {
+            const leadsInStage = getLeadsByStage(stage.id);
+            return (
+              <Card key={stage.id} className="bg-white shadow-sm border-l-4" style={{ borderLeftColor: stage.color }}>
+                <CardContent className="p-4">
+                  <div className="text-2xl font-bold" style={{ color: stage.color }}>
                     {leadsInStage.length}
-                  </Badge>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                {leadsInStage.map(lead => (
-                  <Card
-                    key={lead.id}
-                    className="cursor-move hover:shadow-md transition-shadow bg-white"
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, lead.id)}
-                  >
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm font-medium text-slate-900">
-                        {lead.name}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-0 space-y-2">
-                      <div className="flex items-center text-xs text-slate-600">
-                        <Building className="w-3 h-3 mr-1" />
-                        {lead.company}
-                      </div>
-                      <div className="flex items-center text-xs text-slate-600">
-                        <Phone className="w-3 h-3 mr-1" />
-                        {lead.phone}
-                      </div>
-                      {lead.email && (
-                        <div className="flex items-center text-xs text-slate-600">
-                          <Mail className="w-3 h-3 mr-1" />
-                          {lead.email}
-                        </div>
-                      )}
-                      <div className="flex items-center justify-between pt-2">
-                        <Badge variant="outline" className="text-xs">
-                          {lead.niche}
-                        </Badge>
-                        <div className="flex items-center text-xs text-slate-500">
-                          <User className="w-3 h-3 mr-1" />
-                          {lead.responsible_id}
-                        </div>
-                      </div>
-                      <div className="flex justify-end pt-2">
-                        <Button variant="ghost" size="sm" className="text-slate-400 hover:text-slate-600">
-                          <Archive className="w-3 h-3" />
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-
-                {leadsInStage.length === 0 && (
-                  <div className="text-center py-8 text-slate-400 text-sm">
-                    Nenhum lead neste estágio
                   </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
+                  <div className="text-sm text-slate-600 mt-1">{stage.name}</div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Pipeline Kanban com scroll horizontal */}
+      <div className="flex-1 overflow-hidden">
+        <div className="h-full overflow-x-auto">
+          <div className="flex gap-4 p-6 min-w-max">
+            {pipelineStages.map(stage => {
+              const leadsInStage = getLeadsByStage(stage.id);
+              
+              return (
+                <div
+                  key={stage.id}
+                  className="flex-shrink-0 w-80 bg-slate-50 rounded-lg p-4 h-fit max-h-[calc(100vh-300px)] flex flex-col"
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, stage.id)}
+                >
+                  <div className="flex items-center justify-between mb-4 flex-shrink-0">
+                    <div className="flex items-center space-x-2">
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: stage.color }}
+                      />
+                      <h3 className="font-semibold text-slate-900">{stage.name}</h3>
+                      <Badge variant="secondary" className="text-xs">
+                        {leadsInStage.length}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 overflow-y-auto flex-1">
+                    {leadsInStage.map(lead => (
+                      <Card
+                        key={lead.id}
+                        className="cursor-move hover:shadow-md transition-shadow bg-white"
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, lead.id)}
+                      >
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-sm font-medium text-slate-900">
+                            {lead.name}
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-0 space-y-2">
+                          <div className="flex items-center text-xs text-slate-600">
+                            <Building className="w-3 h-3 mr-1" />
+                            {lead.company}
+                          </div>
+                          <div className="flex items-center text-xs text-slate-600">
+                            <Phone className="w-3 h-3 mr-1" />
+                            {lead.phone}
+                          </div>
+                          {lead.email && (
+                            <div className="flex items-center text-xs text-slate-600">
+                              <Mail className="w-3 h-3 mr-1" />
+                              {lead.email}
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between pt-2">
+                            <Badge variant="outline" className="text-xs">
+                              {lead.niche}
+                            </Badge>
+                            <div className="flex items-center text-xs text-slate-500">
+                              <User className="w-3 h-3 mr-1" />
+                              {lead.responsible_id}
+                            </div>
+                          </div>
+                          <div className="flex justify-end pt-2">
+                            <Button variant="ghost" size="sm" className="text-slate-400 hover:text-slate-600">
+                              <Archive className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+
+                    {leadsInStage.length === 0 && (
+                      <div className="text-center py-8 text-slate-400 text-sm">
+                        Nenhum lead neste estágio
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Event Scheduling Dialog */}

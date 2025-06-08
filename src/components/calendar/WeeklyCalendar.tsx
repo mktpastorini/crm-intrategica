@@ -88,18 +88,18 @@ export default function WeeklyCalendar({ events, onEditEvent, onDeleteEvent, onA
         </div>
       </div>
 
-      {/* Grid do calendário semanal */}
-      <div className="grid grid-cols-7 gap-4">
+      {/* Grid do calendário semanal com espaçamento reduzido */}
+      <div className="grid grid-cols-7 gap-2">
         {weekDays.map((day, index) => {
           const dayEvents = getEventsForDay(day);
           const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
           
           return (
             <Card key={index} className={`min-h-[200px] ${isToday(day) ? 'ring-2 ring-blue-500' : ''}`}>
-              <CardHeader className="pb-3">
+              <CardHeader className="pb-2 px-3 py-2">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-slate-600">{dayNames[index]}</p>
+                    <p className="text-xs font-medium text-slate-600">{dayNames[index]}</p>
                     <p className={`text-lg font-bold ${isToday(day) ? 'text-blue-600' : 'text-slate-900'}`}>
                       {format(day, 'd')}
                     </p>
@@ -114,38 +114,42 @@ export default function WeeklyCalendar({ events, onEditEvent, onDeleteEvent, onA
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="pt-0 space-y-2">
+              <CardContent className="pt-0 px-3 pb-3 space-y-1">
                 {dayEvents.map((event) => (
-                  <div key={event.id} className="p-2 bg-slate-50 rounded-lg border">
+                  <div key={event.id} className="p-2 bg-slate-50 rounded border border-slate-200">
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-slate-900 truncate">
+                        <div className="flex items-center gap-1 mb-1">
+                          <Badge className={`${getEventTypeBadge(event.type)} text-xs px-1 py-0`}>
+                            {getEventTypeLabel(event.type)}
+                          </Badge>
+                          <span className="text-xs text-slate-600">{event.time}</span>
+                        </div>
+                        <p className="text-xs font-medium text-slate-900 truncate mb-1">
                           {event.title}
                         </p>
-                        <p className="text-xs text-slate-600">{event.time}</p>
                         {event.company && (
-                          <p className="text-xs text-slate-500 truncate">{event.company}</p>
+                          <p className="text-xs text-slate-500 truncate">
+                            {event.company}
+                          </p>
                         )}
-                        <Badge className={`${getEventTypeBadge(event.type)} text-xs`}>
-                          {getEventTypeLabel(event.type)}
-                        </Badge>
                       </div>
                       <div className="flex space-x-1 ml-1">
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => onEditEvent(event)}
-                          className="h-5 w-5 p-0"
+                          className="h-4 w-4 p-0"
                         >
-                          <Edit className="w-3 h-3" />
+                          <Edit className="w-2.5 h-2.5" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => onDeleteEvent(event.id)}
-                          className="h-5 w-5 p-0 text-red-600 hover:text-red-700"
+                          className="h-4 w-4 p-0 text-red-600 hover:text-red-700"
                         >
-                          <Trash2 className="w-3 h-3" />
+                          <Trash2 className="w-2.5 h-2.5" />
                         </Button>
                       </div>
                     </div>
