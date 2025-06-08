@@ -5,103 +5,22 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Palette, Save, Upload } from 'lucide-react';
-import { useState, useEffect } from 'react';
 
-interface AppearanceSettingsType {
-  systemName: string;
-  logoUrl: string;
-  faviconUrl: string;
-  primaryColor: string;
-  secondaryColor: string;
+interface AppearanceSettingsProps {
+  settings: any;
+  onInputChange: (field: string, value: any) => Promise<void>;
 }
 
-export default function AppearanceSettings() {
+export default function AppearanceSettings({ settings, onInputChange }: AppearanceSettingsProps) {
   const { toast } = useToast();
-  const [settings, setSettings] = useState<AppearanceSettingsType>({
-    systemName: 'CRM System',
-    logoUrl: '',
-    faviconUrl: '',
-    primaryColor: '#3b82f6',
-    secondaryColor: '#8b5cf6'
-  });
-
-  // Carregar configurações do localStorage
-  useEffect(() => {
-    try {
-      const savedSettings = localStorage.getItem('systemSettings');
-      if (savedSettings) {
-        const parsedSettings = JSON.parse(savedSettings);
-        setSettings({
-          systemName: parsedSettings.systemName || 'CRM System',
-          logoUrl: parsedSettings.logoUrl || '',
-          faviconUrl: parsedSettings.faviconUrl || '',
-          primaryColor: parsedSettings.primaryColor || '#3b82f6',
-          secondaryColor: parsedSettings.secondaryColor || '#8b5cf6'
-        });
-      }
-    } catch (error) {
-      console.error('Erro ao carregar configurações:', error);
-    }
-  }, []);
-
-  const applyVisualSettings = (settings: Partial<AppearanceSettingsType>) => {
-    try {
-      // Aplicar favicon
-      if (settings.faviconUrl) {
-        let favicon = document.querySelector('link[rel="icon"]') as HTMLLinkElement;
-        if (!favicon) {
-          favicon = document.createElement('link');
-          favicon.rel = 'icon';
-          document.head.appendChild(favicon);
-        }
-        favicon.href = settings.faviconUrl;
-      }
-      
-      // Aplicar título do sistema
-      if (settings.systemName) {
-        document.title = settings.systemName;
-      }
-      
-      // Aplicar cores
-      const root = document.documentElement;
-      if (settings.primaryColor) {
-        root.style.setProperty('--primary-color', settings.primaryColor);
-      }
-      if (settings.secondaryColor) {
-        root.style.setProperty('--secondary-color', settings.secondaryColor);
-      }
-    } catch (error) {
-      console.error('Erro ao aplicar configurações visuais:', error);
-    }
-  };
-
-  const updateSettings = (newSettings: Partial<AppearanceSettingsType>) => {
-    try {
-      const updatedSettings = { ...settings, ...newSettings };
-      setSettings(updatedSettings);
-      
-      // Salvar no localStorage
-      const currentSettings = JSON.parse(localStorage.getItem('systemSettings') || '{}');
-      const mergedSettings = { ...currentSettings, ...updatedSettings };
-      localStorage.setItem('systemSettings', JSON.stringify(mergedSettings));
-      
-      // Aplicar mudanças visuais imediatamente
-      applyVisualSettings(updatedSettings);
-      
-      // Disparar evento customizado para notificar outros componentes
-      window.dispatchEvent(new Event('systemSettingsChanged'));
-    } catch (error) {
-      console.error('Erro ao salvar configurações:', error);
-    }
-  };
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (event) => {
+      reader.onload = async (event) => {
         const logoUrl = event.target?.result as string;
-        updateSettings({ logoUrl });
+        await onInputChange('logoUrl', logoUrl);
         
         toast({
           title: "Logo atualizado",
@@ -116,9 +35,9 @@ export default function AppearanceSettings() {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (event) => {
+      reader.onload = async (event) => {
         const faviconUrl = event.target?.result as string;
-        updateSettings({ faviconUrl });
+        await onInputChange('faviconUrl', faviconUrl);
         
         toast({
           title: "Favicon atualizado",
@@ -129,8 +48,8 @@ export default function AppearanceSettings() {
     }
   };
 
-  const handleColorChange = (field: 'primaryColor' | 'secondaryColor', value: string) => {
-    updateSettings({ [field]: value });
+  const handleColorChange = async (field: 'primaryColor' | 'secondaryColor', value: string) => {
+    await onInputChange(field, value);
   };
 
   const handleSave = () => {
@@ -223,7 +142,7 @@ export default function AppearanceSettings() {
               <Input
                 value={settings.primaryColor}
                 onChange={(e) => handleColorChange('primaryColor', e.target.value)}
-                placeholder="#3b82f6"
+                placeholder="#1d0029"
                 className="flex-1"
               />
             </div>
@@ -248,7 +167,7 @@ export default function AppearanceSettings() {
           </div>
         </div>
 
-        <Button onClick={handleSave} className="w-full">
+        <Button onClick={handleSave} className="w-full" style={{ backgroundColor: settings.primaryColor }}>
           <Save className="w-4 h-4 mr-2" />
           Salvar Configurações de Aparência
         </Button>

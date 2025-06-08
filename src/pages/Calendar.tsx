@@ -1,19 +1,29 @@
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSystemSettingsDB } from '@/hooks/useSystemSettingsDB';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Calendar as CalendarIcon } from 'lucide-react';
+import { Plus, Calendar as CalendarIcon, Users, Phone, Mail, MapPin, Clock } from 'lucide-react';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import WeeklyCalendar from '@/components/calendar/WeeklyCalendar';
 import UpcomingEvents from '@/components/calendar/UpcomingEvents';
 
+const eventTypeOptions = [
+  { value: 'reuniao', label: 'Reunião', icon: Users, color: '#1d0029' },
+  { value: 'ligacao', label: 'Ligação', icon: Phone, color: '#e11d48' },
+  { value: 'email', label: 'E-mail', icon: Mail, color: '#3b82f6' },
+  { value: 'visita', label: 'Visita', icon: MapPin, color: '#10b981' },
+  { value: 'followup', label: 'Follow-up', icon: Clock, color: '#f59e0b' },
+];
+
 export default function Calendar() {
   const { user } = useAuth();
+  const { settings } = useSystemSettingsDB();
   const { 
     events, 
     leads,
@@ -119,7 +129,7 @@ export default function Calendar() {
         </div>
         <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
           <DialogTrigger asChild>
-            <Button>
+            <Button style={{ backgroundColor: settings.primaryColor }}>
               <Plus className="w-4 h-4 mr-2" />
               Novo Evento
             </Button>
@@ -142,17 +152,23 @@ export default function Calendar() {
                 />
               </div>
               <div>
-                <Label htmlFor="type">Tipo</Label>
+                <Label htmlFor="type">Tipo de Evento</Label>
                 <Select value={formData.type} onValueChange={(value) => setFormData(prev => ({ ...prev, type: value }))}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="reuniao">Reunião</SelectItem>
-                    <SelectItem value="ligacao">Ligação</SelectItem>
-                    <SelectItem value="email">E-mail</SelectItem>
-                    <SelectItem value="visita">Visita</SelectItem>
-                    <SelectItem value="followup">Follow-up</SelectItem>
+                    {eventTypeOptions.map((option) => {
+                      const Icon = option.icon;
+                      return (
+                        <SelectItem key={option.value} value={option.value}>
+                          <div className="flex items-center gap-2">
+                            <Icon className="w-4 h-4" style={{ color: option.color }} />
+                            <span>{option.label}</span>
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </div>
@@ -215,7 +231,12 @@ export default function Calendar() {
                 </>
               )}
               <div className="flex gap-2 pt-4">
-                <Button type="submit" className="flex-1" disabled={actionLoading === 'create-event' || actionLoading === editingEvent?.id}>
+                <Button 
+                  type="submit" 
+                  className="flex-1" 
+                  disabled={actionLoading === 'create-event' || actionLoading === editingEvent?.id}
+                  style={{ backgroundColor: settings.primaryColor }}
+                >
                   {(actionLoading === 'create-event' || actionLoading === editingEvent?.id) ? (
                     <LoadingSpinner size="sm" />
                   ) : (

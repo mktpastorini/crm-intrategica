@@ -1,7 +1,8 @@
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
+import { supabase } from '@/integrations/supabase/client';
+import { useNavigate } from 'react-router-dom';
 
 interface AuthContextType {
   user: User | null;
@@ -10,7 +11,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -20,80 +21,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [initialized, setInitialized] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    if (initialized) return;
-
-    console.log('Inicializando autenticação...');
-    
-    let mounted = true;
-
-    const initAuth = async () => {
-      try {
-        // Configurar listener primeiro
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-          console.log('Auth state change:', event, session?.user?.id);
-          
-          if (!mounted) return;
-
-          if (session?.user) {
-            setUser(session.user);
-            // Carregar perfil de forma assíncrona
-            setTimeout(async () => {
-              if (mounted) {
-                await loadUserProfile(session.user.id);
-              }
-            }, 0);
-          } else {
-            setUser(null);
-            setProfile(null);
-          }
-          
-          if (mounted) {
-            setLoading(false);
-          }
-        });
-
-        // Verificar sessão atual
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('Erro ao obter sessão:', error);
-        } else if (session?.user && mounted) {
-          console.log('Sessão encontrada:', session.user.id);
-          setUser(session.user);
-          await loadUserProfile(session.user.id);
-        }
-
-        if (mounted) {
-          setLoading(false);
-          setInitialized(true);
-        }
-
-        return () => {
-          subscription?.unsubscribe();
-        };
-      } catch (error) {
-        console.error('Erro na inicialização:', error);
-        if (mounted) {
-          setLoading(false);
-          setInitialized(true);
-        }
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        loadProfile(session.user.id);
       }
-    };
+      setLoading(false);
+    });
 
-    initAuth();
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        await loadProfile(session.user.id);
+        // Redirecionar para o dashboard após login bem-sucedido
+        if (event === 'SIGNED_IN') {
+          navigate('/');
+        }
+      } else {
+        setProfile(null);
+      }
+      setLoading(false);
+    });
 
-    return () => {
-      mounted = false;
-    };
-  }, [initialized]);
+    return () => subscription.unsubscribe();
+  }, [navigate]);
 
-  const loadUserProfile = async (userId: string) => {
+  const loadProfile = async (userId: string) => {
     try {
-      console.log('Carregando perfil para usuário:', userId);
-      
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -101,87 +60,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .single();
 
       if (error) {
-        console.error('Erro ao carregar perfil:', error);
-        setProfile(null);
+        console.error('Error loading profile:', error);
         return;
       }
-      
-      console.log('Perfil carregado:', data);
+
       setProfile(data);
     } catch (error) {
-      console.error('Erro inesperado ao buscar perfil:', error);
-      setProfile(null);
+      console.error('Error loading profile:', error);
     }
   };
 
   const signIn = async (email: string, password: string) => {
-    console.log('Tentando fazer login com:', email);
-    setLoading(true);
-    
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password: password.trim(),
-      });
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
 
-      if (error) {
-        console.error('Erro no login:', error);
-        throw error;
-      }
-      
-      console.log('Login bem-sucedido:', data.user?.id);
-      return data;
-    } catch (error) {
-      console.error('Erro no signIn:', error);
+    if (error) {
       throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const login = async (email: string, password: string) => {
-    try {
-      await signIn(email, password);
-      return { success: true };
-    } catch (error: any) {
-      console.error('Erro no login wrapper:', error);
-      return { success: false, error: error.message };
     }
   };
 
   const signOut = async () => {
-    console.log('Fazendo logout');
-    setLoading(true);
-    
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error('Erro no logout:', error);
-        throw error;
-      }
-      
-      setUser(null);
-      setProfile(null);
-    } finally {
-      setLoading(false);
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      throw error;
     }
+    navigate('/login');
   };
 
-  const logout = async () => {
-    await signOut();
-  };
-
-  const isAuthenticated = !!user;
+  const login = signIn;
+  const logout = signOut;
 
   const value = {
     user,
     profile,
     loading,
-    isAuthenticated,
+    isAuthenticated: !!user,
     signIn,
     signOut,
     login,
-    logout,
+    logout
   };
 
   return (

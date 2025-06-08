@@ -1,16 +1,28 @@
 
 import { useState, useEffect } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useSystemSettingsDB } from '@/hooks/useSystemSettingsDB';
+import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { MessageSquare, Send, Phone, Mail, MessageCircle, Save, Plus, Trash2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
+import { 
+  MessageSquare, 
+  Send, 
+  Plus, 
+  Phone, 
+  Mail, 
+  Save,
+  Users,
+  X
+} from 'lucide-react';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 interface MessageTemplate {
   id: string;
@@ -22,8 +34,9 @@ interface MessageTemplate {
 
 export default function Messages() {
   const { leads, users } = useCrm();
+  const { settings } = useSystemSettingsDB();
   const { toast } = useToast();
-  const [selectedLead, setSelectedLead] = useState<string>('none');
+  const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
   const [messageType, setMessageType] = useState<'whatsapp' | 'email' | 'sms'>('whatsapp');
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
@@ -33,41 +46,95 @@ export default function Messages() {
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [sendMode, setSendMode] = useState<'individual' | 'bulk'>('individual');
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+
+  const messageTypeIcons = {
+    whatsapp: MessageSquare,
+    email: Mail,
+    sms: Phone
+  };
+
+  const categories = Array.from(new Set(leads.map(lead => lead.niche))).filter(Boolean);
 
   useEffect(() => {
-    loadMessageHistory();
-    loadTemplates();
+    const savedTemplates = localStorage.getItem('messageTemplates');
+    if (savedTemplates) {
+      setTemplates(JSON.parse(savedTemplates));
+    }
+
+    const savedHistory = localStorage.getItem('messageHistory');
+    if (savedHistory) {
+      setMessageHistory(JSON.parse(savedHistory));
+    }
   }, []);
 
-  const loadMessageHistory = () => {
-    const saved = localStorage.getItem('messageHistory');
-    if (saved) {
-      setMessageHistory(JSON.parse(saved));
+  const saveTemplate = () => {
+    if (!templateName.trim() || !message.trim()) {
+      toast({
+        title: "Campos obrigatórios",
+        description: "Nome do template e mensagem são obrigatórios",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const newTemplate: MessageTemplate = {
+      id: Date.now().toString(),
+      name: templateName,
+      type: messageType,
+      subject: messageType === 'email' ? subject : undefined,
+      content: message
+    };
+
+    const updatedTemplates = [...templates, newTemplate];
+    setTemplates(updatedTemplates);
+    localStorage.setItem('messageTemplates', JSON.stringify(updatedTemplates));
+
+    setShowTemplateDialog(false);
+    setTemplateName('');
+
+    toast({
+      title: "Template salvo",
+      description: "Template de mensagem foi salvo com sucesso",
+    });
+  };
+
+  const handleLoadTemplate = (templateId: string) => {
+    const template = templates.find(t => t.id === templateId);
+    if (template) {
+      setMessage(template.content);
+      if (template.subject) {
+        setSubject(template.subject);
+      }
     }
   };
 
-  const saveMessageHistory = (newHistory: any[]) => {
-    setMessageHistory(newHistory);
-    localStorage.setItem('messageHistory', JSON.stringify(newHistory));
-  };
-
-  const loadTemplates = () => {
-    const saved = localStorage.getItem('messageTemplates');
-    if (saved) {
-      setTemplates(JSON.parse(saved));
+  const getLeadsToSend = () => {
+    if (sendMode === 'individual') {
+      return leads.filter(lead => selectedLeads.includes(lead.id));
+    } else {
+      // Bulk mode - by categories
+      return leads.filter(lead => selectedCategories.includes(lead.niche));
     }
-  };
-
-  const saveTemplates = (newTemplates: MessageTemplate[]) => {
-    setTemplates(newTemplates);
-    localStorage.setItem('messageTemplates', JSON.stringify(newTemplates));
   };
 
   const handleSendMessage = async () => {
-    if (selectedLead === 'none' || !message.trim()) {
+    const leadsToSend = getLeadsToSend();
+    
+    if (leadsToSend.length === 0 || !message.trim()) {
       toast({
         title: "Campos obrigatórios",
-        description: "Selecione um lead e digite uma mensagem",
+        description: sendMode === 'individual' ? "Selecione leads e digite uma mensagem" : "Selecione categorias e digite uma mensagem",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (messageType === 'email' && !subject.trim()) {
+      toast({
+        title: "Assunto obrigatório",
+        description: "O assunto é obrigatório para e-mails",
         variant: "destructive",
       });
       return;
@@ -76,81 +143,63 @@ export default function Messages() {
     setIsSending(true);
 
     try {
-      const lead = leads.find(l => l.id === selectedLead);
-      if (!lead) return;
+      for (const lead of leadsToSend) {
+        const messageData = {
+          leadId: lead.id,
+          leadName: lead.name,
+          leadPhone: lead.phone,
+          leadEmail: lead.email,
+          company: lead.company,
+          type: messageType,
+          subject: messageType === 'email' ? subject : undefined,
+          message: message,
+          timestamp: new Date().toISOString()
+        };
 
-      // Get webhook URL from settings
-      const settings = localStorage.getItem('systemSettings');
-      if (!settings) {
-        toast({
-          title: "Configuração necessária",
-          description: "Configure o webhook de mensagens nas configurações",
-          variant: "destructive",
-        });
-        return;
+        // Send to webhook if configured
+        if (settings.messageWebhookUrl) {
+          try {
+            await fetch(settings.messageWebhookUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(messageData)
+            });
+          } catch (error) {
+            console.error('Erro ao enviar para webhook:', error);
+          }
+        }
+
+        // Save to history
+        const historyEntry = {
+          id: Date.now().toString() + Math.random(),
+          ...messageData,
+          status: 'sent'
+        };
+
+        const updatedHistory = [historyEntry, ...messageHistory];
+        setMessageHistory(updatedHistory);
+        localStorage.setItem('messageHistory', JSON.stringify(updatedHistory));
       }
-
-      const { messageWebhookUrl, enableMessageWebhook } = JSON.parse(settings);
-      if (!messageWebhookUrl || !enableMessageWebhook) {
-        toast({
-          title: "Webhook não configurado",
-          description: "Configure o webhook de mensagens nas configurações",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Send webhook
-      const webhookData = {
-        lead_name: lead.name,
-        lead_email: lead.email,
-        lead_phone: lead.phone,
-        company: lead.company,
-        message_type: messageType,
-        subject: messageType === 'email' ? subject : '',
-        message: message,
-        timestamp: new Date().toISOString()
-      };
-
-      await fetch(messageWebhookUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        mode: 'no-cors',
-        body: JSON.stringify(webhookData),
-      });
-
-      // Save to history
-      const newMessage = {
-        id: `msg-${Date.now()}`,
-        leadId: selectedLead,
-        leadName: lead.name,
-        type: messageType,
-        subject: messageType === 'email' ? subject : '',
-        content: message,
-        timestamp: new Date().toISOString(),
-        status: 'sent'
-      };
-
-      const updatedHistory = [newMessage, ...messageHistory];
-      saveMessageHistory(updatedHistory);
 
       // Reset form
       setMessage('');
       setSubject('');
-      setSelectedLead('none');
+      setSelectedLeads([]);
+      setSelectedCategories([]);
       setSelectedTemplate('none');
 
       toast({
-        title: "Mensagem enviada",
-        description: "Mensagem foi enviada com sucesso via webhook",
+        title: "Mensagens enviadas",
+        description: `${leadsToSend.length} mensagens foram enviadas com sucesso`,
       });
+
     } catch (error) {
       console.error('Erro ao enviar mensagem:', error);
       toast({
-        title: "Erro ao enviar",
-        description: "Erro ao enviar mensagem via webhook",
+        title: "Erro",
+        description: "Erro ao enviar mensagem",
         variant: "destructive",
       });
     } finally {
@@ -158,131 +207,145 @@ export default function Messages() {
     }
   };
 
-  const handleSaveTemplate = () => {
-    if (!templateName.trim() || !message.trim()) {
-      toast({
-        title: "Campos obrigatórios",
-        description: "Preencha o nome do template e a mensagem",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const newTemplate: MessageTemplate = {
-      id: `template-${Date.now()}`,
-      name: templateName,
-      type: messageType,
-      subject: messageType === 'email' ? subject : '',
-      content: message
-    };
-
-    const updatedTemplates = [...templates, newTemplate];
-    saveTemplates(updatedTemplates);
-
-    setTemplateName('');
-    setShowTemplateDialog(false);
-
-    toast({
-      title: "Template salvo",
-      description: "Template foi salvo com sucesso",
-    });
+  const handleLeadToggle = (leadId: string) => {
+    setSelectedLeads(prev => 
+      prev.includes(leadId) 
+        ? prev.filter(id => id !== leadId)
+        : [...prev, leadId]
+    );
   };
 
-  const handleLoadTemplate = (templateId: string) => {
-    const template = templates.find(t => t.id === templateId);
-    if (template) {
-      setMessageType(template.type);
-      setSubject(template.subject || '');
-      setMessage(template.content);
-    }
+  const handleCategoryToggle = (category: string) => {
+    setSelectedCategories(prev => 
+      prev.includes(category) 
+        ? prev.filter(c => c !== category)
+        : [...prev, category]
+    );
   };
 
-  const handleDeleteTemplate = (templateId: string) => {
-    const updatedTemplates = templates.filter(t => t.id !== templateId);
-    saveTemplates(updatedTemplates);
-    
-    toast({
-      title: "Template excluído",
-      description: "Template foi excluído com sucesso",
-    });
-  };
+  const availableLeads = leads.filter(lead => 
+    messageType === 'email' ? lead.email : lead.phone
+  );
 
-  const getMessageIcon = (type: string) => {
-    switch (type) {
-      case 'whatsapp': return <MessageCircle className="w-4 h-4 text-green-600" />;
-      case 'email': return <Mail className="w-4 h-4 text-blue-600" />;
-      case 'sms': return <Phone className="w-4 h-4 text-orange-600" />;
-      default: return <MessageSquare className="w-4 h-4" />;
-    }
-  };
-
-  const getMessageBadgeColor = (type: string) => {
-    switch (type) {
-      case 'whatsapp': return 'bg-green-100 text-green-800';
-      case 'email': return 'bg-blue-100 text-blue-800';
-      case 'sms': return 'bg-orange-100 text-orange-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getUserName = (userId: string) => {
-    const user = users.find(u => u.id === userId);
-    return user ? user.name : 'Usuário não encontrado';
-  };
-
-  // Filtrar leads com pipeline_stage válido
-  const availableLeads = leads.filter(lead => lead.pipeline_stage && lead.pipeline_stage !== 'contrato-assinado');
+  const Icon = messageTypeIcons[messageType];
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-slate-900">Mensagens</h2>
-        <p className="text-slate-600">Envie mensagens personalizadas para seus leads via webhook</p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900">Central de Mensagens</h2>
+          <p className="text-slate-600">Envie mensagens para seus leads</p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Send Message Form */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <MessageSquare className="w-5 h-5" />
-              Enviar Mensagem
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Lead</label>
-              <Select value={selectedLead} onValueChange={setSelectedLead}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione um lead" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Selecione um lead</SelectItem>
-                  {availableLeads.map(lead => (
-                    <SelectItem key={lead.id} value={lead.id}>
-                      {lead.name} - {lead.company}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Icon className="w-5 h-5" />
+                Nova Mensagem
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Modo de Envio</Label>
+                  <Select value={sendMode} onValueChange={(value: 'individual' | 'bulk') => setSendMode(value)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="individual">Individual (Selecionar Leads)</SelectItem>
+                      <SelectItem value="bulk">Em Massa (Por Categoria)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Tipo de Mensagem</Label>
+                  <Select value={messageType} onValueChange={(value: 'whatsapp' | 'email' | 'sms') => setMessageType(value)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="whatsapp">
+                        <div className="flex items-center gap-2">
+                          <MessageSquare className="w-4 h-4" />
+                          WhatsApp
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="email">
+                        <div className="flex items-center gap-2">
+                          <Mail className="w-4 h-4" />
+                          E-mail
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="sms">
+                        <div className="flex items-center gap-2">
+                          <Phone className="w-4 h-4" />
+                          SMS
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-2">Tipo de Mensagem</label>
-              <Select value={messageType} onValueChange={(value: any) => setMessageType(value)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                  <SelectItem value="email">E-mail</SelectItem>
-                  <SelectItem value="sms">SMS</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+              {sendMode === 'individual' ? (
+                <div>
+                  <Label>Selecionar Leads</Label>
+                  <div className="mt-2 space-y-2 max-h-60 overflow-y-auto border rounded-lg p-3">
+                    {availableLeads.map(lead => (
+                      <div key={lead.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`lead-${lead.id}`}
+                          checked={selectedLeads.includes(lead.id)}
+                          onCheckedChange={() => handleLeadToggle(lead.id)}
+                        />
+                        <Label htmlFor={`lead-${lead.id}`} className="flex-1 cursor-pointer">
+                          {lead.name} - {lead.company}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                  {selectedLeads.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-sm text-slate-600">
+                        {selectedLeads.length} lead(s) selecionado(s)
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <Label>Selecionar Categorias</Label>
+                  <div className="mt-2 space-y-2">
+                    {categories.map(category => (
+                      <div key={category} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`category-${category}`}
+                          checked={selectedCategories.includes(category)}
+                          onCheckedChange={() => handleCategoryToggle(category)}
+                        />
+                        <Label htmlFor={`category-${category}`} className="flex-1 cursor-pointer">
+                          {category}
+                        </Label>
+                        <Badge variant="secondary">
+                          {leads.filter(l => l.niche === category).length} leads
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                  {selectedCategories.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-sm text-slate-600">
+                        {leads.filter(l => selectedCategories.includes(l.niche)).length} leads serão incluídos
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
 
-            <div>
-              <label className="block text-sm font-medium mb-2">Template</label>
               <div className="flex gap-2">
                 <Select value={selectedTemplate} onValueChange={(value) => {
                   setSelectedTemplate(value);
@@ -299,20 +362,21 @@ export default function Messages() {
                         <SelectItem key={template.id} value={template.id}>
                           {template.name}
                         </SelectItem>
-                      ))}
+                    ))}
                   </SelectContent>
                 </Select>
                 <Dialog open={showTemplateDialog} onOpenChange={setShowTemplateDialog}>
                   <DialogTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      <Plus className="w-4 h-4" />
+                    <Button variant="outline">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Salvar Template
                     </Button>
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
                       <DialogTitle>Salvar Template</DialogTitle>
                       <DialogDescription>
-                        Salve a mensagem atual como template para reutilizar
+                        Salve esta mensagem como um template para usar novamente
                       </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
@@ -326,9 +390,9 @@ export default function Messages() {
                         />
                       </div>
                       <div className="flex gap-2">
-                        <Button onClick={handleSaveTemplate} className="flex-1">
+                        <Button onClick={saveTemplate} className="flex-1">
                           <Save className="w-4 h-4 mr-2" />
-                          Salvar Template
+                          Salvar
                         </Button>
                         <Button variant="outline" onClick={() => setShowTemplateDialog(false)} className="flex-1">
                           Cancelar
@@ -338,127 +402,75 @@ export default function Messages() {
                   </DialogContent>
                 </Dialog>
               </div>
-            </div>
 
-            {messageType === 'email' && (
+              {messageType === 'email' && (
+                <div>
+                  <Label htmlFor="subject">Assunto</Label>
+                  <Input
+                    id="subject"
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    placeholder="Digite o assunto do e-mail"
+                  />
+                </div>
+              )}
+
               <div>
-                <label className="block text-sm font-medium mb-2">Assunto</label>
-                <Input
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  placeholder="Digite o assunto do e-mail"
+                <Label htmlFor="message">Mensagem</Label>
+                <Textarea
+                  id="message"
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder="Digite sua mensagem aqui..."
+                  rows={6}
                 />
               </div>
-            )}
 
-            <div>
-              <label className="block text-sm font-medium mb-2">Mensagem</label>
-              <Textarea
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder="Digite sua mensagem..."
-                rows={6}
-              />
-            </div>
-
-            <Button 
-              onClick={handleSendMessage}
-              disabled={selectedLead === 'none' || !message.trim() || isSending}
-              className="w-full"
-            >
-              <Send className="w-4 h-4 mr-2" />
-              {isSending ? 'Enviando...' : 'Enviar Mensagem'}
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Templates & History */}
-        <div className="space-y-6">
-          {/* Templates */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Templates Salvos</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3 max-h-48 overflow-y-auto">
-                {templates.length === 0 ? (
-                  <div className="text-center py-4 text-slate-500">
-                    <MessageSquare className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                    <p>Nenhum template salvo</p>
-                  </div>
+              <Button 
+                onClick={handleSendMessage}
+                disabled={getLeadsToSend().length === 0 || !message.trim() || isSending}
+                className="w-full"
+                style={{ backgroundColor: settings.primaryColor }}
+              >
+                {isSending ? (
+                  <LoadingSpinner size="sm" />
                 ) : (
-                  templates.map((template) => (
-                    <div key={template.id} className="border border-slate-200 rounded-lg p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          {getMessageIcon(template.type)}
-                          <span className="font-medium text-sm">{template.name}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge className={getMessageBadgeColor(template.type)}>
-                            {template.type.toUpperCase()}
-                          </Badge>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteTemplate(template.id)}
-                            className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      </div>
-                      {template.subject && (
-                        <p className="text-xs font-medium text-slate-700 mb-1">
-                          Assunto: {template.subject}
-                        </p>
-                      )}
-                      <p className="text-xs text-slate-600 line-clamp-2">
-                        {template.content}
-                      </p>
-                    </div>
-                  ))
+                  <>
+                    <Send className="w-4 h-4 mr-2" />
+                    Enviar {sendMode === 'bulk' ? 'em Massa' : 'Mensagem'}
+                    {getLeadsToSend().length > 0 && ` (${getLeadsToSend().length})`}
+                  </>
                 )}
-              </div>
+              </Button>
             </CardContent>
           </Card>
+        </div>
 
-          {/* Message History */}
+        <div>
           <Card>
             <CardHeader>
               <CardTitle>Histórico de Mensagens</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4 max-h-96 overflow-y-auto">
+              <div className="space-y-3 max-h-96 overflow-y-auto">
                 {messageHistory.length === 0 ? (
-                  <div className="text-center py-8 text-slate-500">
-                    <MessageSquare className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                    <p>Nenhuma mensagem enviada ainda</p>
-                  </div>
+                  <p className="text-slate-500 text-center py-4">
+                    Nenhuma mensagem enviada ainda
+                  </p>
                 ) : (
                   messageHistory.map((msg) => (
-                    <div key={msg.id} className="border border-slate-200 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          {getMessageIcon(msg.type)}
-                          <span className="font-medium">{msg.leadName}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge className={getMessageBadgeColor(msg.type)}>
-                            {msg.type.toUpperCase()}
-                          </Badge>
-                          <span className="text-xs text-slate-500">
-                            {new Date(msg.timestamp).toLocaleDateString('pt-BR')}
-                          </span>
-                        </div>
+                    <div key={msg.id} className="border-l-4 border-blue-200 pl-3 py-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-medium text-sm">{msg.leadName}</span>
+                        <Badge variant="outline" className="text-xs">
+                          {msg.type}
+                        </Badge>
                       </div>
-                      {msg.subject && (
-                        <p className="text-sm font-medium text-slate-700 mb-1">
-                          Assunto: {msg.subject}
-                        </p>
-                      )}
-                      <p className="text-sm text-slate-600 line-clamp-3">
-                        {msg.content}
+                      <p className="text-sm text-slate-600 line-clamp-2">
+                        {msg.message}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        {new Date(msg.timestamp).toLocaleString()}
                       </p>
                     </div>
                   ))

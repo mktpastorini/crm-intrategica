@@ -143,6 +143,48 @@ export type Database = {
         }
         Relationships: []
       }
+      system_settings: {
+        Row: {
+          created_at: string
+          favicon_url: string | null
+          id: string
+          journey_webhook_url: string | null
+          logo_url: string | null
+          message_webhook_url: string | null
+          primary_color: string | null
+          secondary_color: string | null
+          system_name: string | null
+          updated_at: string
+          webhook_url: string | null
+        }
+        Insert: {
+          created_at?: string
+          favicon_url?: string | null
+          id?: string
+          journey_webhook_url?: string | null
+          logo_url?: string | null
+          message_webhook_url?: string | null
+          primary_color?: string | null
+          secondary_color?: string | null
+          system_name?: string | null
+          updated_at?: string
+          webhook_url?: string | null
+        }
+        Update: {
+          created_at?: string
+          favicon_url?: string | null
+          id?: string
+          journey_webhook_url?: string | null
+          logo_url?: string | null
+          message_webhook_url?: string | null
+          primary_color?: string | null
+          secondary_color?: string | null
+          system_name?: string | null
+          updated_at?: string
+          webhook_url?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
