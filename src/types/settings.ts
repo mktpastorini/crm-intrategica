@@ -1,27 +1,14 @@
 
 export interface SystemSettings {
+  id?: string;
   systemName: string;
-  webhookUrl: string;
-  messageWebhookUrl: string;
-  journeyWebhookUrl: string;
-  scheduleReminderHours: number;
-  scheduleReminderDays: number;
-  enableImmediateSend: boolean;
-  enableMessageWebhook: boolean;
-  dbUrl: string;
-  dbAnonKey: string;
-  dbServiceRoleKey: string;
-  dbHost: string;
-  dbPort: string;
-  dbName: string;
-  dbUser: string;
-  dbPassword: string;
-  logo: File | null;
   logoUrl: string;
-  favicon: File | null;
   faviconUrl: string;
   primaryColor: string;
   secondaryColor: string;
+  webhookUrl: string;
+  messageWebhookUrl: string;
+  journeyWebhookUrl: string;
 }
 
 export const statusOptions = [
