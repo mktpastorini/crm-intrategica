@@ -20,116 +20,106 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    let mounted = true;
+    console.log('AuthProvider: Inicializando autenticação');
     
-    const loadUserProfile = async (userId: string) => {
-      if (!mounted) return;
-      
+    // Verificar sessão inicial
+    const getInitialSession = async () => {
       try {
-        console.log('Carregando perfil para usuário:', userId);
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', userId)
-          .single();
-
-        if (error) {
-          console.error('Erro ao carregar perfil:', error);
-          if (mounted) setProfile(null);
-          return;
-        }
-        
-        if (mounted && data) {
-          console.log('Perfil carregado:', data);
-          setProfile(data);
-        }
-      } catch (error) {
-        console.error('Erro inesperado ao buscar perfil:', error);
-        if (mounted) setProfile(null);
-      }
-    };
-
-    const initAuth = async () => {
-      if (!mounted || initialized) return;
-      
-      try {
-        console.log('AuthProvider: Inicializando autenticação');
-        
-        // Get current session
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
-          console.error('Erro ao obter sessão:', error);
-        }
-        
-        if (mounted) {
-          const currentUser = session?.user || null;
-          console.log('Sessão atual:', currentUser?.id || 'nenhuma');
-          
-          setUser(currentUser);
-          
-          if (currentUser) {
-            await loadUserProfile(currentUser.id);
-          } else {
-            setProfile(null);
-          }
-          
+          console.error('Erro ao obter sessão inicial:', error);
           setLoading(false);
-          setInitialized(true);
+          return;
         }
-      } catch (error) {
-        console.error('Erro na inicialização:', error);
-        if (mounted) {
+
+        console.log('Sessão inicial encontrada:', session?.user?.id || 'nenhuma');
+        
+        if (session?.user) {
+          setUser(session.user);
+          await loadUserProfile(session.user.id);
+        } else {
           setUser(null);
           setProfile(null);
-          setLoading(false);
-          setInitialized(true);
         }
+        
+        setLoading(false);
+      } catch (error) {
+        console.error('Erro na verificação inicial:', error);
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
       }
     };
 
-    // Setup auth state listener - APENAS UMA VEZ
+    // Configurar listener de mudanças de autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return;
-      
       console.log('Auth state change:', event, session?.user?.id || 'sem usuário');
       
-      const currentUser = session?.user || null;
-      setUser(currentUser);
-      
-      if (currentUser && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
-        await loadUserProfile(currentUser.id);
-      } else if (event === 'SIGNED_OUT') {
+      if (session?.user) {
+        setUser(session.user);
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          await loadUserProfile(session.user.id);
+        }
+      } else {
+        setUser(null);
         setProfile(null);
       }
       
-      // Garantir que loading seja false após eventos de auth
-      if (initialized) {
-        setLoading(false);
-      }
+      setLoading(false);
     });
 
-    // Initialize apenas se não foi inicializado
-    if (!initialized) {
-      initAuth();
-    }
+    getInitialSession();
 
     return () => {
-      mounted = false;
       subscription?.unsubscribe();
     };
-  }, [initialized]); // Dependência do initialized para evitar loops
+  }, []);
+
+  const loadUserProfile = async (userId: string) => {
+    try {
+      console.log('Carregando perfil para usuário:', userId);
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        console.error('Erro ao carregar perfil:', error);
+        // Se perfil não existe, criar um básico
+        if (error.code === 'PGRST116') {
+          console.log('Perfil não encontrado, será criado automaticamente');
+        }
+        setProfile(null);
+        return;
+      }
+      
+      console.log('Perfil carregado:', data);
+      setProfile(data);
+    } catch (error) {
+      console.error('Erro inesperado ao buscar perfil:', error);
+      setProfile(null);
+    }
+  };
 
   const signIn = async (email: string, password: string) => {
+    console.log('Tentando fazer login com:', email);
+    
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
-    if (error) throw error;
+    if (error) {
+      console.error('Erro no login:', error);
+      throw error;
+    }
+    
+    console.log('Login bem-sucedido:', data.user?.id);
   };
 
   const login = async (email: string, password: string) => {
@@ -137,13 +127,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await signIn(email, password);
       return { success: true };
     } catch (error: any) {
+      console.error('Erro no login wrapper:', error);
       return { success: false, error: error.message };
     }
   };
 
   const signOut = async () => {
+    console.log('Fazendo logout');
     const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    if (error) {
+      console.error('Erro no logout:', error);
+      throw error;
+    }
   };
 
   const logout = async () => {
