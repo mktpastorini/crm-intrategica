@@ -1,4 +1,5 @@
 
+
 export interface SystemSettings {
   id?: string;
   systemName: string;
@@ -9,6 +10,14 @@ export interface SystemSettings {
   webhookUrl: string;
   messageWebhookUrl: string;
   journeyWebhookUrl: string;
+  dbUrl: string;
+  dbAnonKey: string;
+  dbServiceRoleKey: string;
+  dbHost: string;
+  dbPort: string;
+  dbName: string;
+  dbUser: string;
+  dbPassword: string;
 }
 
 export const statusOptions = [
@@ -20,3 +29,4 @@ export const statusOptions = [
   { value: 'Fechado', label: 'Fechado', color: '#10b981' },
   { value: 'Perdido', label: 'Perdido', color: '#64748b' }
 ];
+

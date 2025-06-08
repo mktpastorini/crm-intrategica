@@ -1,70 +1,139 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-
-interface SystemSettings {
-  id?: string;
-  systemName: string;
-  logoUrl: string;
-  faviconUrl: string;
-  primaryColor: string;
-  secondaryColor: string;
-  webhookUrl: string;
-  messageWebhookUrl: string;
-  journeyWebhookUrl: string;
-}
+import { SystemSettings } from '@/types/settings';
+import { useToast } from '@/hooks/use-toast';
 
 const defaultSettings: SystemSettings = {
   systemName: '',
   logoUrl: '',
   faviconUrl: '',
   primaryColor: '#1d0029',
-  secondaryColor: '#8b5cf6',
+  secondaryColor: '',
   webhookUrl: '',
   messageWebhookUrl: '',
-  journeyWebhookUrl: ''
+  journeyWebhookUrl: '',
+  dbUrl: '',
+  dbAnonKey: '',
+  dbServiceRoleKey: '',
+  dbHost: '',
+  dbPort: '',
+  dbName: '',
+  dbUser: '',
+  dbPassword: ''
 };
 
 export function useSystemSettingsDB() {
   const [settings, setSettings] = useState<SystemSettings>(defaultSettings);
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   const loadSettings = async () => {
     try {
+      console.log('Carregando configurações do sistema...');
       const { data, error } = await supabase
         .from('system_settings')
         .select('*')
-        .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
       if (error) {
-        console.error('Error loading settings:', error);
+        console.error('Erro ao carregar configurações:', error);
         return;
       }
 
       if (data) {
-        const loadedSettings = {
+        console.log('Configurações carregadas:', data);
+        setSettings({
           id: data.id,
           systemName: data.system_name || '',
           logoUrl: data.logo_url || '',
           faviconUrl: data.favicon_url || '',
           primaryColor: data.primary_color || '#1d0029',
-          secondaryColor: data.secondary_color || '#8b5cf6',
+          secondaryColor: data.secondary_color || '',
           webhookUrl: data.webhook_url || '',
           messageWebhookUrl: data.message_webhook_url || '',
-          journeyWebhookUrl: data.journey_webhook_url || ''
-        };
-        setSettings(loadedSettings);
-        applyVisualSettings(loadedSettings);
+          journeyWebhookUrl: data.journey_webhook_url || '',
+          dbUrl: '',
+          dbAnonKey: '',
+          dbServiceRoleKey: '',
+          dbHost: '',
+          dbPort: '',
+          dbName: '',
+          dbUser: '',
+          dbPassword: ''
+        });
       } else {
-        applyVisualSettings(defaultSettings);
+        console.log('Nenhuma configuração encontrada, usando padrões');
+        setSettings(defaultSettings);
       }
     } catch (error) {
-      console.error('Error loading settings:', error);
-      applyVisualSettings(defaultSettings);
+      console.error('Erro ao carregar configurações:', error);
+      setSettings(defaultSettings);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const updateSettings = async (updates: Partial<SystemSettings>) => {
+    try {
+      console.log('Atualizando configurações:', updates);
+      
+      const dbUpdates: any = {};
+      if ('systemName' in updates) dbUpdates.system_name = updates.systemName;
+      if ('logoUrl' in updates) dbUpdates.logo_url = updates.logoUrl;
+      if ('faviconUrl' in updates) dbUpdates.favicon_url = updates.faviconUrl;
+      if ('primaryColor' in updates) dbUpdates.primary_color = updates.primaryColor;
+      if ('secondaryColor' in updates) dbUpdates.secondary_color = updates.secondaryColor;
+      if ('webhookUrl' in updates) dbUpdates.webhook_url = updates.webhookUrl;
+      if ('messageWebhookUrl' in updates) dbUpdates.message_webhook_url = updates.messageWebhookUrl;
+      if ('journeyWebhookUrl' in updates) dbUpdates.journey_webhook_url = updates.journeyWebhookUrl;
+
+      let result;
+      
+      if (settings.id) {
+        // Atualizar registro existente
+        result = await supabase
+          .from('system_settings')
+          .update(dbUpdates)
+          .eq('id', settings.id)
+          .select()
+          .single();
+      } else {
+        // Criar novo registro
+        result = await supabase
+          .from('system_settings')
+          .insert([dbUpdates])
+          .select()
+          .single();
+      }
+
+      if (result.error) {
+        console.error('Erro ao salvar configurações:', result.error);
+        return { success: false, error: result.error.message };
+      }
+
+      console.log('Configurações salvas com sucesso:', result.data);
+      
+      // Atualizar estado local
+      setSettings(prev => ({ ...prev, ...updates, id: result.data.id }));
+      
+      toast({
+        title: "Configurações salvas",
+        description: "As configurações foram salvas com sucesso",
+      });
+
+      return { success: true, data: result.data };
+    } catch (error: any) {
+      console.error('Erro ao salvar configurações:', error);
+      
+      toast({
+        title: "Erro ao salvar",
+        description: "Erro ao salvar as configurações",
+        variant: "destructive",
+      });
+
+      return { success: false, error: error.message };
     }
   };
 
@@ -72,95 +141,10 @@ export function useSystemSettingsDB() {
     loadSettings();
   }, []);
 
-  const applyVisualSettings = (settings: Partial<SystemSettings>) => {
-    try {
-      // Apply logo
-      if (settings.logoUrl) {
-        const logoElements = document.querySelectorAll('[data-logo]');
-        logoElements.forEach(element => {
-          if (element instanceof HTMLImageElement) {
-            element.src = settings.logoUrl;
-          }
-        });
-      }
-      
-      // Apply favicon
-      if (settings.faviconUrl) {
-        let favicon = document.querySelector('link[rel="icon"]') as HTMLLinkElement;
-        if (!favicon) {
-          favicon = document.createElement('link');
-          favicon.rel = 'icon';
-          document.head.appendChild(favicon);
-        }
-        favicon.href = settings.faviconUrl;
-      }
-      
-      // Apply system name to title only if it exists
-      if (settings.systemName) {
-        document.title = settings.systemName;
-      } else {
-        document.title = 'CRM'; // Default title when no system name is set
-      }
-      
-      // Apply colors
-      const root = document.documentElement;
-      if (settings.primaryColor) {
-        root.style.setProperty('--primary-color', settings.primaryColor);
-      }
-      if (settings.secondaryColor) {
-        root.style.setProperty('--secondary-color', settings.secondaryColor);
-      }
-    } catch (error) {
-      console.error('Error applying visual settings:', error);
-    }
+  return {
+    settings,
+    updateSettings,
+    loading,
+    reload: loadSettings
   };
-
-  const updateSettings = async (newSettings: Partial<SystemSettings>) => {
-    try {
-      const updatedSettings = { ...settings, ...newSettings };
-      
-      const settingsData = {
-        system_name: updatedSettings.systemName,
-        logo_url: updatedSettings.logoUrl,
-        favicon_url: updatedSettings.faviconUrl,
-        primary_color: updatedSettings.primaryColor,
-        secondary_color: updatedSettings.secondaryColor,
-        webhook_url: updatedSettings.webhookUrl,
-        message_webhook_url: updatedSettings.messageWebhookUrl,
-        journey_webhook_url: updatedSettings.journeyWebhookUrl
-      };
-
-      let result;
-      if (settings.id) {
-        result = await supabase
-          .from('system_settings')
-          .update(settingsData)
-          .eq('id', settings.id);
-      } else {
-        result = await supabase
-          .from('system_settings')
-          .insert(settingsData)
-          .select()
-          .single();
-        
-        if (result.data) {
-          updatedSettings.id = result.data.id;
-        }
-      }
-
-      if (result.error) {
-        throw result.error;
-      }
-
-      setSettings(updatedSettings);
-      applyVisualSettings(updatedSettings);
-      
-      return { success: true };
-    } catch (error) {
-      console.error('Error saving settings:', error);
-      return { success: false, error };
-    }
-  };
-
-  return { settings, loading, updateSettings, loadSettings };
 }

@@ -21,10 +21,10 @@ export default function ProtectedRoute({ children, requiredRole }: ProtectedRout
   // Se ainda está carregando, mostrar loading
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#1d0029' }}>
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-slate-600">Carregando...</p>
+          <div className="animate-spin rounded-full h-16 w-16 border-4 border-white border-t-transparent mx-auto"></div>
+          <p className="mt-4 text-white text-lg">Carregando...</p>
         </div>
       </div>
     );

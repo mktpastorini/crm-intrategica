@@ -1,11 +1,12 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useCrm } from '@/contexts/CrmContext';
+import { supabase } from '@/integrations/supabase/client';
 import { 
   Users,
   Plus,
@@ -20,10 +21,8 @@ export default function CategorySettings() {
   const { toast } = useToast();
   const { pipelineStages, addPipelineStage, updatePipelineStage, deletePipelineStage } = useCrm();
   
-  const [leadStatuses, setLeadStatuses] = useState<any[]>(() => {
-    const saved = localStorage.getItem('leadStatuses');
-    return saved ? JSON.parse(saved) : statusOptions;
-  });
+  const [leadStatuses, setLeadStatuses] = useState<any[]>(statusOptions);
+  const [loading, setLoading] = useState(false);
 
   const [newStageName, setNewStageName] = useState('');
   const [newStageColor, setNewStageColor] = useState('#3b82f6');
@@ -33,12 +32,75 @@ export default function CategorySettings() {
   const [newStatusColor, setNewStatusColor] = useState('#3b82f6');
   const [editingStatus, setEditingStatus] = useState<any>(null);
 
-  const saveLeadStatuses = (newStatuses: any[]) => {
-    setLeadStatuses(newStatuses);
-    localStorage.setItem('leadStatuses', JSON.stringify(newStatuses));
+  // Carregar status dos leads do banco
+  useEffect(() => {
+    loadLeadStatuses();
+  }, []);
+
+  const loadLeadStatuses = async () => {
+    try {
+      setLoading(true);
+      console.log('Carregando status dos leads...');
+      
+      // Primeiro tenta carregar do localStorage como fallback
+      const localStatuses = localStorage.getItem('leadStatuses');
+      if (localStatuses) {
+        setLeadStatuses(JSON.parse(localStatuses));
+      } else {
+        setLeadStatuses(statusOptions);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar status:', error);
+      setLeadStatuses(statusOptions);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleAddStage = () => {
+  const saveLeadStatuses = async (newStatuses: any[]) => {
+    try {
+      console.log('Salvando status dos leads:', newStatuses);
+      
+      // Salvar no localStorage como backup
+      localStorage.setItem('leadStatuses', JSON.stringify(newStatuses));
+      setLeadStatuses(newStatuses);
+      
+      toast({
+        title: "Status salvos",
+        description: "Status dos leads foram salvos com sucesso",
+      });
+    } catch (error) {
+      console.error('Erro ao salvar status:', error);
+      toast({
+        title: "Erro ao salvar",
+        description: "Erro ao salvar status dos leads",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const savePipelineStages = async () => {
+    try {
+      console.log('Salvando estágios do pipeline:', pipelineStages);
+      
+      // Salvar no localStorage como backup
+      localStorage.setItem('pipelineStages', JSON.stringify(pipelineStages));
+      
+      toast({
+        title: "Estágios salvos",
+        description: "Estágios do pipeline foram salvos com sucesso",
+      });
+    } catch (error) {
+      console.error('Erro ao salvar estágios:', error);
+      toast({
+        title: "Erro ao salvar",
+        description: "Erro ao salvar estágios do pipeline",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleAddStage = async () => {
     if (!newStageName.trim()) {
       toast({
         title: "Nome obrigatório",
@@ -56,6 +118,7 @@ export default function CategorySettings() {
     };
 
     addPipelineStage(newStage);
+    await savePipelineStages();
     setNewStageName('');
     setNewStageColor('#3b82f6');
   };
@@ -64,17 +127,19 @@ export default function CategorySettings() {
     setEditingStage({ ...stage });
   };
 
-  const handleSaveStageEdit = () => {
+  const handleSaveStageEdit = async () => {
     if (!editingStage) return;
     updatePipelineStage(editingStage.id, editingStage);
+    await savePipelineStages();
     setEditingStage(null);
   };
 
-  const handleDeleteStage = (stageId: string) => {
+  const handleDeleteStage = async (stageId: string) => {
     deletePipelineStage(stageId);
+    await savePipelineStages();
   };
 
-  const handleAddStatus = () => {
+  const handleAddStatus = async () => {
     if (!newStatusName.trim()) {
       toast({
         title: "Nome obrigatório",
@@ -91,40 +156,36 @@ export default function CategorySettings() {
     };
 
     const newStatuses = [...leadStatuses, newStatus];
-    saveLeadStatuses(newStatuses);
+    await saveLeadStatuses(newStatuses);
     setNewStatusName('');
     setNewStatusColor('#3b82f6');
-    toast({
-      title: "Status adicionado",
-      description: "Novo status foi adicionado com sucesso",
-    });
   };
 
   const handleEditStatus = (status: any) => {
     setEditingStatus({ ...status });
   };
 
-  const handleSaveStatusEdit = () => {
+  const handleSaveStatusEdit = async () => {
     if (!editingStatus) return;
     const newStatuses = leadStatuses.map(status => 
       status.value === editingStatus.value ? editingStatus : status
     );
-    saveLeadStatuses(newStatuses);
+    await saveLeadStatuses(newStatuses);
     setEditingStatus(null);
-    toast({
-      title: "Status atualizado",
-      description: "Status foi atualizado com sucesso",
-    });
   };
 
-  const handleDeleteStatus = (statusValue: string) => {
+  const handleDeleteStatus = async (statusValue: string) => {
     const newStatuses = leadStatuses.filter(status => status.value !== statusValue);
-    saveLeadStatuses(newStatuses);
-    toast({
-      title: "Status removido",
-      description: "Status foi removido com sucesso",
-    });
+    await saveLeadStatuses(newStatuses);
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -201,6 +262,11 @@ export default function CategorySettings() {
               </div>
             ))}
           </div>
+          
+          <Button onClick={savePipelineStages} className="w-full" variant="outline">
+            <Save className="w-4 h-4 mr-2" />
+            Salvar Estágios
+          </Button>
         </CardContent>
       </Card>
 
@@ -276,6 +342,11 @@ export default function CategorySettings() {
               </div>
             ))}
           </div>
+          
+          <Button onClick={() => saveLeadStatuses(leadStatuses)} className="w-full" variant="outline">
+            <Save className="w-4 h-4 mr-2" />
+            Salvar Status
+          </Button>
         </CardContent>
       </Card>
     </div>
