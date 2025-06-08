@@ -42,6 +42,18 @@ export function useSystemSettings() {
     };
 
     loadSettings();
+
+    // Listener para mudanças nas configurações
+    const handleStorageChange = () => {
+      loadSettings();
+    };
+
+    // Listener apenas para eventos customizados (não storage)
+    window.addEventListener('systemSettingsChanged', handleStorageChange);
+
+    return () => {
+      window.removeEventListener('systemSettingsChanged', handleStorageChange);
+    };
   }, []);
 
   const applyVisualSettings = (settings: Partial<SystemSettings>) => {
@@ -67,6 +79,11 @@ export function useSystemSettings() {
         favicon.href = settings.faviconUrl;
       }
       
+      // Apply system name to title
+      if (settings.systemName) {
+        document.title = settings.systemName;
+      }
+      
       // Apply colors
       const root = document.documentElement;
       if (settings.primaryColor) {
@@ -86,6 +103,9 @@ export function useSystemSettings() {
       setSettings(updatedSettings);
       localStorage.setItem('systemSettings', JSON.stringify(updatedSettings));
       applyVisualSettings(updatedSettings);
+      
+      // Disparar evento customizado
+      window.dispatchEvent(new Event('systemSettingsChanged'));
     } catch (error) {
       console.error('Error saving settings:', error);
     }

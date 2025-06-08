@@ -1,3 +1,4 @@
+
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -89,7 +90,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
-  const [initialized, setInitialized] = useState(false);
+  const [dataLoaded, setDataLoaded] = useState(false);
   
   // Dados locais
   const [pipelineStages, setPipelineStages] = useState<PipelineStage[]>(() => {
@@ -109,21 +110,21 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Carregar dados quando auth estiver pronto e usuário logado
+  // Carregar dados apenas quando necessário
   useEffect(() => {
-    if (!authLoading && user && !initialized) {
+    if (!authLoading && user && !dataLoaded) {
       console.log('Usuário autenticado, carregando dados...');
       refreshData();
-      setInitialized(true);
-    } else if (!user && initialized) {
+      setDataLoaded(true);
+    } else if (!user && dataLoaded) {
       // Limpar dados quando usuário deslogar
       console.log('Usuário deslogado, limpando dados...');
       setLeads([]);
       setEvents([]);
       setUsers([]);
-      setInitialized(false);
+      setDataLoaded(false);
     }
-  }, [user, authLoading, initialized]);
+  }, [user, authLoading, dataLoaded]);
 
   const fetchLeads = async () => {
     try {
@@ -138,7 +139,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
       if (error) {
         console.error('Erro ao buscar leads:', error);
-        throw error;
+        return;
       }
 
       const formattedLeads = data?.map(lead => ({
@@ -175,7 +176,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
       if (error) {
         console.error('Erro ao buscar eventos:', error);
-        throw error;
+        return;
       }
 
       const formattedEvents = data?.map(event => ({
@@ -209,7 +210,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       
       if (error) {
         console.error('Erro ao buscar usuários:', error);
-        throw error;
+        return;
       }
       
       const typedUsers = (data || []).map(user => ({
@@ -472,6 +473,17 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         variant: "destructive",
       });
     }
+  };
+
+  // Salvar dados locais no localStorage
+  const savePipelineStages = (newStages: PipelineStage[]) => {
+    setPipelineStages(newStages);
+    localStorage.setItem('pipelineStages', JSON.stringify(newStages));
+  };
+
+  const savePendingActions = (newActions: PendingAction[]) => {
+    setPendingActions(newActions);
+    localStorage.setItem('pendingActions', JSON.stringify(newActions));
   };
 
   const addPipelineStage = (stage: PipelineStage) => {

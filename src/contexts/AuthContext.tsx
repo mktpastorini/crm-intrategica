@@ -20,11 +20,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
     let mounted = true;
     
     const loadUserProfile = async (userId: string) => {
+      if (!mounted) return;
+      
       try {
         console.log('Carregando perfil para usuário:', userId);
         const { data, error } = await supabase
@@ -50,6 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const initAuth = async () => {
+      if (!mounted || initialized) return;
+      
       try {
         console.log('AuthProvider: Inicializando autenticação');
         
@@ -72,8 +77,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setProfile(null);
           }
           
-          // IMPORTANTE: Sempre setar loading como false no final
           setLoading(false);
+          setInitialized(true);
         }
       } catch (error) {
         console.error('Erro na inicialização:', error);
@@ -81,16 +86,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(null);
           setProfile(null);
           setLoading(false);
+          setInitialized(true);
         }
       }
     };
 
-    // Setup auth state listener
+    // Setup auth state listener - APENAS UMA VEZ
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+      
       console.log('Auth state change:', event, session?.user?.id || 'sem usuário');
       
-      if (!mounted) return;
-
       const currentUser = session?.user || null;
       setUser(currentUser);
       
@@ -101,17 +107,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       // Garantir que loading seja false após eventos de auth
-      setLoading(false);
+      if (initialized) {
+        setLoading(false);
+      }
     });
 
-    // Initialize
-    initAuth();
+    // Initialize apenas se não foi inicializado
+    if (!initialized) {
+      initAuth();
+    }
 
     return () => {
       mounted = false;
-      subscription.unsubscribe();
+      subscription?.unsubscribe();
     };
-  }, []);
+  }, [initialized]); // Dependência do initialized para evitar loops
 
   const signIn = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({
