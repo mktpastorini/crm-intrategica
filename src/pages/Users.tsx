@@ -34,6 +34,7 @@ export default function Users() {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    password: '',
     role: 'comercial',
     status: 'active'
   });
@@ -104,12 +105,35 @@ export default function Users() {
           description: "Usuário foi atualizado com sucesso",
         });
       } else {
-        toast({
-          title: "Funcionalidade em desenvolvimento",
-          description: "A criação de novos usuários será implementada em breve",
-          variant: "destructive",
+        console.log('Criando novo usuário:', formData);
+
+        // Criar usuário no Supabase Auth
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: formData.email,
+          password: formData.password,
+          options: {
+            data: {
+              name: formData.name,
+              role: formData.role,
+              status: formData.status
+            }
+          }
         });
-        return;
+
+        if (authError) {
+          console.error('Erro ao criar usuário no Auth:', authError);
+          throw authError;
+        }
+
+        console.log('Usuário criado no Auth:', authData);
+
+        // O perfil será criado automaticamente pelo trigger
+        await loadUsers(); // Recarregar a lista
+
+        toast({
+          title: "Usuário criado",
+          description: "Usuário foi criado com sucesso",
+        });
       }
 
       handleCloseDialog();
@@ -131,6 +155,7 @@ export default function Users() {
     setFormData({
       name: user.name,
       email: user.email,
+      password: '',
       role: user.role,
       status: user.status
     });
@@ -181,6 +206,7 @@ export default function Users() {
     setFormData({
       name: '',
       email: '',
+      password: '',
       role: 'comercial',
       status: 'active'
     });
@@ -249,6 +275,20 @@ export default function Users() {
                   required
                 />
               </div>
+              {!editingUser && (
+                <div>
+                  <Label htmlFor="password">Senha</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    value={formData.password}
+                    onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                    required
+                    minLength={6}
+                    placeholder="Mínimo 6 caracteres"
+                  />
+                </div>
+              )}
               <div>
                 <Label htmlFor="role">Função</Label>
                 <Select value={formData.role} onValueChange={(value) => setFormData(prev => ({ ...prev, role: value }))}>

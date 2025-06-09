@@ -1,33 +1,40 @@
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
-import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { UserPlus, Search, RefreshCw, Upload } from 'lucide-react';
+import { UserPlus, Filter, Search, Users as UsersIcon } from 'lucide-react';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import LeadsTable from '@/components/leads/LeadsTable';
+import UserSelector from '@/components/leads/UserSelector';
+
+interface Lead {
+  id: string;
+  name: string;
+  email?: string;
+  phone: string;
+  company: string;
+  niche: string;
+  status: string;
+  responsible_id: string;
+  created_at: string;
+}
 
 export default function Leads() {
-  const { user } = useAuth();
-  const { 
-    leads, 
-    users,
-    loading, 
-    actionLoading,
-    createLead, 
-    updateLead, 
-    deleteLead,
-    loadLeads 
-  } = useCrm();
+  const { leads, users, loading, actionLoading, createLead, updateLead, deleteLead, loadLeads, loadUsers } = useCrm();
+  const { toast } = useToast();
   
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [editingLead, setEditingLead] = useState<any>(null);
+  const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -35,36 +42,16 @@ export default function Leads() {
     company: '',
     niche: '',
     status: 'novo',
-    pipeline_stage: 'aguardando-inicio',
-    responsible_id: user?.id || ''
+    responsible_id: ''
   });
 
-  // Filtrar leads baseado na busca
-  const filteredLeads = useMemo(() => {
-    if (!searchTerm) return leads;
-    
-    return leads.filter(lead => 
-      lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      lead.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      lead.phone.includes(searchTerm) ||
-      (lead.email && lead.email.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
-  }, [leads, searchTerm]);
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
 
-  // Calcular estatísticas
-  const stats = useMemo(() => {
-    const total = leads.length;
-    const active = leads.filter(lead => ['novo', 'contatado', 'qualificado'].includes(lead.status)).length;
-    const converted = leads.filter(lead => lead.status === 'fechado').length;
-    const conversionRate = total > 0 ? Math.round((converted / total) * 100) : 0;
-
-    return { total, active, conversionRate };
-  }, [leads]);
-
-  // Get user name by ID
   const getUserName = (userId: string) => {
-    const foundUser = users.find(u => u.id === userId);
-    return foundUser ? foundUser.name : 'Usuário não encontrado';
+    const user = users.find(u => u.id === userId);
+    return user?.name || 'Não atribuído';
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -73,21 +60,25 @@ export default function Leads() {
     try {
       if (editingLead) {
         await updateLead(editingLead.id, formData);
+        toast({
+          title: "Lead atualizado",
+          description: "Lead foi atualizado com sucesso",
+        });
       } else {
-        await createLead({ 
-          ...formData, 
-          responsible_id: user?.id || '',
-          pipeline_stage: 'aguardando-inicio'
+        await createLead(formData);
+        toast({
+          title: "Lead criado",
+          description: "Lead foi criado com sucesso",
         });
       }
       
       handleCloseDialog();
     } catch (error) {
-      console.error('Erro ao salvar lead:', error);
+      // Erro já tratado no contexto
     }
   };
 
-  const handleEdit = (lead: any) => {
+  const handleEdit = (lead: Lead) => {
     setEditingLead(lead);
     setFormData({
       name: lead.name,
@@ -96,7 +87,6 @@ export default function Leads() {
       company: lead.company,
       niche: lead.niche,
       status: lead.status,
-      pipeline_stage: lead.pipeline_stage || 'aguardando-inicio',
       responsible_id: lead.responsible_id
     });
     setShowAddDialog(true);
@@ -107,22 +97,13 @@ export default function Leads() {
     
     try {
       await deleteLead(leadId);
+      toast({
+        title: "Lead excluído",
+        description: "Lead foi excluído com sucesso",
+      });
     } catch (error) {
-      console.error('Erro ao excluir lead:', error);
+      // Erro já tratado no contexto
     }
-  };
-
-  const handleRefresh = async () => {
-    try {
-      await loadLeads();
-    } catch (error) {
-      console.error('Erro ao atualizar leads:', error);
-    }
-  };
-
-  const handleMassImport = () => {
-    // Placeholder for mass import functionality
-    alert('Funcionalidade de importação em massa será implementada em breve');
   };
 
   const handleCloseDialog = () => {
@@ -135,10 +116,21 @@ export default function Leads() {
       company: '',
       niche: '',
       status: 'novo',
-      pipeline_stage: 'aguardando-inicio',
-      responsible_id: user?.id || ''
+      responsible_id: ''
     });
   };
+
+  const filteredLeads = leads.filter(lead => {
+    const matchesSearch = 
+      lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      lead.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      lead.phone.includes(searchTerm) ||
+      (lead.email && lead.email.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    const matchesStatus = statusFilter === 'all' || lead.status === statusFilter;
+    
+    return matchesSearch && matchesStatus;
+  });
 
   if (loading) {
     return (
@@ -150,166 +142,194 @@ export default function Leads() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-start">
+      <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">Gestão de Leads</h2>
-          <p className="text-slate-600">Gerencie todos os seus contatos comerciais</p>
+          <h2 className="text-2xl font-bold text-slate-900">Leads</h2>
+          <p className="text-slate-600">Gerencie seus contatos e oportunidades</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={handleRefresh} disabled={loading}>
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Atualizar
-          </Button>
-          <Button variant="outline" onClick={handleMassImport}>
-            <Upload className="w-4 h-4 mr-2" />
-            Importar em Massa
-          </Button>
-          <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-            <DialogTrigger asChild>
-              <Button>
-                <UserPlus className="w-4 h-4 mr-2" />
-                Adicionar Lead
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>{editingLead ? 'Editar Lead' : 'Novo Lead'}</DialogTitle>
-                <DialogDescription>
-                  {editingLead ? 'Edite as informações do lead' : 'Adicione um novo lead ao sistema'}
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <Label htmlFor="name">Nome</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="phone">Telefone</Label>
-                  <Input
-                    id="phone"
-                    value={formData.phone}
-                    onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="company">Empresa</Label>
-                  <Input
-                    id="company"
-                    value={formData.company}
-                    onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="niche">Nicho</Label>
-                  <Input
-                    id="niche"
-                    value={formData.niche}
-                    onChange={(e) => setFormData(prev => ({ ...prev, niche: e.target.value }))}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="status">Status</Label>
-                  <Select value={formData.status} onValueChange={(value) => setFormData(prev => ({ ...prev, status: value }))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="novo">Novo</SelectItem>
-                      <SelectItem value="contatado">Contatado</SelectItem>
-                      <SelectItem value="qualificado">Qualificado</SelectItem>
-                      <SelectItem value="proposta">Proposta</SelectItem>
-                      <SelectItem value="fechado">Fechado</SelectItem>
-                      <SelectItem value="perdido">Perdido</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex gap-2 pt-4">
-                  <Button type="submit" className="flex-1" disabled={actionLoading === 'create-lead' || actionLoading === editingLead?.id}>
-                    {(actionLoading === 'create-lead' || actionLoading === editingLead?.id) ? (
-                      <LoadingSpinner size="sm" />
-                    ) : (
-                      editingLead ? 'Atualizar' : 'Criar Lead'
-                    )}
-                  </Button>
-                  <Button type="button" variant="outline" onClick={handleCloseDialog} className="flex-1">
-                    Cancelar
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>
+        <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+          <DialogTrigger asChild>
+            <Button>
+              <UserPlus className="w-4 h-4 mr-2" />
+              Novo Lead
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>{editingLead ? 'Editar Lead' : 'Novo Lead'}</DialogTitle>
+              <DialogDescription>
+                {editingLead ? 'Edite as informações do lead' : 'Adicione um novo lead ao sistema'}
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <Label htmlFor="name">Nome do Contato</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="company">Empresa</Label>
+                <Input
+                  id="company"
+                  value={formData.company}
+                  onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="phone">Telefone</Label>
+                <Input
+                  id="phone"
+                  value={formData.phone}
+                  onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="email">Email (opcional)</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="niche">Nicho</Label>
+                <Input
+                  id="niche"
+                  value={formData.niche}
+                  onChange={(e) => setFormData(prev => ({ ...prev, niche: e.target.value }))}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="status">Status</Label>
+                <Select value={formData.status} onValueChange={(value) => setFormData(prev => ({ ...prev, status: value }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="novo">Novo</SelectItem>
+                    <SelectItem value="contatado">Contatado</SelectItem>
+                    <SelectItem value="qualificado">Qualificado</SelectItem>
+                    <SelectItem value="proposta">Proposta</SelectItem>
+                    <SelectItem value="fechado">Fechado</SelectItem>
+                    <SelectItem value="perdido">Perdido</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <UserSelector
+                users={users}
+                value={formData.responsible_id}
+                onValueChange={(value) => setFormData(prev => ({ ...prev, responsible_id: value }))}
+                placeholder="Selecionar responsável"
+              />
+              <div className="flex gap-2 pt-4">
+                <Button type="submit" className="flex-1" disabled={actionLoading === 'create-lead' || actionLoading === 'submit'}>
+                  {(actionLoading === 'create-lead' || actionLoading === 'submit') ? (
+                    <LoadingSpinner size="sm" />
+                  ) : (
+                    editingLead ? 'Atualizar' : 'Criar Lead'
+                  )}
+                </Button>
+                <Button type="button" variant="outline" onClick={handleCloseDialog} className="flex-1">
+                  Cancelar
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      {/* Barra de busca */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
-        <Input
-          placeholder="Buscar por nome, empresa, telefone ou email..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10"
-        />
-      </div>
+      {/* Filtros */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex gap-4 items-end">
+            <div className="flex-1">
+              <Label htmlFor="search">Buscar</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+                <Input
+                  id="search"
+                  placeholder="Buscar por nome, empresa, telefone ou email..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="status-filter">Status</Label>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os status</SelectItem>
+                  <SelectItem value="novo">Novo</SelectItem>
+                  <SelectItem value="contatado">Contatado</SelectItem>
+                  <SelectItem value="qualificado">Qualificado</SelectItem>
+                  <SelectItem value="proposta">Proposta</SelectItem>
+                  <SelectItem value="fechado">Fechado</SelectItem>
+                  <SelectItem value="perdido">Perdido</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setSearchTerm('');
+                setStatusFilter('all');
+              }}
+              size="icon"
+            >
+              <Filter className="w-4 h-4" />
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Estatísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-600">Total de Leads</p>
-                <p className="text-3xl font-bold text-blue-600">{stats.total}</p>
-              </div>
-            </div>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-blue-600">{leads.length}</div>
+            <p className="text-sm text-slate-600">Total de Leads</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-600">Ativos</p>
-                <p className="text-3xl font-bold text-green-600">{stats.active}</p>
-              </div>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-green-600">
+              {leads.filter(l => l.status === 'novo').length}
             </div>
+            <p className="text-sm text-slate-600">Novos</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-600">Taxa de Conversão</p>
-                <p className="text-3xl font-bold text-purple-600">{stats.conversionRate}%</p>
-              </div>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-orange-600">
+              {leads.filter(l => l.status === 'qualificado').length}
             </div>
+            <p className="text-sm text-slate-600">Qualificados</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-emerald-600">
+              {leads.filter(l => l.status === 'fechado').length}
+            </div>
+            <p className="text-sm text-slate-600">Fechados</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Tabela de leads */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-slate-900">
-            Lista de Leads ({filteredLeads.length})
-          </h3>
-        </div>
+      {/* Tabela de Leads */}
+      {filteredLeads.length > 0 ? (
         <LeadsTable
           leads={filteredLeads}
           onEditLead={handleEdit}
@@ -317,7 +337,22 @@ export default function Leads() {
           actionLoading={actionLoading}
           getUserName={getUserName}
         />
-      </div>
+      ) : (
+        <Card>
+          <CardContent className="p-12 text-center">
+            <UsersIcon className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-slate-900 mb-2">
+              {searchTerm || statusFilter !== 'all' ? 'Nenhum lead encontrado' : 'Nenhum lead cadastrado'}
+            </h3>
+            <p className="text-slate-600">
+              {searchTerm || statusFilter !== 'all' 
+                ? 'Tente ajustar os filtros de busca.' 
+                : 'Comece adicionando um novo lead ao sistema.'
+              }
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
