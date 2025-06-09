@@ -12,7 +12,9 @@ import {
   Edit,
   Trash2,
   Save,
-  X
+  X,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import { statusOptions } from '@/types/settings';
 
@@ -120,6 +122,34 @@ export default function CategorySettings() {
     await deletePipelineStage(stageId);
   };
 
+  const moveStageUp = async (index: number) => {
+    if (index === 0) return;
+    
+    const newStages = [...pipelineStages];
+    [newStages[index], newStages[index - 1]] = [newStages[index - 1], newStages[index]];
+    
+    // Update order values
+    newStages.forEach((stage, idx) => {
+      stage.order = idx + 1;
+    });
+    
+    await savePipelineStages(newStages);
+  };
+
+  const moveStageDown = async (index: number) => {
+    if (index === pipelineStages.length - 1) return;
+    
+    const newStages = [...pipelineStages];
+    [newStages[index], newStages[index + 1]] = [newStages[index + 1], newStages[index]];
+    
+    // Update order values
+    newStages.forEach((stage, idx) => {
+      stage.order = idx + 1;
+    });
+    
+    await savePipelineStages(newStages);
+  };
+
   const handleAddStatus = async () => {
     if (!newStatusName.trim()) {
       toast({
@@ -133,7 +163,8 @@ export default function CategorySettings() {
     const newStatus = {
       value: newStatusName,
       label: newStatusName,
-      color: newStatusColor
+      color: newStatusColor,
+      order: leadStatuses.length + 1
     };
 
     const newStatuses = [...leadStatuses, newStatus];
@@ -160,6 +191,34 @@ export default function CategorySettings() {
     await saveLeadStatuses(newStatuses);
   };
 
+  const moveStatusUp = async (index: number) => {
+    if (index === 0) return;
+    
+    const newStatuses = [...leadStatuses];
+    [newStatuses[index], newStatuses[index - 1]] = [newStatuses[index - 1], newStatuses[index]];
+    
+    // Update order values
+    newStatuses.forEach((status, idx) => {
+      status.order = idx + 1;
+    });
+    
+    await saveLeadStatuses(newStatuses);
+  };
+
+  const moveStatusDown = async (index: number) => {
+    if (index === leadStatuses.length - 1) return;
+    
+    const newStatuses = [...leadStatuses];
+    [newStatuses[index], newStatuses[index + 1]] = [newStatuses[index + 1], newStatuses[index]];
+    
+    // Update order values
+    newStatuses.forEach((status, idx) => {
+      status.order = idx + 1;
+    });
+    
+    await saveLeadStatuses(newStatuses);
+  };
+
   const handleSavePipelineStages = async () => {
     await savePipelineStages(pipelineStages);
   };
@@ -171,6 +230,10 @@ export default function CategorySettings() {
       </div>
     );
   }
+
+  // Sort stages and statuses by order
+  const sortedStages = [...pipelineStages].sort((a, b) => (a.order || 0) - (b.order || 0));
+  const sortedStatuses = [...leadStatuses].sort((a, b) => (a.order || 0) - (b.order || 0));
 
   return (
     <div className="space-y-6">
@@ -201,7 +264,7 @@ export default function CategorySettings() {
           </div>
 
           <div className="space-y-2">
-            {pipelineStages.map((stage) => (
+            {sortedStages.map((stage, index) => (
               <div key={stage.id} className="flex items-center gap-2 p-3 border border-slate-200 rounded-lg">
                 {editingStage?.id === stage.id ? (
                   <>
@@ -225,6 +288,26 @@ export default function CategorySettings() {
                   </>
                 ) : (
                   <>
+                    <div className="flex flex-col gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => moveStageUp(index)}
+                        disabled={index === 0}
+                        className="h-4 w-4 p-0"
+                      >
+                        <ArrowUp className="w-3 h-3" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => moveStageDown(index)}
+                        disabled={index === sortedStages.length - 1}
+                        className="h-4 w-4 p-0"
+                      >
+                        <ArrowDown className="w-3 h-3" />
+                      </Button>
+                    </div>
                     <div 
                       className="w-4 h-4 rounded-full" 
                       style={{ backgroundColor: stage.color }}
@@ -282,7 +365,7 @@ export default function CategorySettings() {
           </div>
 
           <div className="space-y-2">
-            {leadStatuses.map((status) => (
+            {sortedStatuses.map((status, index) => (
               <div key={status.value} className="flex items-center gap-2 p-3 border border-slate-200 rounded-lg">
                 {editingStatus?.value === status.value ? (
                   <>
@@ -306,11 +389,32 @@ export default function CategorySettings() {
                   </>
                 ) : (
                   <>
+                    <div className="flex flex-col gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => moveStatusUp(index)}
+                        disabled={index === 0}
+                        className="h-4 w-4 p-0"
+                      >
+                        <ArrowUp className="w-3 h-3" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => moveStatusDown(index)}
+                        disabled={index === sortedStatuses.length - 1}
+                        className="h-4 w-4 p-0"
+                      >
+                        <ArrowDown className="w-3 h-3" />
+                      </Button>
+                    </div>
                     <div 
                       className="w-4 h-4 rounded-full" 
                       style={{ backgroundColor: status.color }}
                     />
                     <span className="flex-1 font-medium">{status.label}</span>
+                    <Badge variant="outline">Ordem: {status.order || index + 1}</Badge>
                     <Button size="sm" variant="ghost" onClick={() => handleEditStatus(status)}>
                       <Edit className="w-4 h-4" />
                     </Button>
@@ -328,7 +432,7 @@ export default function CategorySettings() {
             ))}
           </div>
           
-          <Button onClick={() => saveLeadStatuses(leadStatuses)} className="w-full" variant="outline">
+          <Button onClick={() => saveLeadStatuses(sortedStatuses)} className="w-full" variant="outline">
             <Save className="w-4 h-4 mr-2" />
             Salvar Status
           </Button>

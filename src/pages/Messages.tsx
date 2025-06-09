@@ -143,8 +143,43 @@ export default function Messages() {
     setIsSending(true);
 
     try {
+      // Prepare webhook data with all leads
+      const webhookData = {
+        messageType,
+        subject: messageType === 'email' ? subject : undefined,
+        message,
+        leads: leadsToSend.map(lead => ({
+          id: lead.id,
+          name: lead.name,
+          phone: lead.phone,
+          email: lead.email,
+          company: lead.company,
+          niche: lead.niche
+        })),
+        totalLeads: leadsToSend.length,
+        timestamp: new Date().toISOString()
+      };
+
+      // Send to webhook if configured
+      if (settings.messageWebhookUrl) {
+        try {
+          await fetch(settings.messageWebhookUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(webhookData)
+          });
+          console.log('Webhook enviado com todos os leads:', webhookData);
+        } catch (error) {
+          console.error('Erro ao enviar para webhook:', error);
+        }
+      }
+
+      // Save individual message entries to history
       for (const lead of leadsToSend) {
-        const messageData = {
+        const historyEntry = {
+          id: Date.now().toString() + Math.random(),
           leadId: lead.id,
           leadName: lead.name,
           leadPhone: lead.phone,
@@ -153,28 +188,7 @@ export default function Messages() {
           type: messageType,
           subject: messageType === 'email' ? subject : undefined,
           message: message,
-          timestamp: new Date().toISOString()
-        };
-
-        // Send to webhook if configured
-        if (settings.messageWebhookUrl) {
-          try {
-            await fetch(settings.messageWebhookUrl, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify(messageData)
-            });
-          } catch (error) {
-            console.error('Erro ao enviar para webhook:', error);
-          }
-        }
-
-        // Save to history
-        const historyEntry = {
-          id: Date.now().toString() + Math.random(),
-          ...messageData,
+          timestamp: new Date().toISOString(),
           status: 'sent'
         };
 
