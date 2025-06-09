@@ -1,4 +1,3 @@
-
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSystemSettingsDB } from '@/hooks/useSystemSettingsDB';
@@ -26,7 +25,7 @@ interface LayoutProps {
 }
 
 export default function Layout({ children }: LayoutProps) {
-  const { user, profile, logout } = useAuth();
+  const { user, profile, signOut } = useAuth();
   const { settings, loading: settingsLoading } = useSystemSettingsDB();
   const location = useLocation();
 
@@ -50,7 +49,7 @@ export default function Layout({ children }: LayoutProps) {
   };
 
   const handleLogout = () => {
-    logout();
+    signOut();
   };
 
   // Use default color if settings are still loading
