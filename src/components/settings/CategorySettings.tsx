@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useCrm } from '@/contexts/CrmContext';
-import { supabase } from '@/integrations/supabase/client';
 import { 
   Users,
   Plus,
@@ -19,7 +18,13 @@ import { statusOptions } from '@/types/settings';
 
 export default function CategorySettings() {
   const { toast } = useToast();
-  const { pipelineStages, addPipelineStage, updatePipelineStage, deletePipelineStage } = useCrm();
+  const { 
+    pipelineStages, 
+    addPipelineStage, 
+    updatePipelineStage, 
+    deletePipelineStage,
+    savePipelineStages 
+  } = useCrm();
   
   const [leadStatuses, setLeadStatuses] = useState<any[]>(statusOptions);
   const [loading, setLoading] = useState(false);
@@ -32,7 +37,7 @@ export default function CategorySettings() {
   const [newStatusColor, setNewStatusColor] = useState('#3b82f6');
   const [editingStatus, setEditingStatus] = useState<any>(null);
 
-  // Carregar status dos leads do banco
+  // Carregar status dos leads do localStorage
   useEffect(() => {
     loadLeadStatuses();
   }, []);
@@ -42,12 +47,13 @@ export default function CategorySettings() {
       setLoading(true);
       console.log('Carregando status dos leads...');
       
-      // Primeiro tenta carregar do localStorage como fallback
+      // Carregar do localStorage
       const localStatuses = localStorage.getItem('leadStatuses');
       if (localStatuses) {
         setLeadStatuses(JSON.parse(localStatuses));
       } else {
         setLeadStatuses(statusOptions);
+        localStorage.setItem('leadStatuses', JSON.stringify(statusOptions));
       }
     } catch (error) {
       console.error('Erro ao carregar status:', error);
@@ -61,7 +67,7 @@ export default function CategorySettings() {
     try {
       console.log('Salvando status dos leads:', newStatuses);
       
-      // Salvar no localStorage como backup
+      // Salvar no localStorage
       localStorage.setItem('leadStatuses', JSON.stringify(newStatuses));
       setLeadStatuses(newStatuses);
       
@@ -79,27 +85,6 @@ export default function CategorySettings() {
     }
   };
 
-  const savePipelineStages = async () => {
-    try {
-      console.log('Salvando estágios do pipeline:', pipelineStages);
-      
-      // Salvar no localStorage como backup
-      localStorage.setItem('pipelineStages', JSON.stringify(pipelineStages));
-      
-      toast({
-        title: "Estágios salvos",
-        description: "Estágios do pipeline foram salvos com sucesso",
-      });
-    } catch (error) {
-      console.error('Erro ao salvar estágios:', error);
-      toast({
-        title: "Erro ao salvar",
-        description: "Erro ao salvar estágios do pipeline",
-        variant: "destructive",
-      });
-    }
-  };
-
   const handleAddStage = async () => {
     if (!newStageName.trim()) {
       toast({
@@ -111,14 +96,12 @@ export default function CategorySettings() {
     }
 
     const newStage = {
-      id: `stage-${Date.now()}`,
       name: newStageName,
       order: pipelineStages.length + 1,
       color: newStageColor
     };
 
-    addPipelineStage(newStage);
-    await savePipelineStages();
+    await addPipelineStage(newStage);
     setNewStageName('');
     setNewStageColor('#3b82f6');
   };
@@ -129,14 +112,12 @@ export default function CategorySettings() {
 
   const handleSaveStageEdit = async () => {
     if (!editingStage) return;
-    updatePipelineStage(editingStage.id, editingStage);
-    await savePipelineStages();
+    await updatePipelineStage(editingStage.id, editingStage);
     setEditingStage(null);
   };
 
   const handleDeleteStage = async (stageId: string) => {
-    deletePipelineStage(stageId);
-    await savePipelineStages();
+    await deletePipelineStage(stageId);
   };
 
   const handleAddStatus = async () => {
@@ -177,6 +158,10 @@ export default function CategorySettings() {
   const handleDeleteStatus = async (statusValue: string) => {
     const newStatuses = leadStatuses.filter(status => status.value !== statusValue);
     await saveLeadStatuses(newStatuses);
+  };
+
+  const handleSavePipelineStages = async () => {
+    await savePipelineStages(pipelineStages);
   };
 
   if (loading) {
@@ -263,7 +248,7 @@ export default function CategorySettings() {
             ))}
           </div>
           
-          <Button onClick={savePipelineStages} className="w-full" variant="outline">
+          <Button onClick={handleSavePipelineStages} className="w-full" variant="outline">
             <Save className="w-4 h-4 mr-2" />
             Salvar Estágios
           </Button>

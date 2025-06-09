@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -84,9 +83,11 @@ interface CrmContextType {
   deleteUser: (id: string) => Promise<void>;
   
   // Pipeline Stages
-  addPipelineStage: (stage: Omit<PipelineStage, 'id'>) => void;
-  updatePipelineStage: (id: string, stage: Partial<PipelineStage>) => void;
-  deletePipelineStage: (id: string) => void;
+  loadPipelineStages: () => Promise<void>;
+  savePipelineStages: (stages: PipelineStage[]) => Promise<void>;
+  addPipelineStage: (stage: Omit<PipelineStage, 'id'>) => Promise<void>;
+  updatePipelineStage: (id: string, stage: Partial<PipelineStage>) => Promise<void>;
+  deletePipelineStage: (id: string) => Promise<void>;
   
   // Supervision
   approveAction: (actionId: string) => void;
@@ -166,6 +167,46 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
       console.error('Erro ao enviar mensagem da jornada:', error);
     }
   };
+
+  // Load Pipeline Stages from localStorage with fallback
+  const loadPipelineStages = useCallback(async () => {
+    try {
+      const savedStages = localStorage.getItem('pipelineStages');
+      if (savedStages) {
+        const stages = JSON.parse(savedStages);
+        setPipelineStages(stages);
+        console.log('Pipeline stages carregados do localStorage:', stages);
+      } else {
+        // Se não há nada salvo, usar os padrões
+        setPipelineStages(defaultPipelineStages);
+        localStorage.setItem('pipelineStages', JSON.stringify(defaultPipelineStages));
+      }
+    } catch (error) {
+      console.error('Erro ao carregar pipeline stages:', error);
+      setPipelineStages(defaultPipelineStages);
+    }
+  }, []);
+
+  // Save Pipeline Stages to localStorage
+  const savePipelineStages = useCallback(async (stages: PipelineStage[]) => {
+    try {
+      console.log('Salvando pipeline stages:', stages);
+      localStorage.setItem('pipelineStages', JSON.stringify(stages));
+      setPipelineStages(stages);
+      
+      toast({
+        title: "Estágios salvos",
+        description: "Estágios do pipeline foram salvos com sucesso",
+      });
+    } catch (error) {
+      console.error('Erro ao salvar pipeline stages:', error);
+      toast({
+        title: "Erro ao salvar",
+        description: "Erro ao salvar estágios do pipeline",
+        variant: "destructive",
+      });
+    }
+  }, [toast]);
 
   // Load Leads
   const loadLeads = useCallback(async () => {
@@ -641,33 +682,24 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
   }, [toast]);
 
   // Pipeline Stages Management
-  const addPipelineStage = useCallback((stage: Omit<PipelineStage, 'id'>) => {
+  const addPipelineStage = useCallback(async (stage: Omit<PipelineStage, 'id'>) => {
     const newStage: PipelineStage = {
       ...stage,
       id: `stage-${Date.now()}`
     };
-    setPipelineStages(prev => [...prev, newStage]);
-    toast({
-      title: "Estágio adicionado",
-      description: "Estágio foi adicionado com sucesso",
-    });
-  }, [toast]);
+    const newStages = [...pipelineStages, newStage];
+    await savePipelineStages(newStages);
+  }, [pipelineStages, savePipelineStages]);
 
-  const updatePipelineStage = useCallback((id: string, stage: Partial<PipelineStage>) => {
-    setPipelineStages(prev => prev.map(s => s.id === id ? { ...s, ...stage } : s));
-    toast({
-      title: "Estágio atualizado",
-      description: "Estágio foi atualizado com sucesso",
-    });
-  }, [toast]);
+  const updatePipelineStage = useCallback(async (id: string, stage: Partial<PipelineStage>) => {
+    const newStages = pipelineStages.map(s => s.id === id ? { ...s, ...stage } : s);
+    await savePipelineStages(newStages);
+  }, [pipelineStages, savePipelineStages]);
 
-  const deletePipelineStage = useCallback((id: string) => {
-    setPipelineStages(prev => prev.filter(s => s.id !== id));
-    toast({
-      title: "Estágio removido",
-      description: "Estágio foi removido com sucesso",
-    });
-  }, [toast]);
+  const deletePipelineStage = useCallback(async (id: string) => {
+    const newStages = pipelineStages.filter(s => s.id !== id);
+    await savePipelineStages(newStages);
+  }, [pipelineStages, savePipelineStages]);
 
   // Supervision Actions
   const approveAction = useCallback((actionId: string) => {
@@ -691,7 +723,8 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     loadLeads();
     loadEvents();
     loadUsers();
-  }, [loadLeads, loadEvents, loadUsers]);
+    loadPipelineStages();
+  }, [loadLeads, loadEvents, loadUsers, loadPipelineStages]);
 
   const value: CrmContextType = {
     leads,
@@ -715,6 +748,8 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     createUser,
     updateUser,
     deleteUser,
+    loadPipelineStages,
+    savePipelineStages,
     addPipelineStage,
     updatePipelineStage,
     deletePipelineStage,
