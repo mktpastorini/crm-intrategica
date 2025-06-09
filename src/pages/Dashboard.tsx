@@ -6,7 +6,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Users, Target, Calendar, TrendingUp, Phone, Mail, Clock, Award } from 'lucide-react';
 
 export default function Dashboard() {
-  const { leads, pipelineStages, events, profiles } = useCrm();
+  const { leads, pipelineStages, events, users } = useCrm();
 
   const totalLeads = leads.length;
   const leadsInPipeline = leads.filter(lead => lead.pipeline_stage !== 'contrato-assinado').length;
@@ -19,9 +19,9 @@ export default function Dashboard() {
 
   // Função para obter o nome do usuário pelo ID
   const getUserName = (userId: string | null) => {
-    if (!userId) return 'Não atribuído';
-    const profile = profiles.find(p => p.id === userId);
-    return profile?.name || 'Usuário desconhecido';
+    if (!userId || !users || users.length === 0) return 'Não atribuído';
+    const user = users.find(u => u.id === userId);
+    return user?.name || 'Usuário desconhecido';
   };
 
   // Dados reais para gráficos baseados nos dados atuais
@@ -58,6 +58,8 @@ export default function Dashboard() {
 
   // Calcular estatísticas de usuários (baseado em responsáveis)
   const getUserStats = () => {
+    if (!users || users.length === 0) return [];
+    
     const userStats: { [key: string]: { leads: number, fechamentos: number, userName: string } } = {};
     
     leads.forEach(lead => {
