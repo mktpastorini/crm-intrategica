@@ -1,3 +1,4 @@
+
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSystemSettingsDB } from '@/hooks/useSystemSettingsDB';
@@ -56,9 +57,9 @@ export default function Layout({ children }: LayoutProps) {
   const primaryColor = settings.primaryColor || '#1d0029';
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#faf9fb' }}>
-      {/* Header */}
-      <header className="bg-white border-b border-slate-200 shadow-sm">
+    <div className="h-screen flex flex-col" style={{ backgroundColor: '#faf9fb' }}>
+      {/* Header fixo */}
+      <header className="flex-shrink-0 bg-white border-b border-slate-200 shadow-sm z-50">
         <div className="px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
@@ -120,9 +121,9 @@ export default function Layout({ children }: LayoutProps) {
         </div>
       </header>
 
-      <div className="flex">
-        {/* Sidebar */}
-        <nav className="w-64 bg-white border-r border-slate-200 min-h-screen shadow-sm">
+      <div className="flex flex-1 min-h-0">
+        {/* Sidebar fixo */}
+        <nav className="flex-shrink-0 w-64 bg-white border-r border-slate-200 shadow-sm">
           <div className="p-6">
             <div className="space-y-1">
               {navigation.map((item) => {
@@ -151,8 +152,8 @@ export default function Layout({ children }: LayoutProps) {
           </div>
         </nav>
 
-        {/* Main content */}
-        <main className="flex-1 p-6">
+        {/* Main content com scroll */}
+        <main className="flex-1 min-h-0 overflow-hidden">
           {children}
         </main>
       </div>

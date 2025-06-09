@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -173,9 +174,9 @@ export default function CustomerJourney() {
   };
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col bg-white">
       {/* Header fixo */}
-      <div className="flex-shrink-0 p-6 bg-white border-b">
+      <div className="flex-shrink-0 p-6 bg-white border-b shadow-sm">
         <div className="flex justify-between items-center">
           <div>
             <h2 className="text-2xl font-bold text-slate-900">Jornada do Cliente</h2>
@@ -183,7 +184,7 @@ export default function CustomerJourney() {
           </div>
           <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
             <DialogTrigger asChild>
-              <Button>
+              <Button className="shadow-sm">
                 <Plus className="w-4 h-4 mr-2" />
                 Nova Mensagem
               </Button>
@@ -308,83 +309,81 @@ export default function CustomerJourney() {
       </div>
 
       {/* Kanban Board com scroll horizontal */}
-      <div className="flex-1 overflow-hidden">
-        <div className="h-full overflow-x-auto">
-          <div className="flex gap-4 p-6 min-w-max">
-            {pipelineStages.map(stage => {
-              const stageMessages = getMessagesByStage(stage.id);
-              
-              return (
-                <div
-                  key={stage.id}
-                  className="flex-shrink-0 w-80 bg-slate-50 rounded-lg p-4 h-fit max-h-[calc(100vh-200px)] flex flex-col"
-                  onDragOver={handleDragOver}
-                  onDrop={(e) => handleDrop(e, stage.id)}
-                >
-                  <div className="flex items-center justify-between mb-4 flex-shrink-0">
-                    <div className="flex items-center space-x-2">
-                      <div
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: stage.color }}
-                      />
-                      <h3 className="font-semibold text-slate-900">{stage.name}</h3>
-                      <Badge variant="secondary" className="text-xs">
-                        {stageMessages.length}
-                      </Badge>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3 overflow-y-auto flex-1">
-                    {stageMessages.map(message => (
-                      <Card
-                        key={message.id}
-                        className="cursor-move hover:shadow-md transition-shadow bg-white"
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, message.id)}
-                      >
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-sm font-medium text-slate-900 flex items-center gap-2">
-                            {getTypeIcon(message.type)}
-                            {message.title}
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="pt-0 space-y-2">
-                          <p className="text-xs text-slate-600 line-clamp-2">
-                            {message.content}
-                          </p>
-                          <div className="flex items-center gap-2 text-xs text-slate-500">
-                            <Clock className="w-3 h-3" />
-                            <span>
-                              {message.delay} {message.delayUnit === 'hours' ? 'hora(s)' : 'dia(s)'} após entrada
-                            </span>
-                          </div>
-                          <div className="flex justify-end gap-1 pt-2">
-                            <Button variant="ghost" size="sm" onClick={() => handleEdit(message)}>
-                              <Edit className="w-3 h-3" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              onClick={() => handleDelete(message.id)}
-                              className="text-red-600 hover:text-red-700"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-
-                    {stageMessages.length === 0 && (
-                      <div className="text-center py-8 text-slate-400 text-sm">
-                        Nenhuma mensagem configurada
-                      </div>
-                    )}
+      <div className="flex-1 overflow-auto">
+        <div className="flex gap-4 p-6 min-w-max">
+          {pipelineStages.map(stage => {
+            const stageMessages = getMessagesByStage(stage.id);
+            
+            return (
+              <div
+                key={stage.id}
+                className="flex-shrink-0 w-80 bg-slate-50 rounded-lg p-4 max-h-[calc(100vh-240px)] flex flex-col"
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, stage.id)}
+              >
+                <div className="flex items-center justify-between mb-4 flex-shrink-0">
+                  <div className="flex items-center space-x-2">
+                    <div
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: stage.color }}
+                    />
+                    <h3 className="font-semibold text-slate-900">{stage.name}</h3>
+                    <Badge variant="secondary" className="text-xs">
+                      {stageMessages.length}
+                    </Badge>
                   </div>
                 </div>
-              );
-            })}
-          </div>
+
+                <div className="space-y-3 overflow-y-auto flex-1">
+                  {stageMessages.map(message => (
+                    <Card
+                      key={message.id}
+                      className="cursor-move hover:shadow-md transition-shadow bg-white"
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, message.id)}
+                    >
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm font-medium text-slate-900 flex items-center gap-2">
+                          {getTypeIcon(message.type)}
+                          {message.title}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-0 space-y-2">
+                        <p className="text-xs text-slate-600 line-clamp-2">
+                          {message.content}
+                        </p>
+                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                          <Clock className="w-3 h-3" />
+                          <span>
+                            {message.delay} {message.delayUnit === 'hours' ? 'hora(s)' : 'dia(s)'} após entrada
+                          </span>
+                        </div>
+                        <div className="flex justify-end gap-1 pt-2">
+                          <Button variant="ghost" size="sm" onClick={() => handleEdit(message)}>
+                            <Edit className="w-3 h-3" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => handleDelete(message.id)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+
+                  {stageMessages.length === 0 && (
+                    <div className="text-center py-8 text-slate-400 text-sm">
+                      Nenhuma mensagem configurada
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
