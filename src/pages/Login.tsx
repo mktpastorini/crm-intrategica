@@ -120,11 +120,7 @@ export default function Login() {
             </Button>
           </form>
           
-          <div className="mt-4 p-3 bg-blue-50 rounded-lg text-sm">
-            <p className="font-medium text-blue-900">Credenciais de teste:</p>
-            <p className="text-blue-700">Email: admin@admin.com</p>
-            <p className="text-blue-700">Senha: admin123</p>
-          </div>
+         
         </CardContent>
       </Card>
     </div>
