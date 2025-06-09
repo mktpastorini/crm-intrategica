@@ -6,7 +6,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Users, Target, Calendar, TrendingUp, Phone, Mail, Clock, Award } from 'lucide-react';
 
 export default function Dashboard() {
-  const { leads, pipelineStages, events } = useCrm();
+  const { leads, pipelineStages, events, profiles } = useCrm();
 
   const totalLeads = leads.length;
   const leadsInPipeline = leads.filter(lead => lead.pipeline_stage !== 'contrato-assinado').length;
@@ -16,6 +16,13 @@ export default function Dashboard() {
     new Date(event.date + 'T' + event.time) >= new Date() &&
     new Date(event.date + 'T' + event.time) <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
   ).length;
+
+  // Função para obter o nome do usuário pelo ID
+  const getUserName = (userId: string | null) => {
+    if (!userId) return 'Não atribuído';
+    const profile = profiles.find(p => p.id === userId);
+    return profile?.name || 'Usuário desconhecido';
+  };
 
   // Dados reais para gráficos baseados nos dados atuais
   const statusData = pipelineStages.map(stage => ({
@@ -51,21 +58,28 @@ export default function Dashboard() {
 
   // Calcular estatísticas de usuários (baseado em responsáveis)
   const getUserStats = () => {
-    const userStats: { [key: string]: { leads: number, fechamentos: number } } = {};
+    const userStats: { [key: string]: { leads: number, fechamentos: number, userName: string } } = {};
     
     leads.forEach(lead => {
-      const user = lead.responsible_id || 'Não atribuído';
-      if (!userStats[user]) {
-        userStats[user] = { leads: 0, fechamentos: 0 };
+      const userId = lead.responsible_id || 'unassigned';
+      const userName = getUserName(lead.responsible_id);
+      
+      if (!userStats[userId]) {
+        userStats[userId] = { leads: 0, fechamentos: 0, userName };
       }
-      userStats[user].leads++;
+      userStats[userId].leads++;
       if (lead.pipeline_stage === 'contrato-assinado') {
-        userStats[user].fechamentos++;
+        userStats[userId].fechamentos++;
       }
     });
 
     return Object.entries(userStats)
-      .map(([user, stats]) => ({ user, ...stats }))
+      .map(([userId, stats]) => ({ 
+        userId, 
+        userName: stats.userName,
+        leads: stats.leads,
+        fechamentos: stats.fechamentos 
+      }))
       .sort((a, b) => b.fechamentos - a.fechamentos);
   };
 
@@ -81,9 +95,10 @@ export default function Dashboard() {
       .slice(0, 3);
     
     recentLeads.forEach(lead => {
+      const responsibleName = getUserName(lead.responsible_id);
       activities.push({
         type: 'lead',
-        message: `Novo lead adicionado: ${lead.company}`,
+        message: `Novo lead adicionado: ${lead.company} (Responsável: ${responsibleName})`,
         time: new Date(lead.created_at).toLocaleDateString('pt-BR')
       });
     });
@@ -95,9 +110,10 @@ export default function Dashboard() {
       .slice(0, 2);
 
     upcomingEvents.forEach(event => {
+      const responsibleName = getUserName(event.responsible_id);
       activities.push({
         type: 'event',
-        message: `${event.type === 'reunion' ? 'Reunião agendada' : 'Evento agendado'} com ${event.lead_name || 'cliente'}`,
+        message: `${event.type === 'reunion' ? 'Reunião agendada' : 'Evento agendado'} com ${event.lead_name || 'cliente'} (${responsibleName})`,
         time: new Date(event.date).toLocaleDateString('pt-BR')
       });
     });
@@ -256,7 +272,7 @@ export default function Dashboard() {
           <CardContent className="space-y-4">
             {userStats.length > 0 ? (
               userStats.slice(0, 3).map((user, index) => (
-                <div key={user.user} className="flex items-center justify-between p-3 bg-white rounded-lg border border-green-200">
+                <div key={user.userId} className="flex items-center justify-between p-3 bg-white rounded-lg border border-green-200">
                   <div className="flex items-center space-x-3">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
                       index === 0 ? 'bg-gradient-to-r from-green-400 to-emerald-500' :
@@ -266,7 +282,7 @@ export default function Dashboard() {
                       <span className="text-white text-sm font-bold">{index + 1}</span>
                     </div>
                     <div>
-                      <p className="font-medium text-slate-900">{user.user}</p>
+                      <p className="font-medium text-slate-900">{user.userName}</p>
                       <p className="text-sm text-slate-600">{user.fechamentos} fechamentos</p>
                     </div>
                   </div>

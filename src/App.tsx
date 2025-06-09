@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { CrmProvider } from "./contexts/CrmContext";
+import { useFavicon } from "./hooks/useFavicon";
 import Dashboard from "./pages/Dashboard";
 import Leads from "./pages/Leads";
 import Pipeline from "./pages/Pipeline";
@@ -21,6 +22,11 @@ import CustomerJourney from "./pages/CustomerJourney";
 
 const queryClient = new QueryClient();
 
+const FaviconManager = () => {
+  useFavicon();
+  return null;
+};
+
 const LayoutWrapper = () => (
   <Layout>
     <Outlet />
@@ -35,6 +41,7 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <CrmProvider>
+            <FaviconManager />
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/" element={
