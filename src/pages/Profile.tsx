@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, Camera } from 'lucide-react';
+import { Camera } from 'lucide-react';
 import LoadingSpinner from '@/components/LoadingSpinner';
 
 export default function Profile() {
@@ -18,7 +18,6 @@ export default function Profile() {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: profile?.name || '',
-    currentPassword: '',
     newPassword: '',
     confirmPassword: ''
   });
@@ -37,6 +36,7 @@ export default function Profile() {
 
     try {
       setLoading(true);
+      console.log('Atualizando perfil:', formData);
       
       // Update profile
       await updateProfile({
@@ -52,11 +52,11 @@ export default function Profile() {
       // Clear password fields
       setFormData(prev => ({
         ...prev,
-        currentPassword: '',
         newPassword: '',
         confirmPassword: ''
       }));
     } catch (error: any) {
+      console.error('Erro ao atualizar perfil:', error);
       toast({
         title: "Erro",
         description: error.message || "Erro ao atualizar perfil",
@@ -93,6 +93,7 @@ export default function Profile() {
 
     try {
       setLoading(true);
+      console.log('Uploading avatar...');
       
       // Convert to base64 for simple storage
       const reader = new FileReader();
@@ -106,6 +107,7 @@ export default function Profile() {
             description: "Sua foto de perfil foi atualizada com sucesso",
           });
         } catch (error: any) {
+          console.error('Erro ao atualizar foto:', error);
           toast({
             title: "Erro",
             description: error.message || "Erro ao atualizar foto",
@@ -119,6 +121,7 @@ export default function Profile() {
       reader.readAsDataURL(file);
     } catch (error: any) {
       setLoading(false);
+      console.error('Erro ao processar imagem:', error);
       toast({
         title: "Erro",
         description: "Erro ao processar imagem",
@@ -126,6 +129,16 @@ export default function Profile() {
       });
     }
   };
+
+  if (!user || !profile) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-6">
+        <div className="flex items-center justify-center h-64">
+          <LoadingSpinner size="lg" text="Carregando perfil..." />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -145,7 +158,7 @@ export default function Profile() {
               {profile?.avatar_url ? (
                 <AvatarImage src={profile.avatar_url} alt={profile.name} />
               ) : null}
-              <AvatarFallback className="text-xl">
+              <AvatarFallback className="text-xl bg-slate-200">
                 {profile?.name?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || 'U'}
               </AvatarFallback>
             </Avatar>
@@ -197,20 +210,21 @@ export default function Profile() {
               </p>
             </div>
 
+            <div>
+              <Label htmlFor="role">Função</Label>
+              <Input
+                id="role"
+                value={profile?.role === 'admin' ? 'Administrador' : 
+                       profile?.role === 'supervisor' ? 'Supervisor' : 'Comercial'}
+                disabled
+                className="bg-slate-100"
+              />
+            </div>
+
             <div className="border-t pt-4">
               <h3 className="text-lg font-medium mb-4">Alterar Senha</h3>
               
               <div className="space-y-4">
-                <div>
-                  <Label htmlFor="currentPassword">Senha Atual</Label>
-                  <Input
-                    id="currentPassword"
-                    type="password"
-                    value={formData.currentPassword}
-                    onChange={(e) => setFormData(prev => ({ ...prev, currentPassword: e.target.value }))}
-                  />
-                </div>
-
                 <div>
                   <Label htmlFor="newPassword">Nova Senha</Label>
                   <Input
@@ -218,6 +232,7 @@ export default function Profile() {
                     type="password"
                     value={formData.newPassword}
                     onChange={(e) => setFormData(prev => ({ ...prev, newPassword: e.target.value }))}
+                    placeholder="Deixe em branco para manter a senha atual"
                   />
                 </div>
 
@@ -228,6 +243,7 @@ export default function Profile() {
                     type="password"
                     value={formData.confirmPassword}
                     onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                    placeholder="Confirme a nova senha"
                   />
                 </div>
               </div>

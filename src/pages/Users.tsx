@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { UserPlus, Edit, Trash2, UserX, Users as UsersIcon } from 'lucide-react';
+import { UserPlus, Edit, Trash2, UserX, Users as UsersIcon, UserCheck } from 'lucide-react';
 import LoadingSpinner from '@/components/LoadingSpinner';
 
 interface User {
@@ -129,8 +129,27 @@ export default function Users() {
 
         console.log('Usuário criado no Auth:', authData);
 
-        // O perfil será criado automaticamente pelo trigger
-        await loadUsers(); // Recarregar a lista
+        // Aguardar um pouco para o trigger criar o perfil
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Verificar se o perfil foi criado e atualizar com o status correto
+        if (authData.user) {
+          const { error: updateError } = await supabase
+            .from('profiles')
+            .update({
+              name: formData.name,
+              role: formData.role,
+              status: formData.status
+            })
+            .eq('id', authData.user.id);
+
+          if (updateError) {
+            console.error('Erro ao atualizar perfil criado:', updateError);
+          }
+        }
+
+        // Recarregar a lista
+        await loadUsers();
 
         toast({
           title: "Usuário criado",
@@ -164,12 +183,48 @@ export default function Users() {
     setShowAddDialog(true);
   };
 
+  const handleActivate = async (userId: string) => {
+    try {
+      console.log('Ativando usuário:', userId);
+      setActionLoading(`activate-${userId}`);
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({ status: 'active' })
+        .eq('id', userId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao ativar usuário:', error);
+        throw error;
+      }
+
+      console.log('Usuário ativado:', data);
+      setUsers(prev => prev.map(u => u.id === userId ? data : u));
+
+      toast({
+        title: "Usuário ativado",
+        description: "Usuário foi ativado com sucesso",
+      });
+    } catch (error: any) {
+      console.error('Erro ao ativar usuário:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao ativar usuário",
+        variant: "destructive",
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handleDeactivate = async (userId: string) => {
     if (!confirm('Tem certeza que deseja desativar este usuário?')) return;
 
     try {
       console.log('Desativando usuário:', userId);
-      setActionLoading(userId);
+      setActionLoading(`deactivate-${userId}`);
       
       const { data, error } = await supabase
         .from('profiles')
@@ -371,58 +426,76 @@ export default function Users() {
       </div>
 
       <div className="grid gap-4">
-        {users.map((user) => (
-          <Card key={user.id}>
+        {users.map((userItem) => (
+          <Card key={userItem.id}>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   <Avatar className="w-12 h-12">
-                    {user.avatar_url ? (
-                      <AvatarImage src={user.avatar_url} alt={user.name} />
+                    {userItem.avatar_url ? (
+                      <AvatarImage src={userItem.avatar_url} alt={userItem.name} />
                     ) : null}
                     <AvatarFallback className="bg-gradient-to-r from-blue-400 to-purple-500 text-white font-medium">
-                      {user.name.charAt(0).toUpperCase()}
+                      {userItem.name.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <h3 className="text-lg font-medium text-slate-900">{user.name}</h3>
-                    <p className="text-slate-600">{user.email}</p>
+                    <h3 className="text-lg font-medium text-slate-900">{userItem.name}</h3>
+                    <p className="text-slate-600">{userItem.email}</p>
                     <div className="flex space-x-2 mt-2">
-                      <Badge className={getRoleBadgeColor(user.role)}>
-                        {user.role === 'admin' ? 'Administrador' : 
-                         user.role === 'supervisor' ? 'Supervisor' : 'Comercial'}
+                      <Badge className={getRoleBadgeColor(userItem.role)}>
+                        {userItem.role === 'admin' ? 'Administrador' : 
+                         userItem.role === 'supervisor' ? 'Supervisor' : 'Comercial'}
                       </Badge>
-                      <Badge className={getStatusBadgeColor(user.status)}>
-                        {user.status === 'active' ? 'Ativo' : 'Inativo'}
+                      <Badge className={getStatusBadgeColor(userItem.status)}>
+                        {userItem.status === 'active' ? 'Ativo' : 'Inativo'}
                       </Badge>
                     </div>
                   </div>
                 </div>
                 <div className="flex space-x-2">
-                  <Button variant="outline" size="sm" onClick={() => handleEdit(user)}>
+                  <Button variant="outline" size="sm" onClick={() => handleEdit(userItem)}>
                     <Edit className="w-4 h-4" />
                   </Button>
+                  
+                  {userItem.status === 'active' ? (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => handleDeactivate(userItem.id)}
+                      className="text-orange-600 hover:text-orange-700"
+                      disabled={actionLoading === `deactivate-${userItem.id}`}
+                    >
+                      {actionLoading === `deactivate-${userItem.id}` ? (
+                        <LoadingSpinner size="sm" />
+                      ) : (
+                        <UserX className="w-4 h-4" />
+                      )}
+                    </Button>
+                  ) : (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => handleActivate(userItem.id)}
+                      className="text-green-600 hover:text-green-700"
+                      disabled={actionLoading === `activate-${userItem.id}`}
+                    >
+                      {actionLoading === `activate-${userItem.id}` ? (
+                        <LoadingSpinner size="sm" />
+                      ) : (
+                        <UserCheck className="w-4 h-4" />
+                      )}
+                    </Button>
+                  )}
+                  
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    onClick={() => handleDeactivate(user.id)}
-                    className="text-orange-600 hover:text-orange-700"
-                    disabled={actionLoading === user.id}
-                  >
-                    {actionLoading === user.id ? (
-                      <LoadingSpinner size="sm" />
-                    ) : (
-                      <UserX className="w-4 h-4" />
-                    )}
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => handleDelete(user.id)}
+                    onClick={() => handleDelete(userItem.id)}
                     className="text-red-600 hover:text-red-700"
-                    disabled={actionLoading === `delete-${user.id}`}
+                    disabled={actionLoading === `delete-${userItem.id}`}
                   >
-                    {actionLoading === `delete-${user.id}` ? (
+                    {actionLoading === `delete-${userItem.id}` ? (
                       <LoadingSpinner size="sm" />
                     ) : (
                       <Trash2 className="w-4 h-4" />
