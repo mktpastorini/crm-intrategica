@@ -11,6 +11,7 @@ interface Profile {
   status: string;
   created_at: string;
   last_login?: string;
+  avatar_url?: string;
 }
 
 interface AuthContextType {
@@ -20,6 +21,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  updateProfile: (updates: Partial<Profile> & { password?: string }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -49,6 +51,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(data);
     } catch (error) {
       console.error('Erro ao carregar perfil:', error);
+    }
+  }, [user]);
+
+  const updateProfile = useCallback(async (updates: Partial<Profile> & { password?: string }) => {
+    if (!user) throw new Error('Usuário não autenticado');
+
+    try {
+      // Update password if provided
+      if (updates.password) {
+        const { error: passwordError } = await supabase.auth.updateUser({
+          password: updates.password
+        });
+        if (passwordError) throw passwordError;
+      }
+
+      // Update profile data (excluding password)
+      const profileUpdates = { ...updates };
+      delete profileUpdates.password;
+
+      if (Object.keys(profileUpdates).length > 0) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update(profileUpdates)
+          .eq('id', user.id);
+
+        if (profileError) throw profileError;
+
+        // Update local state
+        setProfile(prev => prev ? { ...prev, ...profileUpdates } : null);
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar perfil:', error);
+      throw error;
     }
   }, [user]);
 
@@ -166,7 +201,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loading,
     signIn,
     signOut,
-    refreshProfile
+    refreshProfile,
+    updateProfile
   };
 
   return (
