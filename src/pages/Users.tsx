@@ -130,22 +130,27 @@ export default function Users() {
         console.log('Usuário criado no Auth:', authData);
 
         // Aguardar um pouco para o trigger criar o perfil
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 2000));
         
-        // Verificar se o perfil foi criado e atualizar com o status correto
+        // Verificar se o perfil foi criado e atualizar com os dados corretos
         if (authData.user) {
-          const { error: updateError } = await supabase
+          const { data: profileData, error: updateError } = await supabase
             .from('profiles')
             .update({
               name: formData.name,
               role: formData.role,
               status: formData.status
             })
-            .eq('id', authData.user.id);
+            .eq('id', authData.user.id)
+            .select()
+            .single();
 
           if (updateError) {
             console.error('Erro ao atualizar perfil criado:', updateError);
+            // Mesmo com erro na atualização, vamos recarregar a lista
           }
+
+          console.log('Perfil atualizado:', profileData);
         }
 
         // Recarregar a lista
@@ -153,7 +158,7 @@ export default function Users() {
 
         toast({
           title: "Usuário criado",
-          description: "Usuário foi criado com sucesso",
+          description: `Usuário foi criado com status ${formData.status}`,
         });
       }
 
@@ -201,7 +206,7 @@ export default function Users() {
       }
 
       console.log('Usuário ativado:', data);
-      setUsers(prev => prev.map(u => u.id === userId ? data : u));
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: 'active' } : u));
 
       toast({
         title: "Usuário ativado",
@@ -239,7 +244,7 @@ export default function Users() {
       }
 
       console.log('Usuário desativado:', data);
-      setUsers(prev => prev.map(u => u.id === userId ? data : u));
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: 'inactive' } : u));
 
       toast({
         title: "Usuário desativado",

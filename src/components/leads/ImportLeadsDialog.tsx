@@ -7,8 +7,10 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, FileText, MapPin, AlertCircle, ExternalLink } from 'lucide-react';
+import { Upload, FileText, MapPin, AlertCircle } from 'lucide-react';
+import { useSystemSettingsDB } from '@/hooks/useSystemSettingsDB';
 import GoogleMapsInstructions from '@/components/GoogleMapsInstructions';
+import GoogleMapsSearch from '@/components/GoogleMapsSearch';
 import LoadingSpinner from '@/components/LoadingSpinner';
 
 interface ImportLeadsDialogProps {
@@ -19,13 +21,8 @@ interface ImportLeadsDialogProps {
 
 export default function ImportLeadsDialog({ open, onOpenChange, onImport }: ImportLeadsDialogProps) {
   const { toast } = useToast();
+  const { settings } = useSystemSettingsDB();
   const [loading, setLoading] = useState(false);
-  const [googleMapsData, setGoogleMapsData] = useState({
-    apiKey: '',
-    category: '',
-    city: '',
-    radius: '5'
-  });
 
   const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -100,69 +97,28 @@ export default function ImportLeadsDialog({ open, onOpenChange, onImport }: Impo
     }
   };
 
-  const handleGoogleMapsImport = async () => {
-    if (!googleMapsData.apiKey || !googleMapsData.category || !googleMapsData.city) {
-      toast({
-        title: "Erro",
-        description: "Preencha todos os campos obrigatórios",
-        variant: "destructive",
-      });
-      return;
-    }
-
+  const handleGoogleMapsImport = async (leads: any[]) => {
     try {
-      setLoading(true);
-      
-      // Simulação da importação do Google Maps (demonstração)
-      // Em um ambiente real, isso faria uma requisição para a Places API
-      const mockLeads = [
-        {
-          name: `${googleMapsData.category} - Empresa 1`,
-          phone: "(11) 99999-0001",
-          company: `${googleMapsData.category} Ltda 1`,
-          email: "contato1@empresa.com",
-          niche: googleMapsData.category,
-          status: 'novo'
-        },
-        {
-          name: `${googleMapsData.category} - Empresa 2`, 
-          phone: "(11) 99999-0002",
-          company: `${googleMapsData.category} Ltda 2`,
-          email: "contato2@empresa.com",
-          niche: googleMapsData.category,
-          status: 'novo'
-        },
-        {
-          name: `${googleMapsData.category} - Empresa 3`,
-          phone: "(11) 99999-0003", 
-          company: `${googleMapsData.category} Ltda 3`,
-          email: "contato3@empresa.com",
-          niche: googleMapsData.category,
-          status: 'novo'
-        }
-      ];
-
-      await onImport(mockLeads);
+      await onImport(leads);
       toast({
-        title: "Demonstração",
-        description: `Importação simulada: ${mockLeads.length} leads de exemplo criados`,
+        title: "Sucesso",
+        description: `${leads.length} leads importados do Google Maps`,
       });
       onOpenChange(false);
-    } catch (error) {
-      console.error('Erro na importação do Google Maps:', error);
+    } catch (error: any) {
       toast({
-        title: "Erro",
-        description: "Erro ao importar do Google Maps",
+        title: "Erro na importação",
+        description: error.message || "Erro ao importar leads",
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
     }
   };
 
+  const hasGoogleMapsKey = settings?.google_maps_api_key;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Importar Leads em Massa</DialogTitle>
           <DialogDescription>
@@ -232,84 +188,35 @@ export default function ImportLeadsDialog({ open, onOpenChange, onImport }: Impo
           </TabsContent>
 
           <TabsContent value="google-maps" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MapPin className="w-5 h-5" />
-                  Extrair do Google Maps (Demonstração)
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                  <div className="flex items-start gap-2">
-                    <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <h4 className="font-semibold text-yellow-900 mb-1">Demonstração</h4>
-                      <p className="text-yellow-800 text-sm">
-                        Esta funcionalidade está em modo demonstração e criará leads de exemplo. 
-                        Para implementação real, é necessário configurar a API do Google Maps.
-                      </p>
-                    </div>
+            {!hasGoogleMapsKey ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 text-orange-600" />
+                    Configuração Necessária
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                    <p className="text-orange-800 text-sm mb-3">
+                      Para usar a importação do Google Maps, é necessário configurar uma chave da API do Google Maps.
+                    </p>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => onOpenChange(false)}
+                      className="text-orange-700 border-orange-300 hover:bg-orange-100"
+                    >
+                      Ir para Configurações
+                    </Button>
                   </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="api-key">API Key do Google Maps</Label>
-                    <Input
-                      id="api-key"
-                      type="password"
-                      value={googleMapsData.apiKey}
-                      onChange={(e) => setGoogleMapsData(prev => ({ ...prev, apiKey: e.target.value }))}
-                      placeholder="AIzaSy..."
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="category">Categoria/Palavra-chave</Label>
-                    <Input
-                      id="category"
-                      value={googleMapsData.category}
-                      onChange={(e) => setGoogleMapsData(prev => ({ ...prev, category: e.target.value }))}
-                      placeholder="ex: dentista, restaurante, advogado"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="city">Cidade</Label>
-                    <Input
-                      id="city"
-                      value={googleMapsData.city}
-                      onChange={(e) => setGoogleMapsData(prev => ({ ...prev, city: e.target.value }))}
-                      placeholder="ex: São Paulo, SP"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="radius">Raio (km)</Label>
-                    <Input
-                      id="radius"
-                      type="number"
-                      value={googleMapsData.radius}
-                      onChange={(e) => setGoogleMapsData(prev => ({ ...prev, radius: e.target.value }))}
-                      placeholder="5"
-                    />
-                  </div>
-                </div>
-
-                <Button 
-                  onClick={handleGoogleMapsImport} 
-                  disabled={loading}
-                  className="w-full"
-                >
-                  {loading ? (
-                    <LoadingSpinner size="sm" />
-                  ) : (
-                    <>
-                      <MapPin className="w-4 h-4 mr-2" />
-                      Importar do Google Maps (Demo)
-                    </>
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            ) : (
+              <GoogleMapsSearch 
+                apiKey={settings.google_maps_api_key}
+                onImport={handleGoogleMapsImport}
+              />
+            )}
           </TabsContent>
 
           <TabsContent value="instructions">

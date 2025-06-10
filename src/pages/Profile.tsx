@@ -1,5 +1,5 @@
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,16 +11,26 @@ import { Camera } from 'lucide-react';
 import LoadingSpinner from '@/components/LoadingSpinner';
 
 export default function Profile() {
-  const { user, profile, updateProfile } = useAuth();
+  const { user, profile, updateProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    name: profile?.name || '',
+    name: '',
     newPassword: '',
     confirmPassword: ''
   });
+
+  // Atualizar formData quando o profile carregar
+  useEffect(() => {
+    if (profile?.name) {
+      setFormData(prev => ({
+        ...prev,
+        name: profile.name
+      }));
+    }
+  }, [profile]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,11 +140,37 @@ export default function Profile() {
     }
   };
 
-  if (!user || !profile) {
+  // Mostrar loading enquanto o contexto está carregando
+  if (authLoading) {
     return (
       <div className="max-w-2xl mx-auto space-y-6">
         <div className="flex items-center justify-center h-64">
           <LoadingSpinner size="lg" text="Carregando perfil..." />
+        </div>
+      </div>
+    );
+  }
+
+  // Verificar se usuário e perfil existem
+  if (!user) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-6">
+        <Card>
+          <CardContent className="p-12 text-center">
+            <h3 className="text-lg font-medium text-slate-900 mb-2">Erro ao carregar perfil</h3>
+            <p className="text-slate-600">Usuário não encontrado. Tente fazer login novamente.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Se não há profile ainda, mas temos user, mostrar loading
+  if (!profile) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-6">
+        <div className="flex items-center justify-center h-64">
+          <LoadingSpinner size="lg" text="Carregando dados do perfil..." />
         </div>
       </div>
     );

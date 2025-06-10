@@ -8,6 +8,7 @@ import WebhookSettings from '@/components/settings/WebhookSettings';
 import DatabaseSettings from '@/components/settings/DatabaseSettings';
 import AppearanceSettings from '@/components/settings/AppearanceSettings';
 import CategorySettings from '@/components/settings/CategorySettings';
+import GoogleMapsSettings from '@/components/settings/GoogleMapsSettings';
 
 export default function Settings() {
   const { toast } = useToast();
@@ -45,6 +46,13 @@ export default function Settings() {
     });
   };
 
+  const handleSaveGoogleMaps = () => {
+    toast({
+      title: "Configurações salvas",
+      description: "Configurações do Google Maps foram salvas com sucesso",
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -53,12 +61,13 @@ export default function Settings() {
       </div>
 
       <Tabs defaultValue="general" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="general">Geral</TabsTrigger>
           <TabsTrigger value="webhooks">Webhooks</TabsTrigger>
           <TabsTrigger value="database">Banco de Dados</TabsTrigger>
           <TabsTrigger value="appearance">Aparência</TabsTrigger>
           <TabsTrigger value="categories">Categorias</TabsTrigger>
+          <TabsTrigger value="googlemaps">Google Maps</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general">
@@ -94,6 +103,14 @@ export default function Settings() {
 
         <TabsContent value="categories">
           <CategorySettings />
+        </TabsContent>
+
+        <TabsContent value="googlemaps">
+          <GoogleMapsSettings 
+            settings={settings}
+            onInputChange={handleInputChange}
+            onSave={handleSaveGoogleMaps}
+          />
         </TabsContent>
       </Tabs>
     </div>
