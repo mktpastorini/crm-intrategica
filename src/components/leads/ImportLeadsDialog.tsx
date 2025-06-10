@@ -4,91 +4,37 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, FileText, MapPin, Info } from 'lucide-react';
+import { Upload, FileText, MapPin, AlertCircle, ExternalLink } from 'lucide-react';
+import GoogleMapsInstructions from '@/components/GoogleMapsInstructions';
 import LoadingSpinner from '@/components/LoadingSpinner';
 
 interface ImportLeadsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onImport: (leads: any[]) => void;
+  onImport: (leads: any[]) => Promise<void>;
 }
 
 export default function ImportLeadsDialog({ open, onOpenChange, onImport }: ImportLeadsDialogProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [fileContent, setFileContent] = useState('');
   const [googleMapsData, setGoogleMapsData] = useState({
-    keyword: '',
+    apiKey: '',
+    category: '',
     city: '',
-    radius: '10',
-    limit: '50'
+    radius: '5'
   });
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const content = e.target?.result as string;
-      setFileContent(content);
-    };
-    reader.readAsText(file);
-  };
-
-  const parseCSV = (content: string) => {
-    const lines = content.split('\n').filter(line => line.trim());
-    if (lines.length < 2) {
-      throw new Error('Arquivo deve conter pelo menos uma linha de cabeçalho e uma linha de dados');
-    }
-
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-    const leads = [];
-
-    for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(',').map(v => v.trim());
-      const lead: any = {};
-
-      headers.forEach((header, index) => {
-        const value = values[index] || '';
-        
-        // Map common column names
-        if (header.includes('nome') || header.includes('name')) {
-          lead.name = value;
-        } else if (header.includes('empresa') || header.includes('company')) {
-          lead.company = value;
-        } else if (header.includes('telefone') || header.includes('phone')) {
-          lead.phone = value;
-        } else if (header.includes('email')) {
-          lead.email = value;
-        } else if (header.includes('nicho') || header.includes('niche') || header.includes('categoria')) {
-          lead.niche = value;
-        }
-      });
-
-      // Validate required fields
-      if (lead.name && lead.company && lead.phone) {
-        leads.push({
-          ...lead,
-          status: 'novo',
-          responsible_id: ''
-        });
-      }
-    }
-
-    return leads;
-  };
-
-  const handleCSVImport = async () => {
-    if (!fileContent.trim()) {
+    if (!file.name.match(/\.(csv|txt)$/i)) {
       toast({
         title: "Erro",
-        description: "Selecione um arquivo para importar",
+        description: "Apenas arquivos CSV ou TXT são permitidos",
         variant: "destructive",
       });
       return;
@@ -96,23 +42,57 @@ export default function ImportLeadsDialog({ open, onOpenChange, onImport }: Impo
 
     try {
       setLoading(true);
-      const leads = parseCSV(fileContent);
+      const text = await file.text();
+      const lines = text.split('\n').filter(line => line.trim());
       
-      if (leads.length === 0) {
-        throw new Error('Nenhum lead válido encontrado no arquivo');
+      if (lines.length < 2) {
+        toast({
+          title: "Erro",
+          description: "O arquivo deve conter pelo menos uma linha de cabeçalho e uma linha de dados",
+          variant: "destructive",
+        });
+        return;
       }
 
-      onImport(leads);
+      // Parse CSV/TXT
+      const headers = lines[0].split(/[,;\t]/).map(h => h.trim().toLowerCase());
+      const leads = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(/[,;\t]/).map(v => v.trim());
+        if (values.length >= 3) { // Mínimo: nome, telefone, empresa
+          const lead = {
+            name: values[headers.indexOf('nome') || headers.indexOf('name') || 0] || `Lead ${i}`,
+            phone: values[headers.indexOf('telefone') || headers.indexOf('phone') || 1] || '',
+            company: values[headers.indexOf('empresa') || headers.indexOf('company') || 2] || '',
+            email: values[headers.indexOf('email') || headers.indexOf('e-mail')] || '',
+            niche: values[headers.indexOf('nicho') || headers.indexOf('niche')] || 'Importado',
+            status: 'novo'
+          };
+          leads.push(lead);
+        }
+      }
+
+      if (leads.length === 0) {
+        toast({
+          title: "Erro",
+          description: "Nenhum lead válido encontrado no arquivo",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      await onImport(leads);
       toast({
-        title: "Importação realizada",
+        title: "Sucesso",
         description: `${leads.length} leads importados com sucesso`,
       });
       onOpenChange(false);
-      setFileContent('');
-    } catch (error: any) {
+    } catch (error) {
+      console.error('Erro ao importar arquivo:', error);
       toast({
-        title: "Erro na importação",
-        description: error.message || "Erro ao importar arquivo",
+        title: "Erro",
+        description: "Erro ao processar o arquivo",
         variant: "destructive",
       });
     } finally {
@@ -121,10 +101,10 @@ export default function ImportLeadsDialog({ open, onOpenChange, onImport }: Impo
   };
 
   const handleGoogleMapsImport = async () => {
-    if (!googleMapsData.keyword || !googleMapsData.city) {
+    if (!googleMapsData.apiKey || !googleMapsData.category || !googleMapsData.city) {
       toast({
         title: "Erro",
-        description: "Preencha a palavra-chave e cidade",
+        description: "Preencha todos os campos obrigatórios",
         variant: "destructive",
       });
       return;
@@ -133,39 +113,46 @@ export default function ImportLeadsDialog({ open, onOpenChange, onImport }: Impo
     try {
       setLoading(true);
       
-      // Simular extração do Google Maps (em um cenário real, isso seria feito no backend)
-      // Por limitações da API do Google Places, vamos simular dados
+      // Simulação da importação do Google Maps (demonstração)
+      // Em um ambiente real, isso faria uma requisição para a Places API
       const mockLeads = [
         {
-          name: "João Silva",
-          company: `${googleMapsData.keyword} Silva Ltda`,
-          phone: "(11) 99999-9999",
-          email: "contato@silva.com",
-          niche: googleMapsData.keyword,
-          status: 'novo',
-          responsible_id: ''
+          name: `${googleMapsData.category} - Empresa 1`,
+          phone: "(11) 99999-0001",
+          company: `${googleMapsData.category} Ltda 1`,
+          email: "contato1@empresa.com",
+          niche: googleMapsData.category,
+          status: 'novo'
         },
         {
-          name: "Maria Santos",
-          company: `${googleMapsData.keyword} Santos & Cia`,
-          phone: "(11) 88888-8888",
-          email: "maria@santos.com",
-          niche: googleMapsData.keyword,
-          status: 'novo',
-          responsible_id: ''
+          name: `${googleMapsData.category} - Empresa 2`, 
+          phone: "(11) 99999-0002",
+          company: `${googleMapsData.category} Ltda 2`,
+          email: "contato2@empresa.com",
+          niche: googleMapsData.category,
+          status: 'novo'
+        },
+        {
+          name: `${googleMapsData.category} - Empresa 3`,
+          phone: "(11) 99999-0003", 
+          company: `${googleMapsData.category} Ltda 3`,
+          email: "contato3@empresa.com",
+          niche: googleMapsData.category,
+          status: 'novo'
         }
       ];
 
-      onImport(mockLeads);
+      await onImport(mockLeads);
       toast({
-        title: "Importação realizada",
-        description: `${mockLeads.length} leads importados do Google Maps`,
+        title: "Demonstração",
+        description: `Importação simulada: ${mockLeads.length} leads de exemplo criados`,
       });
       onOpenChange(false);
-    } catch (error: any) {
+    } catch (error) {
+      console.error('Erro na importação do Google Maps:', error);
       toast({
-        title: "Erro na importação",
-        description: error.message || "Erro ao importar do Google Maps",
+        title: "Erro",
+        description: "Erro ao importar do Google Maps",
         variant: "destructive",
       });
     } finally {
@@ -175,160 +162,158 @@ export default function ImportLeadsDialog({ open, onOpenChange, onImport }: Impo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Importar Leads em Massa</DialogTitle>
           <DialogDescription>
-            Importe leads de arquivos CSV/TXT ou extraia do Google Maps
+            Importe leads de arquivos CSV/TXT ou extraia diretamente do Google Maps
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="csv" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="csv">
-              <FileText className="w-4 h-4 mr-2" />
-              Arquivo CSV/TXT
-            </TabsTrigger>
-            <TabsTrigger value="google-maps">
-              <MapPin className="w-4 h-4 mr-2" />
-              Google Maps
-            </TabsTrigger>
+        <Tabs defaultValue="file" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="file">Arquivo CSV/TXT</TabsTrigger>
+            <TabsTrigger value="google-maps">Google Maps</TabsTrigger>
+            <TabsTrigger value="instructions">Configuração API</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="csv" className="space-y-4">
+          <TabsContent value="file" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm flex items-center">
-                  <Info className="w-4 h-4 mr-2" />
-                  Formato do Arquivo
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="w-5 h-5" />
+                  Importar de Arquivo
                 </CardTitle>
               </CardHeader>
-              <CardContent className="text-sm text-slate-600">
-                <p>O arquivo deve conter as seguintes colunas (separadas por vírgula):</p>
-                <ul className="list-disc list-inside mt-2 space-y-1">
-                  <li><strong>nome</strong> - Nome do contato (obrigatório)</li>
-                  <li><strong>empresa</strong> - Nome da empresa (obrigatório)</li>
-                  <li><strong>telefone</strong> - Telefone de contato (obrigatório)</li>
-                  <li><strong>email</strong> - Email (opcional)</li>
-                  <li><strong>nicho</strong> - Segmento/categoria (opcional)</li>
-                </ul>
-                <p className="mt-2 text-xs">
-                  Exemplo: nome,empresa,telefone,email,nicho
-                </p>
+              <CardContent className="space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-blue-900 mb-2">📋 Formato do Arquivo</h4>
+                  <p className="text-blue-800 text-sm mb-2">
+                    Seu arquivo deve conter as seguintes colunas (separadas por vírgula, ponto-e-vírgula ou tab):
+                  </p>
+                  <ul className="text-blue-800 text-sm space-y-1">
+                    <li>• <strong>Nome</strong> (obrigatório)</li>
+                    <li>• <strong>Telefone</strong> (obrigatório)</li>
+                    <li>• <strong>Empresa</strong> (obrigatório)</li>
+                    <li>• <strong>Email</strong> (opcional)</li>
+                    <li>• <strong>Nicho</strong> (opcional)</li>
+                  </ul>
+                </div>
+
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-green-900 mb-2">✅ Exemplo de CSV</h4>
+                  <code className="text-green-800 text-xs block whitespace-pre-wrap">
+                    Nome,Telefone,Empresa,Email,Nicho{'\n'}
+                    João Silva,(11) 99999-1111,Silva Construções,joao@silva.com,Construção{'\n'}
+                    Maria Santos,(11) 99999-2222,Santos Consultoria,maria@santos.com,Consultoria
+                  </code>
+                </div>
+
+                <div>
+                  <Label htmlFor="file-upload">Selecionar Arquivo</Label>
+                  <Input
+                    id="file-upload"
+                    type="file"
+                    accept=".csv,.txt"
+                    onChange={handleFileImport}
+                    disabled={loading}
+                    className="mt-1"
+                  />
+                </div>
+
+                {loading && (
+                  <div className="flex items-center justify-center py-4">
+                    <LoadingSpinner size="sm" />
+                    <span className="ml-2 text-sm text-slate-600">Processando arquivo...</span>
+                  </div>
+                )}
               </CardContent>
             </Card>
-
-            <div>
-              <Label htmlFor="file-upload">Selecionar Arquivo</Label>
-              <Input
-                id="file-upload"
-                type="file"
-                accept=".csv,.txt"
-                onChange={handleFileUpload}
-                className="mt-1"
-              />
-            </div>
-
-            {fileContent && (
-              <div>
-                <Label>Prévia do Arquivo</Label>
-                <Textarea
-                  value={fileContent.substring(0, 500) + (fileContent.length > 500 ? '...' : '')}
-                  readOnly
-                  className="mt-1 h-32"
-                />
-              </div>
-            )}
-
-            <Button onClick={handleCSVImport} disabled={loading || !fileContent} className="w-full">
-              {loading ? (
-                <LoadingSpinner size="sm" />
-              ) : (
-                <>
-                  <Upload className="w-4 h-4 mr-2" />
-                  Importar Arquivo
-                </>
-              )}
-            </Button>
           </TabsContent>
 
           <TabsContent value="google-maps" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm flex items-center">
-                  <Info className="w-4 h-4 mr-2" />
-                  Extração do Google Maps
+                <CardTitle className="flex items-center gap-2">
+                  <MapPin className="w-5 h-5" />
+                  Extrair do Google Maps (Demonstração)
                 </CardTitle>
               </CardHeader>
-              <CardContent className="text-sm text-slate-600">
-                <p>Esta funcionalidade extrai informações de empresas do Google Maps baseada nos critérios de busca.</p>
-                <p className="mt-2 text-yellow-600">
-                  <strong>Nota:</strong> Esta é uma versão demonstrativa. Em produção, seria necessário configurar APIs apropriadas.
-                </p>
+              <CardContent className="space-y-4">
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="font-semibold text-yellow-900 mb-1">Demonstração</h4>
+                      <p className="text-yellow-800 text-sm">
+                        Esta funcionalidade está em modo demonstração e criará leads de exemplo. 
+                        Para implementação real, é necessário configurar a API do Google Maps.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="api-key">API Key do Google Maps</Label>
+                    <Input
+                      id="api-key"
+                      type="password"
+                      value={googleMapsData.apiKey}
+                      onChange={(e) => setGoogleMapsData(prev => ({ ...prev, apiKey: e.target.value }))}
+                      placeholder="AIzaSy..."
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="category">Categoria/Palavra-chave</Label>
+                    <Input
+                      id="category"
+                      value={googleMapsData.category}
+                      onChange={(e) => setGoogleMapsData(prev => ({ ...prev, category: e.target.value }))}
+                      placeholder="ex: dentista, restaurante, advogado"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="city">Cidade</Label>
+                    <Input
+                      id="city"
+                      value={googleMapsData.city}
+                      onChange={(e) => setGoogleMapsData(prev => ({ ...prev, city: e.target.value }))}
+                      placeholder="ex: São Paulo, SP"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="radius">Raio (km)</Label>
+                    <Input
+                      id="radius"
+                      type="number"
+                      value={googleMapsData.radius}
+                      onChange={(e) => setGoogleMapsData(prev => ({ ...prev, radius: e.target.value }))}
+                      placeholder="5"
+                    />
+                  </div>
+                </div>
+
+                <Button 
+                  onClick={handleGoogleMapsImport} 
+                  disabled={loading}
+                  className="w-full"
+                >
+                  {loading ? (
+                    <LoadingSpinner size="sm" />
+                  ) : (
+                    <>
+                      <MapPin className="w-4 h-4 mr-2" />
+                      Importar do Google Maps (Demo)
+                    </>
+                  )}
+                </Button>
               </CardContent>
             </Card>
+          </TabsContent>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="keyword">Palavra-chave</Label>
-                <Input
-                  id="keyword"
-                  placeholder="Ex: restaurante, loja, clínica"
-                  value={googleMapsData.keyword}
-                  onChange={(e) => setGoogleMapsData(prev => ({ ...prev, keyword: e.target.value }))}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="city">Cidade</Label>
-                <Input
-                  id="city"
-                  placeholder="Ex: São Paulo, SP"
-                  value={googleMapsData.city}
-                  onChange={(e) => setGoogleMapsData(prev => ({ ...prev, city: e.target.value }))}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="radius">Raio (km)</Label>
-                <Select value={googleMapsData.radius} onValueChange={(value) => setGoogleMapsData(prev => ({ ...prev, radius: value }))}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="5">5 km</SelectItem>
-                    <SelectItem value="10">10 km</SelectItem>
-                    <SelectItem value="25">25 km</SelectItem>
-                    <SelectItem value="50">50 km</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="limit">Limite de resultados</Label>
-                <Select value={googleMapsData.limit} onValueChange={(value) => setGoogleMapsData(prev => ({ ...prev, limit: value }))}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="20">20 resultados</SelectItem>
-                    <SelectItem value="50">50 resultados</SelectItem>
-                    <SelectItem value="100">100 resultados</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <Button onClick={handleGoogleMapsImport} disabled={loading} className="w-full">
-              {loading ? (
-                <LoadingSpinner size="sm" />
-              ) : (
-                <>
-                  <MapPin className="w-4 h-4 mr-2" />
-                  Extrair do Google Maps
-                </>
-              )}
-            </Button>
+          <TabsContent value="instructions">
+            <GoogleMapsInstructions />
           </TabsContent>
         </Tabs>
       </DialogContent>

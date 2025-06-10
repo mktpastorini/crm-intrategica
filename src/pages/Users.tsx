@@ -8,9 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { UserPlus, Edit, Trash2, Users as UsersIcon } from 'lucide-react';
+import { UserPlus, Edit, Trash2, UserX, Users as UsersIcon } from 'lucide-react';
 import LoadingSpinner from '@/components/LoadingSpinner';
 
 interface User {
@@ -21,6 +22,7 @@ interface User {
   status: string;
   created_at: string;
   last_login?: string;
+  avatar_url?: string;
 }
 
 export default function Users() {
@@ -162,7 +164,7 @@ export default function Users() {
     setShowAddDialog(true);
   };
 
-  const handleDelete = async (userId: string) => {
+  const handleDeactivate = async (userId: string) => {
     if (!confirm('Tem certeza que deseja desativar este usuário?')) return;
 
     try {
@@ -193,6 +195,43 @@ export default function Users() {
       toast({
         title: "Erro",
         description: error.message || "Erro ao desativar usuário",
+        variant: "destructive",
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDelete = async (userId: string) => {
+    if (!confirm('Tem certeza que deseja EXCLUIR permanentemente este usuário? Esta ação não pode ser desfeita.')) return;
+
+    try {
+      console.log('Excluindo usuário:', userId);
+      setActionLoading(`delete-${userId}`);
+      
+      // Primeiro, exclua o perfil
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', userId);
+
+      if (profileError) {
+        console.error('Erro ao excluir perfil:', profileError);
+        throw profileError;
+      }
+
+      // Remove da lista local
+      setUsers(prev => prev.filter(u => u.id !== userId));
+
+      toast({
+        title: "Usuário excluído",
+        description: "Usuário foi excluído permanentemente",
+      });
+    } catch (error: any) {
+      console.error('Erro ao excluir usuário:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao excluir usuário",
         variant: "destructive",
       });
     } finally {
@@ -337,11 +376,14 @@ export default function Users() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full flex items-center justify-center">
-                    <span className="text-white font-medium">
+                  <Avatar className="w-12 h-12">
+                    {user.avatar_url ? (
+                      <AvatarImage src={user.avatar_url} alt={user.name} />
+                    ) : null}
+                    <AvatarFallback className="bg-gradient-to-r from-blue-400 to-purple-500 text-white font-medium">
                       {user.name.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
+                    </AvatarFallback>
+                  </Avatar>
                   <div>
                     <h3 className="text-lg font-medium text-slate-900">{user.name}</h3>
                     <p className="text-slate-600">{user.email}</p>
@@ -363,11 +405,24 @@ export default function Users() {
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    onClick={() => handleDelete(user.id)}
-                    className="text-red-600 hover:text-red-700"
+                    onClick={() => handleDeactivate(user.id)}
+                    className="text-orange-600 hover:text-orange-700"
                     disabled={actionLoading === user.id}
                   >
                     {actionLoading === user.id ? (
+                      <LoadingSpinner size="sm" />
+                    ) : (
+                      <UserX className="w-4 h-4" />
+                    )}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => handleDelete(user.id)}
+                    className="text-red-600 hover:text-red-700"
+                    disabled={actionLoading === `delete-${user.id}`}
+                  >
+                    {actionLoading === `delete-${user.id}` ? (
                       <LoadingSpinner size="sm" />
                     ) : (
                       <Trash2 className="w-4 h-4" />
