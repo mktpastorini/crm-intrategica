@@ -16,6 +16,7 @@ import Supervision from "./pages/Supervision";
 import Users from "./pages/Users";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
+import Profile from "./pages/Profile";
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import CustomerJourney from "./pages/CustomerJourney";

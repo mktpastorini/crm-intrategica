@@ -114,19 +114,21 @@ export default function WeeklyCalendar({ events, onEditEvent, onDeleteEvent, onA
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="pt-0 px-3 pb-3 space-y-1">
+              <CardContent className="pt-0 px-3 pb-3 space-y-2">
                 {dayEvents.map((event) => (
                   <div key={event.id} className="p-2 bg-slate-50 rounded border border-slate-200">
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1 mb-1">
-                          <Badge className={`${getEventTypeBadge(event.type)} text-xs px-1 py-0`}>
+                        <div className="mb-1">
+                          <Badge className={`${getEventTypeBadge(event.type)} text-xs px-1 py-0 mb-1`}>
                             {getEventTypeLabel(event.type)}
                           </Badge>
-                          <span className="text-xs text-slate-600">{event.time}</span>
                         </div>
                         <p className="text-xs font-medium text-slate-900 truncate mb-1">
                           {event.title}
+                        </p>
+                        <p className="text-xs text-slate-600 mb-1">
+                          {event.time}
                         </p>
                         {event.company && (
                           <p className="text-xs text-slate-500 truncate">

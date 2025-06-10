@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSystemSettingsDB } from '@/hooks/useSystemSettingsDB';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import {
   Calendar,
@@ -57,7 +57,7 @@ export default function Layout({ children }: LayoutProps) {
   const primaryColor = settings.primaryColor || '#1d0029';
 
   return (
-    <div className="h-screen flex flex-col" style={{ backgroundColor: '#faf9fb' }}>
+    <div className="h-screen flex flex-col bg-slate-50">
       {/* Header fixo */}
       <header className="flex-shrink-0 bg-white border-b border-slate-200 shadow-sm z-50">
         <div className="px-6 py-4">
@@ -90,6 +90,9 @@ export default function Layout({ children }: LayoutProps) {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="flex items-center space-x-2">
                     <Avatar className="w-8 h-8">
+                      {profile?.avatar_url ? (
+                        <AvatarImage src={profile.avatar_url} alt={profile.name} />
+                      ) : null}
                       <AvatarFallback style={{ backgroundColor: primaryColor, color: 'white' }}>
                         {profile?.name?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || 'U'}
                       </AvatarFallback>
@@ -105,10 +108,12 @@ export default function Layout({ children }: LayoutProps) {
                     <ChevronDown className="w-4 h-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuItem>
-                    <User className="w-4 h-4 mr-2" />
-                    Perfil
+                <DropdownMenuContent align="end" className="w-56 bg-white">
+                  <DropdownMenuItem asChild>
+                    <Link to="/profile" className="flex items-center">
+                      <User className="w-4 h-4 mr-2" />
+                      Perfil
+                    </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleLogout}>
                     <LogOut className="w-4 h-4 mr-2" />
@@ -123,7 +128,7 @@ export default function Layout({ children }: LayoutProps) {
 
       <div className="flex flex-1 min-h-0">
         {/* Sidebar fixo */}
-        <nav className="flex-shrink-0 w-64 bg-white border-r border-slate-200 shadow-sm">
+        <nav className="flex-shrink-0 w-64 bg-white border-r border-slate-200 shadow-sm overflow-y-auto">
           <div className="p-6">
             <div className="space-y-1">
               {navigation.map((item) => {
@@ -153,8 +158,10 @@ export default function Layout({ children }: LayoutProps) {
         </nav>
 
         {/* Main content com scroll */}
-        <main className="flex-1 min-h-0 overflow-hidden">
-          {children}
+        <main className="flex-1 min-h-0 overflow-auto bg-slate-50">
+          <div className="p-6 h-full">
+            {children}
+          </div>
         </main>
       </div>
     </div>

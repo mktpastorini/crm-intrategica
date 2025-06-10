@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,10 +9,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { UserPlus, Filter, Search, Users as UsersIcon } from 'lucide-react';
+import { UserPlus, Filter, Search, Users as UsersIcon, Upload } from 'lucide-react';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import LeadsTable from '@/components/leads/LeadsTable';
 import UserSelector from '@/components/leads/UserSelector';
+import ImportLeadsDialog from '@/components/leads/ImportLeadsDialog';
+import { usePhoneMask } from '@/hooks/usePhoneMask';
 
 interface Lead {
   id: string;
@@ -30,8 +31,10 @@ interface Lead {
 export default function Leads() {
   const { leads, users, loading, actionLoading, createLead, updateLead, deleteLead, loadLeads, loadUsers } = useCrm();
   const { toast } = useToast();
+  const { handlePhoneChange } = usePhoneMask();
   
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -120,6 +123,24 @@ export default function Leads() {
     });
   };
 
+  const handleImportLeads = async (importedLeads: any[]) => {
+    try {
+      for (const lead of importedLeads) {
+        await createLead(lead);
+      }
+      toast({
+        title: "Importação concluída",
+        description: `${importedLeads.length} leads importados com sucesso`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Erro na importação",
+        description: error.message || "Erro ao importar leads",
+        variant: "destructive",
+      });
+    }
+  };
+
   const filteredLeads = leads.filter(lead => {
     const matchesSearch = 
       lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -147,103 +168,110 @@ export default function Leads() {
           <h2 className="text-2xl font-bold text-slate-900">Leads</h2>
           <p className="text-slate-600">Gerencie seus contatos e oportunidades</p>
         </div>
-        <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-          <DialogTrigger asChild>
-            <Button>
-              <UserPlus className="w-4 h-4 mr-2" />
-              Novo Lead
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>{editingLead ? 'Editar Lead' : 'Novo Lead'}</DialogTitle>
-              <DialogDescription>
-                {editingLead ? 'Edite as informações do lead' : 'Adicione um novo lead ao sistema'}
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <Label htmlFor="name">Nome do Contato</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  required
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setShowImportDialog(true)}>
+            <Upload className="w-4 h-4 mr-2" />
+            Importar em Massa
+          </Button>
+          <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+            <DialogTrigger asChild>
+              <Button>
+                <UserPlus className="w-4 h-4 mr-2" />
+                Novo Lead
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>{editingLead ? 'Editar Lead' : 'Novo Lead'}</DialogTitle>
+                <DialogDescription>
+                  {editingLead ? 'Edite as informações do lead' : 'Adicione um novo lead ao sistema'}
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <Label htmlFor="name">Nome do Contato</Label>
+                  <Input
+                    id="name"
+                    value={formData.name}
+                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="company">Empresa</Label>
+                  <Input
+                    id="company"
+                    value={formData.company}
+                    onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="phone">Telefone</Label>
+                  <Input
+                    id="phone"
+                    value={formData.phone}
+                    onChange={(e) => handlePhoneChange(e.target.value, (value) => setFormData(prev => ({ ...prev, phone: value })))}
+                    required
+                    placeholder="(11) 99999-9999"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="email">Email (opcional)</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="niche">Nicho</Label>
+                  <Input
+                    id="niche"
+                    value={formData.niche}
+                    onChange={(e) => setFormData(prev => ({ ...prev, niche: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="status">Status</Label>
+                  <Select value={formData.status} onValueChange={(value) => setFormData(prev => ({ ...prev, status: value }))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="novo">Novo</SelectItem>
+                      <SelectItem value="contatado">Contatado</SelectItem>
+                      <SelectItem value="qualificado">Qualificado</SelectItem>
+                      <SelectItem value="proposta">Proposta</SelectItem>
+                      <SelectItem value="fechado">Fechado</SelectItem>
+                      <SelectItem value="perdido">Perdido</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <UserSelector
+                  users={users}
+                  value={formData.responsible_id}
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, responsible_id: value }))}
+                  placeholder="Selecionar responsável"
                 />
-              </div>
-              <div>
-                <Label htmlFor="company">Empresa</Label>
-                <Input
-                  id="company"
-                  value={formData.company}
-                  onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="phone">Telefone</Label>
-                <Input
-                  id="phone"
-                  value={formData.phone}
-                  onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="email">Email (opcional)</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                />
-              </div>
-              <div>
-                <Label htmlFor="niche">Nicho</Label>
-                <Input
-                  id="niche"
-                  value={formData.niche}
-                  onChange={(e) => setFormData(prev => ({ ...prev, niche: e.target.value }))}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="status">Status</Label>
-                <Select value={formData.status} onValueChange={(value) => setFormData(prev => ({ ...prev, status: value }))}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="novo">Novo</SelectItem>
-                    <SelectItem value="contatado">Contatado</SelectItem>
-                    <SelectItem value="qualificado">Qualificado</SelectItem>
-                    <SelectItem value="proposta">Proposta</SelectItem>
-                    <SelectItem value="fechado">Fechado</SelectItem>
-                    <SelectItem value="perdido">Perdido</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <UserSelector
-                users={users}
-                value={formData.responsible_id}
-                onValueChange={(value) => setFormData(prev => ({ ...prev, responsible_id: value }))}
-                placeholder="Selecionar responsável"
-              />
-              <div className="flex gap-2 pt-4">
-                <Button type="submit" className="flex-1" disabled={actionLoading === 'create-lead' || actionLoading === 'submit'}>
-                  {(actionLoading === 'create-lead' || actionLoading === 'submit') ? (
-                    <LoadingSpinner size="sm" />
-                  ) : (
-                    editingLead ? 'Atualizar' : 'Criar Lead'
-                  )}
-                </Button>
-                <Button type="button" variant="outline" onClick={handleCloseDialog} className="flex-1">
-                  Cancelar
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+                <div className="flex gap-2 pt-4">
+                  <Button type="submit" className="flex-1" disabled={actionLoading === 'create-lead' || actionLoading === 'submit'}>
+                    {(actionLoading === 'create-lead' || actionLoading === 'submit') ? (
+                      <LoadingSpinner size="sm" />
+                    ) : (
+                      editingLead ? 'Atualizar' : 'Criar Lead'
+                    )}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={handleCloseDialog} className="flex-1">
+                    Cancelar
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Filtros */}
@@ -353,6 +381,12 @@ export default function Leads() {
           </CardContent>
         </Card>
       )}
+
+      <ImportLeadsDialog
+        open={showImportDialog}
+        onOpenChange={setShowImportDialog}
+        onImport={handleImportLeads}
+      />
     </div>
   );
 }
