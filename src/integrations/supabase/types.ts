@@ -150,6 +150,7 @@ export type Database = {
         Row: {
           created_at: string
           favicon_url: string | null
+          google_maps_api_key: string | null
           id: string
           journey_webhook_url: string | null
           logo_url: string | null
@@ -163,6 +164,7 @@ export type Database = {
         Insert: {
           created_at?: string
           favicon_url?: string | null
+          google_maps_api_key?: string | null
           id?: string
           journey_webhook_url?: string | null
           logo_url?: string | null
@@ -176,6 +178,7 @@ export type Database = {
         Update: {
           created_at?: string
           favicon_url?: string | null
+          google_maps_api_key?: string | null
           id?: string
           journey_webhook_url?: string | null
           logo_url?: string | null
