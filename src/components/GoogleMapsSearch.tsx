@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { MapPin, Search, Import, Users, ExternalLink } from 'lucide-react';
+import { MapPin, Search, Import, Users, ExternalLink, AlertCircle } from 'lucide-react';
 import LoadingSpinner from '@/components/LoadingSpinner';
 
 interface GoogleMapsLead {
@@ -25,6 +25,14 @@ interface GoogleMapsSearchProps {
   onImport: (leads: any[]) => Promise<void>;
 }
 
+// Declare global google object
+declare global {
+  interface Window {
+    google: any;
+    initGoogleMaps: () => void;
+  }
+}
+
 export default function GoogleMapsSearch({ apiKey, onImport }: GoogleMapsSearchProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -35,6 +43,30 @@ export default function GoogleMapsSearch({ apiKey, onImport }: GoogleMapsSearchP
   });
   const [results, setResults] = useState<GoogleMapsLead[]>([]);
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
+  const [googleMapsLoaded, setGoogleMapsLoaded] = useState(false);
+
+  // Load Google Maps API
+  const loadGoogleMapsAPI = () => {
+    if (window.google) {
+      setGoogleMapsLoaded(true);
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        setGoogleMapsLoaded(true);
+        resolve(true);
+      };
+      script.onerror = () => {
+        reject(new Error('Erro ao carregar Google Maps API'));
+      };
+      document.head.appendChild(script);
+    });
+  };
 
   const searchPlaces = async () => {
     if (!searchData.query || !searchData.location) {
@@ -48,36 +80,55 @@ export default function GoogleMapsSearch({ apiKey, onImport }: GoogleMapsSearchP
 
     try {
       setLoading(true);
+      console.log('Carregando Google Maps API...');
+      
+      await loadGoogleMapsAPI();
+      
       console.log('Buscando lugares no Google Maps...', searchData);
       
-      // Busca de lugares usando a API do Google Places
-      const searchQuery = `${searchData.query} in ${searchData.location}`;
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchQuery)}&radius=${searchData.radius}&key=${apiKey}`,
-        {
-          method: 'GET',
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Erro na busca do Google Maps');
-      }
-
-      const data = await response.json();
+      // Criar um mapa temporário (invisível) para usar o PlacesService
+      const map = new window.google.maps.Map(document.createElement('div'));
+      const service = new window.google.maps.places.PlacesService(map);
       
-      if (data.status !== 'OK') {
-        throw new Error(data.error_message || 'Erro na API do Google Maps');
-      }
+      // Configurar request para busca de texto
+      const request = {
+        query: `${searchData.query} ${searchData.location}`,
+        fields: ['place_id', 'name', 'formatted_address', 'formatted_phone_number', 'website', 'rating', 'business_status']
+      };
 
-      console.log('Resultados encontrados:', data.results?.length || 0);
-      setResults(data.results || []);
+      // Fazer a busca
+      service.textSearch(request, (results: any[], status: any) => {
+        if (status === window.google.maps.places.PlacesServiceStatus.OK && results) {
+          console.log('Resultados encontrados:', results.length);
+          
+          const formattedResults = results.map(place => ({
+            place_id: place.place_id,
+            name: place.name,
+            formatted_address: place.formatted_address,
+            phone: place.formatted_phone_number || '',
+            website: place.website || '',
+            rating: place.rating || 0,
+            business_status: place.business_status || 'OPERATIONAL'
+          }));
+          
+          setResults(formattedResults);
 
-      if (!data.results || data.results.length === 0) {
-        toast({
-          title: "Nenhum resultado",
-          description: "Nenhum estabelecimento encontrado com os critérios informados",
-        });
-      }
+          if (formattedResults.length === 0) {
+            toast({
+              title: "Nenhum resultado",
+              description: "Nenhum estabelecimento encontrado com os critérios informados",
+            });
+          }
+        } else {
+          console.error('Erro na busca:', status);
+          toast({
+            title: "Erro na busca",
+            description: "Erro ao buscar no Google Maps. Verifique a chave da API e tente novamente.",
+            variant: "destructive",
+          });
+        }
+        setLoading(false);
+      });
     } catch (error: any) {
       console.error('Erro na busca:', error);
       toast({
@@ -85,7 +136,6 @@ export default function GoogleMapsSearch({ apiKey, onImport }: GoogleMapsSearchP
         description: error.message || "Erro ao buscar no Google Maps. Verifique a chave da API.",
         variant: "destructive",
       });
-    } finally {
       setLoading(false);
     }
   };
@@ -145,6 +195,17 @@ export default function GoogleMapsSearch({ apiKey, onImport }: GoogleMapsSearchP
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {!googleMapsLoaded && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-blue-600" />
+                <p className="text-blue-800 text-sm">
+                  A API do Google Maps será carregada automaticamente quando você fizer a primeira busca.
+                </p>
+              </div>
+            </div>
+          )}
+          
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="query">Palavra-chave/Categoria</Label>

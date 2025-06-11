@@ -88,14 +88,14 @@ export default function WeeklyCalendar({ events, onEditEvent, onDeleteEvent, onA
         </div>
       </div>
 
-      {/* Grid do calendário semanal com espaçamento reduzido */}
+      {/* Grid do calendário semanal */}
       <div className="grid grid-cols-7 gap-2">
         {weekDays.map((day, index) => {
           const dayEvents = getEventsForDay(day);
           const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
           
           return (
-            <Card key={index} className={`min-h-[200px] ${isToday(day) ? 'ring-2 ring-blue-500' : ''}`}>
+            <Card key={index} className={`min-h-[250px] ${isToday(day) ? 'ring-2 ring-blue-500' : ''}`}>
               <CardHeader className="pb-2 px-3 py-2">
                 <div className="flex items-center justify-between">
                   <div>
@@ -116,49 +116,55 @@ export default function WeeklyCalendar({ events, onEditEvent, onDeleteEvent, onA
               </CardHeader>
               <CardContent className="pt-0 px-3 pb-3 space-y-2">
                 {dayEvents.map((event) => (
-                  <div key={event.id} className="p-2 bg-slate-50 rounded border border-slate-200">
-                    <div className="flex items-start justify-between">
+                  <div key={event.id} className="p-3 bg-slate-50 rounded border border-slate-200">
+                    <div className="flex items-start justify-between mb-2">
                       <div className="flex-1 min-w-0">
-                        <div className="mb-1">
-                          <Badge className={`${getEventTypeBadge(event.type)} text-xs px-1 py-0 mb-1`}>
-                            {getEventTypeLabel(event.type)}
-                          </Badge>
-                        </div>
-                        <p className="text-xs font-medium text-slate-900 truncate mb-1">
-                          {event.title}
-                        </p>
-                        <p className="text-xs text-slate-600 mb-1">
-                          {event.time}
-                        </p>
-                        {event.company && (
-                          <p className="text-xs text-slate-500 truncate">
-                            {event.company}
-                          </p>
-                        )}
+                        <Badge className={`${getEventTypeBadge(event.type)} text-xs px-2 py-1 mb-2`}>
+                          {getEventTypeLabel(event.type)}
+                        </Badge>
                       </div>
-                      <div className="flex space-x-1 ml-1">
+                      <div className="flex space-x-1 ml-2">
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => onEditEvent(event)}
-                          className="h-4 w-4 p-0"
+                          className="h-6 w-6 p-0"
                         >
-                          <Edit className="w-2.5 h-2.5" />
+                          <Edit className="w-3 h-3" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => onDeleteEvent(event.id)}
-                          className="h-4 w-4 p-0 text-red-600 hover:text-red-700"
+                          className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
                         >
-                          <Trash2 className="w-2.5 h-2.5" />
+                          <Trash2 className="w-3 h-3" />
                         </Button>
                       </div>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-slate-900 leading-tight">
+                        {event.title}
+                      </p>
+                      <p className="text-xs text-slate-600 font-medium">
+                        {event.time}
+                      </p>
+                      {event.lead_name && (
+                        <p className="text-xs text-slate-700 leading-tight">
+                          <span className="font-medium">Contato:</span> {event.lead_name}
+                        </p>
+                      )}
+                      {event.company && (
+                        <p className="text-xs text-slate-600 leading-tight">
+                          <span className="font-medium">Empresa:</span> {event.company}
+                        </p>
+                      )}
                     </div>
                   </div>
                 ))}
                 {dayEvents.length === 0 && (
-                  <p className="text-xs text-slate-400 text-center py-4">
+                  <p className="text-xs text-slate-400 text-center py-6">
                     Nenhum evento
                   </p>
                 )}
