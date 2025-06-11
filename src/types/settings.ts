@@ -1,5 +1,4 @@
 
-
 export interface SystemSettings {
   id?: string;
   systemName: string;
@@ -18,6 +17,7 @@ export interface SystemSettings {
   dbName: string;
   dbUser: string;
   dbPassword: string;
+  google_maps_api_key?: string;
 }
 
 export const statusOptions = [
@@ -29,4 +29,3 @@ export const statusOptions = [
   { value: 'Fechado', label: 'Fechado', color: '#10b981' },
   { value: 'Perdido', label: 'Perdido', color: '#64748b' }
 ];
-

@@ -20,7 +20,8 @@ const defaultSettings: SystemSettings = {
   dbPort: '',
   dbName: '',
   dbUser: '',
-  dbPassword: ''
+  dbPassword: '',
+  google_maps_api_key: ''
 };
 
 export function useSystemSettingsDB() {
@@ -54,6 +55,7 @@ export function useSystemSettingsDB() {
           webhookUrl: data.webhook_url || '',
           messageWebhookUrl: data.message_webhook_url || '',
           journeyWebhookUrl: data.journey_webhook_url || '',
+          google_maps_api_key: data.google_maps_api_key || '',
           dbUrl: '',
           dbAnonKey: '',
           dbServiceRoleKey: '',
@@ -88,6 +90,7 @@ export function useSystemSettingsDB() {
       if ('webhookUrl' in updates) dbUpdates.webhook_url = updates.webhookUrl;
       if ('messageWebhookUrl' in updates) dbUpdates.message_webhook_url = updates.messageWebhookUrl;
       if ('journeyWebhookUrl' in updates) dbUpdates.journey_webhook_url = updates.journeyWebhookUrl;
+      if ('google_maps_api_key' in updates) dbUpdates.google_maps_api_key = updates.google_maps_api_key;
 
       let result;
       
