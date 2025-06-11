@@ -125,14 +125,38 @@ export default function Leads() {
 
   const handleImportLeads = async (importedLeads: any[]) => {
     try {
-      for (const lead of importedLeads) {
-        await createLead(lead);
+      // Get the first available user as default responsible
+      const defaultUser = users.length > 0 ? users[0] : null;
+      
+      if (!defaultUser) {
+        toast({
+          title: "Erro na importação",
+          description: "Nenhum usuário disponível para atribuir os leads. Cadastre um usuário primeiro.",
+          variant: "destructive",
+        });
+        return;
       }
+
+      for (const lead of importedLeads) {
+        // Ensure required fields are present
+        const leadData = {
+          ...lead,
+          responsible_id: lead.responsible_id || defaultUser.id,
+          phone: lead.phone || '',
+          company: lead.company || lead.name || 'Empresa não informada',
+          niche: lead.niche || 'Google Maps'
+        };
+        
+        console.log('Importando lead:', leadData);
+        await createLead(leadData);
+      }
+      
       toast({
         title: "Importação concluída",
         description: `${importedLeads.length} leads importados com sucesso`,
       });
     } catch (error: any) {
+      console.error('Erro na importação:', error);
       toast({
         title: "Erro na importação",
         description: error.message || "Erro ao importar leads",

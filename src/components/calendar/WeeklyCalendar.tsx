@@ -119,7 +119,7 @@ export default function WeeklyCalendar({ events, onEditEvent, onDeleteEvent, onA
                   <div key={event.id} className="p-3 bg-slate-50 rounded border border-slate-200">
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex-1 min-w-0">
-                        <Badge className={`${getEventTypeBadge(event.type)} text-xs px-2 py-1 mb-2`}>
+                        <Badge className={`${getEventTypeBadge(event.type)} text-xs px-2 py-1 mb-1`}>
                           {getEventTypeLabel(event.type)}
                         </Badge>
                       </div>
@@ -144,9 +144,9 @@ export default function WeeklyCalendar({ events, onEditEvent, onDeleteEvent, onA
                     </div>
                     
                     <div className="space-y-1">
-                      <p className="text-sm font-semibold text-slate-900 leading-tight">
+                      <h4 className="text-sm font-semibold text-slate-900 leading-tight">
                         {event.title}
-                      </p>
+                      </h4>
                       <p className="text-xs text-slate-600 font-medium">
                         {event.time}
                       </p>
