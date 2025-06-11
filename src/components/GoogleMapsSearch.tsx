@@ -18,6 +18,7 @@ interface GoogleMapsLead {
   website?: string;
   rating?: number;
   business_status: string;
+  international_phone_number?: string;
 }
 
 interface GoogleMapsSearchProps {
@@ -36,6 +37,7 @@ declare global {
 export default function GoogleMapsSearch({ apiKey, onImport }: GoogleMapsSearchProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [importLoading, setImportLoading] = useState(false);
   const [searchData, setSearchData] = useState({
     query: '',
     location: '',
@@ -93,7 +95,7 @@ export default function GoogleMapsSearch({ apiKey, onImport }: GoogleMapsSearchP
       // Configurar request para busca de texto
       const request = {
         query: `${searchData.query} ${searchData.location}`,
-        fields: ['place_id', 'name', 'formatted_address', 'formatted_phone_number', 'website', 'rating', 'business_status']
+        fields: ['place_id', 'name', 'formatted_address', 'formatted_phone_number', 'international_phone_number', 'website', 'rating', 'business_status']
       };
 
       // Fazer a busca
@@ -105,10 +107,11 @@ export default function GoogleMapsSearch({ apiKey, onImport }: GoogleMapsSearchP
             place_id: place.place_id,
             name: place.name,
             formatted_address: place.formatted_address,
-            phone: place.formatted_phone_number || '',
+            phone: place.formatted_phone_number || place.international_phone_number || '',
             website: place.website || '',
             rating: place.rating || 0,
-            business_status: place.business_status || 'OPERATIONAL'
+            business_status: place.business_status || 'OPERATIONAL',
+            international_phone_number: place.international_phone_number || ''
           }));
           
           setResults(formattedResults);
@@ -157,21 +160,7 @@ export default function GoogleMapsSearch({ apiKey, onImport }: GoogleMapsSearchP
   };
 
   const handleImportSelected = async () => {
-    const leadsToImport = results
-      .filter(result => selectedLeads.includes(result.place_id))
-      .map(result => ({
-        name: result.name,
-        company: result.name,
-        phone: result.phone || '',
-        email: '',
-        niche: searchData.query,
-        status: 'novo',
-        address: result.formatted_address,
-        website: result.website || '',
-        rating: result.rating || 0
-      }));
-
-    if (leadsToImport.length === 0) {
+    if (selectedLeads.length === 0) {
       toast({
         title: "Erro",
         description: "Selecione pelo menos um lead para importar",
@@ -180,9 +169,61 @@ export default function GoogleMapsSearch({ apiKey, onImport }: GoogleMapsSearchP
       return;
     }
 
-    await onImport(leadsToImport);
-    setResults([]);
-    setSelectedLeads([]);
+    try {
+      setImportLoading(true);
+      
+      const leadsToImport = results
+        .filter(result => selectedLeads.includes(result.place_id))
+        .map(result => {
+          // Limpar e formatar o telefone
+          let cleanPhone = '';
+          if (result.phone) {
+            // Remove caracteres especiais e espaços, mantém apenas números
+            cleanPhone = result.phone.replace(/[^\d]/g, '');
+            // Se o telefone brasileiro não tem código do país, adiciona +55
+            if (cleanPhone.length === 11 && cleanPhone.startsWith('11')) {
+              cleanPhone = `+55${cleanPhone}`;
+            } else if (cleanPhone.length === 10) {
+              cleanPhone = `+55${cleanPhone}`;
+            }
+          }
+
+          return {
+            name: result.name || 'Nome não informado',
+            company: result.name || 'Empresa não informada',
+            phone: cleanPhone,
+            email: '', // Google Maps não fornece email através da API
+            niche: searchData.query || 'Google Maps',
+            status: 'novo',
+            address: result.formatted_address || '',
+            website: result.website || '',
+            rating: result.rating || 0,
+            place_id: result.place_id
+          };
+        });
+
+      console.log('Leads preparados para importação:', leadsToImport);
+
+      await onImport(leadsToImport);
+      
+      // Limpar seleções após importação bem-sucedida
+      setResults([]);
+      setSelectedLeads([]);
+      
+      toast({
+        title: "Sucesso",
+        description: `${leadsToImport.length} leads importados com sucesso`,
+      });
+    } catch (error: any) {
+      console.error('Erro na importação:', error);
+      toast({
+        title: "Erro na importação",
+        description: error.message || "Erro ao importar leads",
+        variant: "destructive",
+      });
+    } finally {
+      setImportLoading(false);
+    }
   };
 
   return (
@@ -261,9 +302,15 @@ export default function GoogleMapsSearch({ apiKey, onImport }: GoogleMapsSearchP
                 <Button variant="outline" size="sm" onClick={handleSelectAll}>
                   {selectedLeads.length === results.length ? 'Desmarcar Todos' : 'Selecionar Todos'}
                 </Button>
-                <Button onClick={handleImportSelected} disabled={selectedLeads.length === 0}>
-                  <Import className="w-4 h-4 mr-2" />
-                  Importar Selecionados ({selectedLeads.length})
+                <Button onClick={handleImportSelected} disabled={selectedLeads.length === 0 || importLoading}>
+                  {importLoading ? (
+                    <LoadingSpinner size="sm" />
+                  ) : (
+                    <>
+                      <Import className="w-4 h-4 mr-2" />
+                      Importar Selecionados ({selectedLeads.length})
+                    </>
+                  )}
                 </Button>
               </div>
             </CardTitle>
@@ -278,8 +325,8 @@ export default function GoogleMapsSearch({ apiKey, onImport }: GoogleMapsSearchP
                   />
                   <div className="flex-1">
                     <h4 className="font-medium text-slate-900">{result.name}</h4>
-                    <p className="text-sm text-slate-600">{result.formatted_address}</p>
-                    <div className="flex items-center gap-2 mt-1">
+                    <p className="text-sm text-slate-600 mb-2">{result.formatted_address}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
                       {result.phone && (
                         <Badge variant="outline" className="text-xs">
                           📞 {result.phone}
