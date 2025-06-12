@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
@@ -9,6 +8,7 @@ import DatabaseSettings from '@/components/settings/DatabaseSettings';
 import AppearanceSettings from '@/components/settings/AppearanceSettings';
 import CategorySettings from '@/components/settings/CategorySettings';
 import GoogleMapsSettings from '@/components/settings/GoogleMapsSettings';
+import ApiDocumentation from '@/components/settings/ApiDocumentation';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 export default function Settings() {
@@ -63,7 +63,7 @@ export default function Settings() {
       </div>
 
       <Tabs defaultValue="general" className="space-y-6">
-        <TabsList className={`grid w-full ${isMobile ? 'grid-cols-3' : 'grid-cols-6'} ${isMobile ? 'gap-1' : ''}`}>
+        <TabsList className={`grid w-full ${isMobile ? 'grid-cols-3' : 'grid-cols-7'} ${isMobile ? 'gap-1' : ''}`}>
           <TabsTrigger value="general" className={isMobile ? 'text-xs px-2' : ''}>
             {isMobile ? 'Geral' : 'Geral'}
           </TabsTrigger>
@@ -76,10 +76,11 @@ export default function Settings() {
           {!isMobile && <TabsTrigger value="appearance">Aparência</TabsTrigger>}
           {!isMobile && <TabsTrigger value="categories">Categorias</TabsTrigger>}
           {!isMobile && <TabsTrigger value="googlemaps">Google Maps</TabsTrigger>}
+          {!isMobile && <TabsTrigger value="api-docs">API</TabsTrigger>}
         </TabsList>
 
         {isMobile && (
-          <TabsList className="grid w-full grid-cols-3 gap-1 mt-2">
+          <TabsList className="grid w-full grid-cols-4 gap-1 mt-2">
             <TabsTrigger value="appearance" className="text-xs px-2">
               Aparência
             </TabsTrigger>
@@ -88,6 +89,9 @@ export default function Settings() {
             </TabsTrigger>
             <TabsTrigger value="googlemaps" className="text-xs px-2">
               Maps
+            </TabsTrigger>
+            <TabsTrigger value="api-docs" className="text-xs px-2">
+              API
             </TabsTrigger>
           </TabsList>
         )}
@@ -133,6 +137,10 @@ export default function Settings() {
             onInputChange={handleInputChange}
             onSave={handleSaveGoogleMaps}
           />
+        </TabsContent>
+
+        <TabsContent value="api-docs">
+          <ApiDocumentation />
         </TabsContent>
       </Tabs>
     </div>
