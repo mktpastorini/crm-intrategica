@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,17 +20,15 @@ interface Lead {
   id: string;
   name: string;
   company: string;
-  email: string;
+  email: string | null;
   phone: string;
-  whatsapp: string;
+  whatsapp: string | null;
   status: string;
   created_at: string;
   updated_at: string;
   responsible_id: string;
-  last_contact: string | null;
-  source: string;
-  website: string;
-  address: string;
+  website: string | null;
+  address: string | null;
   niche: string;
   pipeline_stage: string | null;
   rating: number | null;
@@ -128,7 +125,7 @@ export default function Leads() {
       filtered = filtered.filter(lead => 
         lead.name.toLowerCase().includes(term) || 
         lead.company.toLowerCase().includes(term) || 
-        lead.email.toLowerCase().includes(term) ||
+        (lead.email && lead.email.toLowerCase().includes(term)) ||
         lead.phone.includes(term)
       );
     }
@@ -153,14 +150,13 @@ export default function Leads() {
         .insert([{
           name: leadData.name || '',
           company: leadData.company || '',
-          email: leadData.email || '',
+          email: leadData.email || null,
           phone: leadData.phone || '',
-          whatsapp: leadData.whatsapp || '',
+          whatsapp: leadData.whatsapp || null,
           status: leadData.status || 'novo',
           responsible_id: leadData.responsible_id || '',
-          source: leadData.source || '',
-          website: leadData.website || '',
-          address: leadData.address || '',
+          website: leadData.website || null,
+          address: leadData.address || null,
           niche: leadData.niche || '',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -261,14 +257,13 @@ export default function Leads() {
       const leadsWithTimestamp = importedLeads.map(lead => ({
         name: lead.name || '',
         company: lead.company || '',
-        email: lead.email || '',
+        email: lead.email || null,
         phone: lead.phone || '',
-        whatsapp: lead.whatsapp || '',
+        whatsapp: lead.whatsapp || null,
         status: 'novo',
         responsible_id: lead.responsible_id || '',
-        source: lead.source || '',
-        website: lead.website || '',
-        address: lead.address || '',
+        website: lead.website || null,
+        address: lead.address || null,
         niche: lead.niche || '',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -301,17 +296,16 @@ export default function Leads() {
 
   const exportLeads = () => {
     const csvContent = [
-      ['Nome', 'Empresa', 'Email', 'Telefone', 'WhatsApp', 'Status', 'Origem', 'Website', 'Endereço', 'Data de Criação'].join(','),
+      ['Nome', 'Empresa', 'Email', 'Telefone', 'WhatsApp', 'Status', 'Website', 'Endereço', 'Data de Criação'].join(','),
       ...filteredLeads.map(lead => [
         lead.name,
         lead.company,
-        lead.email,
+        lead.email || '',
         lead.phone,
-        lead.whatsapp,
+        lead.whatsapp || '',
         lead.status,
-        lead.source,
-        lead.website,
-        lead.address,
+        lead.website || '',
+        lead.address || '',
         new Date(lead.created_at).toLocaleDateString('pt-BR')
       ].join(','))
     ].join('\n');

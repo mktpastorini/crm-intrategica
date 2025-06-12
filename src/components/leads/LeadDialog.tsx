@@ -13,17 +13,15 @@ interface Lead {
   id: string;
   name: string;
   company: string;
-  email: string;
+  email: string | null;
   phone: string;
-  whatsapp: string;
+  whatsapp: string | null;
   status: string;
   created_at: string;
   updated_at: string;
   responsible_id: string;
-  last_contact: string | null;
-  source: string;
-  website: string;
-  address: string;
+  website: string | null;
+  address: string | null;
   niche: string;
   pipeline_stage: string | null;
   rating: number | null;
@@ -58,7 +56,6 @@ export default function LeadDialog({ open, onOpenChange, lead, onSave, onClose, 
     whatsapp: '',
     status: 'novo',
     responsible_id: '',
-    source: '',
     website: '',
     address: '',
     niche: ''
@@ -76,7 +73,6 @@ export default function LeadDialog({ open, onOpenChange, lead, onSave, onClose, 
         whatsapp: lead.whatsapp || '',
         status: lead.status || 'novo',
         responsible_id: lead.responsible_id || '',
-        source: lead.source || '',
         website: lead.website || '',
         address: lead.address || '',
         niche: lead.niche || ''
@@ -90,7 +86,6 @@ export default function LeadDialog({ open, onOpenChange, lead, onSave, onClose, 
         whatsapp: '',
         status: 'novo',
         responsible_id: '',
-        source: '',
         website: '',
         address: '',
         niche: ''
@@ -223,15 +218,6 @@ export default function LeadDialog({ open, onOpenChange, lead, onSave, onClose, 
                 value={formData.niche}
                 onChange={(e) => setFormData({ ...formData, niche: e.target.value })}
                 required
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="source">Origem</Label>
-              <Input
-                id="source"
-                value={formData.source}
-                onChange={(e) => setFormData({ ...formData, source: e.target.value })}
               />
             </div>
             
