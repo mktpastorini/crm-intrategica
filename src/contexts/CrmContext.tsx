@@ -14,6 +14,11 @@ interface Lead {
   responsible_id: string;
   created_at: string;
   updated_at: string;
+  website?: string;
+  address?: string;
+  rating?: number;
+  place_id?: string;
+  whatsapp?: string;
 }
 
 interface Event {
