@@ -177,8 +177,8 @@ export default function Layout({ children }: LayoutProps) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56 bg-white">
-                  <DropdownMenuItem>
-                    <Link to="/profile" className="flex items-center w-full">
+                  <DropdownMenuItem asChild>
+                    <Link to="/profile" className="flex items-center">
                       <User className="w-4 h-4 mr-2" />
                       Perfil
                     </Link>

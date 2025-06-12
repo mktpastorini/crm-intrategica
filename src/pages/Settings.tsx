@@ -61,13 +61,13 @@ export default function Settings() {
       </div>
 
       <Tabs defaultValue="general" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-6 gap-1">
-          <TabsTrigger value="general" className="text-xs md:text-sm">Geral</TabsTrigger>
-          <TabsTrigger value="webhooks" className="text-xs md:text-sm">Webhooks</TabsTrigger>
-          <TabsTrigger value="database" className="text-xs md:text-sm">Banco</TabsTrigger>
-          <TabsTrigger value="appearance" className="text-xs md:text-sm">Aparência</TabsTrigger>
-          <TabsTrigger value="categories" className="text-xs md:text-sm">Categorias</TabsTrigger>
-          <TabsTrigger value="googlemaps" className="text-xs md:text-sm">Maps</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-6">
+          <TabsTrigger value="general">Geral</TabsTrigger>
+          <TabsTrigger value="webhooks">Webhooks</TabsTrigger>
+          <TabsTrigger value="database">Banco de Dados</TabsTrigger>
+          <TabsTrigger value="appearance">Aparência</TabsTrigger>
+          <TabsTrigger value="categories">Categorias</TabsTrigger>
+          <TabsTrigger value="googlemaps">Google Maps</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general">

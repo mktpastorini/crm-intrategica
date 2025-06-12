@@ -1,86 +1,95 @@
 
 import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Upload, FileText, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { Upload, FileText, MapPin, AlertCircle } from 'lucide-react';
+import { useSystemSettingsDB } from '@/hooks/useSystemSettingsDB';
+import GoogleMapsInstructions from '@/components/GoogleMapsInstructions';
+import GoogleMapsSearch from '@/components/GoogleMapsSearch';
 import LoadingSpinner from '@/components/LoadingSpinner';
 
 interface ImportLeadsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onImport: (leads: any[]) => void;
+  onImport: (leads: any[]) => Promise<void>;
 }
 
 export default function ImportLeadsDialog({ open, onOpenChange, onImport }: ImportLeadsDialogProps) {
-  const [loading, setLoading] = useState(false);
-  const [importType, setImportType] = useState<'csv' | 'text'>('csv');
-  const [textData, setTextData] = useState('');
   const { toast } = useToast();
+  const { settings } = useSystemSettingsDB();
+  const [loading, setLoading] = useState(false);
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
+    if (!file.name.match(/\.(csv|txt)$/i)) {
       toast({
         title: "Erro",
-        description: "Por favor, selecione um arquivo CSV válido",
+        description: "Apenas arquivos CSV ou TXT são permitidos",
         variant: "destructive",
       });
       return;
     }
 
-    setLoading(true);
     try {
+      setLoading(true);
       const text = await file.text();
       const lines = text.split('\n').filter(line => line.trim());
-      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
       
-      const leads = lines.slice(1).map(line => {
-        const values = line.split(',').map(v => v.trim());
-        const lead: any = {};
-        
-        headers.forEach((header, index) => {
-          const value = values[index] || '';
-          
-          // Map CSV headers to lead fields
-          if (header.includes('nome') || header.includes('name')) {
-            lead.name = value;
-          } else if (header.includes('empresa') || header.includes('company')) {
-            lead.company = value;
-          } else if (header.includes('email')) {
-            lead.email = value;
-          } else if (header.includes('telefone') || header.includes('phone')) {
-            lead.phone = value;
-          } else if (header.includes('whatsapp')) {
-            lead.whatsapp = value;
-          } else if (header.includes('site') || header.includes('website')) {
-            lead.website = value;
-          } else if (header.includes('endereco') || header.includes('address')) {
-            lead.address = value;
-          }
+      if (lines.length < 2) {
+        toast({
+          title: "Erro",
+          description: "O arquivo deve conter pelo menos uma linha de cabeçalho e uma linha de dados",
+          variant: "destructive",
         });
-        
-        return lead;
-      }).filter(lead => lead.name || lead.email);
+        return;
+      }
 
-      onImport(leads);
-      onOpenChange(false);
-      
+      // Parse CSV/TXT
+      const headers = lines[0].split(/[,;\t]/).map(h => h.trim().toLowerCase());
+      const leads = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(/[,;\t]/).map(v => v.trim());
+        if (values.length >= 3) { // Mínimo: nome, telefone, empresa
+          const lead = {
+            name: values[headers.indexOf('nome') || headers.indexOf('name') || 0] || `Lead ${i}`,
+            phone: values[headers.indexOf('telefone') || headers.indexOf('phone') || 1] || '',
+            company: values[headers.indexOf('empresa') || headers.indexOf('company') || 2] || '',
+            email: values[headers.indexOf('email') || headers.indexOf('e-mail')] || '',
+            niche: values[headers.indexOf('nicho') || headers.indexOf('niche')] || 'Importado',
+            status: 'novo'
+          };
+          leads.push(lead);
+        }
+      }
+
+      if (leads.length === 0) {
+        toast({
+          title: "Erro",
+          description: "Nenhum lead válido encontrado no arquivo",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      await onImport(leads);
       toast({
-        title: "Importação concluída",
-        description: `${leads.length} leads foram importados com sucesso`,
+        title: "Sucesso",
+        description: `${leads.length} leads importados com sucesso`,
       });
+      onOpenChange(false);
     } catch (error) {
-      console.error('Erro ao processar arquivo:', error);
+      console.error('Erro ao importar arquivo:', error);
       toast({
         title: "Erro",
-        description: "Erro ao processar o arquivo CSV",
+        description: "Erro ao processar o arquivo",
         variant: "destructive",
       });
     } finally {
@@ -88,163 +97,132 @@ export default function ImportLeadsDialog({ open, onOpenChange, onImport }: Impo
     }
   };
 
-  const handleTextImport = () => {
-    if (!textData.trim()) {
-      toast({
-        title: "Erro",
-        description: "Por favor, insira os dados dos leads",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setLoading(true);
+  const handleGoogleMapsImport = async (leads: any[]) => {
     try {
-      const lines = textData.split('\n').filter(line => line.trim());
-      const leads = lines.map(line => {
-        const parts = line.split(',').map(p => p.trim());
-        return {
-          name: parts[0] || '',
-          company: parts[1] || '',
-          email: parts[2] || '',
-          phone: parts[3] || ''
-        };
-      }).filter(lead => lead.name || lead.email);
-
-      onImport(leads);
-      onOpenChange(false);
-      setTextData('');
-      
+      await onImport(leads);
       toast({
-        title: "Importação concluída",
-        description: `${leads.length} leads foram importados com sucesso`,
+        title: "Sucesso",
+        description: `${leads.length} leads importados do Google Maps`,
       });
-    } catch (error) {
-      console.error('Erro ao processar texto:', error);
+      onOpenChange(false);
+    } catch (error: any) {
       toast({
-        title: "Erro",
-        description: "Erro ao processar os dados",
+        title: "Erro na importação",
+        description: error.message || "Erro ao importar leads",
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
     }
   };
 
-  const downloadTemplate = () => {
-    const csvContent = "nome,empresa,email,telefone,whatsapp,website,endereco\nJoão Silva,Empresa ABC,joao@empresa.com,(11) 99999-9999,(11) 99999-9999,https://empresa.com,Rua Example 123";
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', 'template_leads.csv');
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+  const hasGoogleMapsKey = settings?.google_maps_api_key;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[95%] max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Importar Leads em Massa</DialogTitle>
+          <DialogDescription>
+            Importe leads de arquivos CSV/TXT ou extraia diretamente do Google Maps
+          </DialogDescription>
         </DialogHeader>
-        
-        <div className="space-y-4">
-          {/* Import Type Selection */}
-          <div className="flex flex-col sm:flex-row gap-2">
-            <Button
-              variant={importType === 'csv' ? 'default' : 'outline'}
-              onClick={() => setImportType('csv')}
-              className="flex-1"
-            >
-              <FileText className="w-4 h-4 mr-2" />
-              Arquivo CSV
-            </Button>
-            <Button
-              variant={importType === 'text' ? 'default' : 'outline'}
-              onClick={() => setImportType('text')}
-              className="flex-1"
-            >
-              <Upload className="w-4 h-4 mr-2" />
-              Texto
-            </Button>
-          </div>
 
-          {importType === 'csv' ? (
+        <Tabs defaultValue="file" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="file">Arquivo CSV/TXT</TabsTrigger>
+            <TabsTrigger value="google-maps">Google Maps</TabsTrigger>
+            <TabsTrigger value="instructions">Configuração API</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="file" className="space-y-4">
             <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg">Upload de Arquivo CSV</CardTitle>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="w-5 h-5" />
+                  Importar de Arquivo
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-blue-900 mb-2">📋 Formato do Arquivo</h4>
+                  <p className="text-blue-800 text-sm mb-2">
+                    Seu arquivo deve conter as seguintes colunas (separadas por vírgula, ponto-e-vírgula ou tab):
+                  </p>
+                  <ul className="text-blue-800 text-sm space-y-1">
+                    <li>• <strong>Nome</strong> (obrigatório)</li>
+                    <li>• <strong>Telefone</strong> (obrigatório)</li>
+                    <li>• <strong>Empresa</strong> (obrigatório)</li>
+                    <li>• <strong>Email</strong> (opcional)</li>
+                    <li>• <strong>Nicho</strong> (opcional)</li>
+                  </ul>
+                </div>
+
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-green-900 mb-2">✅ Exemplo de CSV</h4>
+                  <code className="text-green-800 text-xs block whitespace-pre-wrap">
+                    Nome,Telefone,Empresa,Email,Nicho{'\n'}
+                    João Silva,(11) 99999-1111,Silva Construções,joao@silva.com,Construção{'\n'}
+                    Maria Santos,(11) 99999-2222,Santos Consultoria,maria@santos.com,Consultoria
+                  </code>
+                </div>
+
                 <div>
-                  <Label htmlFor="csv-file">Selecionar arquivo CSV</Label>
+                  <Label htmlFor="file-upload">Selecionar Arquivo</Label>
                   <Input
-                    id="csv-file"
+                    id="file-upload"
                     type="file"
-                    accept=".csv"
-                    onChange={handleFileUpload}
+                    accept=".csv,.txt"
+                    onChange={handleFileImport}
                     disabled={loading}
                     className="mt-1"
                   />
                 </div>
-                
-                <div className="text-sm text-slate-600 bg-slate-50 p-3 rounded-lg">
-                  <p className="font-medium mb-2">Formato esperado:</p>
-                  <p>nome, empresa, email, telefone, whatsapp, website, endereco</p>
-                </div>
-                
-                <Button
-                  variant="outline"
-                  onClick={downloadTemplate}
-                  className="w-full"
-                >
-                  <Download className="w-4 h-4 mr-2" />
-                  Baixar Template
-                </Button>
+
+                {loading && (
+                  <div className="flex items-center justify-center py-4">
+                    <LoadingSpinner size="sm" />
+                    <span className="ml-2 text-sm text-slate-600">Processando arquivo...</span>
+                  </div>
+                )}
               </CardContent>
             </Card>
-          ) : (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg">Importar via Texto</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="text-data">Dados dos Leads</Label>
-                  <Textarea
-                    id="text-data"
-                    placeholder="Exemplo:&#10;João Silva, Empresa ABC, joao@empresa.com, (11) 99999-9999&#10;Maria Santos, Empresa XYZ, maria@empresa.com, (11) 88888-8888"
-                    value={textData}
-                    onChange={(e) => setTextData(e.target.value)}
-                    rows={8}
-                    className="mt-1 text-sm"
-                  />
-                </div>
-                
-                <div className="text-sm text-slate-600 bg-slate-50 p-3 rounded-lg">
-                  <p className="font-medium mb-1">Formato:</p>
-                  <p>Nome, Empresa, Email, Telefone (um por linha)</p>
-                </div>
-                
-                <Button
-                  onClick={handleTextImport}
-                  disabled={loading || !textData.trim()}
-                  className="w-full"
-                >
-                  {loading ? <LoadingSpinner size="sm" /> : 'Importar Leads'}
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-          
-          {loading && (
-            <div className="flex items-center justify-center py-8">
-              <LoadingSpinner size="lg" text="Processando importação..." />
-            </div>
-          )}
-        </div>
+          </TabsContent>
+
+          <TabsContent value="google-maps" className="space-y-4">
+            {!hasGoogleMapsKey ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 text-orange-600" />
+                    Configuração Necessária
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                    <p className="text-orange-800 text-sm mb-3">
+                      Para usar a importação do Google Maps, é necessário configurar uma chave da API do Google Maps.
+                    </p>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => onOpenChange(false)}
+                      className="text-orange-700 border-orange-300 hover:bg-orange-100"
+                    >
+                      Ir para Configurações
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <GoogleMapsSearch 
+                apiKey={settings.google_maps_api_key}
+                onImport={handleGoogleMapsImport}
+              />
+            )}
+          </TabsContent>
+
+          <TabsContent value="instructions">
+            <GoogleMapsInstructions />
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );
