@@ -55,6 +55,7 @@ const App = () => (
                 <Route path="pipeline" element={<Pipeline />} />
                 <Route path="messages" element={<Messages />} />
                 <Route path="calendar" element={<Calendar />} />
+                <Route path="profile" element={<Profile />} />
                 <Route 
                   path="supervision" 
                   element={

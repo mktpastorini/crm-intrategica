@@ -9,10 +9,12 @@ import DatabaseSettings from '@/components/settings/DatabaseSettings';
 import AppearanceSettings from '@/components/settings/AppearanceSettings';
 import CategorySettings from '@/components/settings/CategorySettings';
 import GoogleMapsSettings from '@/components/settings/GoogleMapsSettings';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 export default function Settings() {
   const { toast } = useToast();
   const { settings, updateSettings } = useSystemSettingsDB();
+  const isMobile = useIsMobile();
 
   const handleInputChange = async (field: string, value: any) => {
     const result = await updateSettings({ [field]: value });
@@ -61,14 +63,34 @@ export default function Settings() {
       </div>
 
       <Tabs defaultValue="general" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6">
-          <TabsTrigger value="general">Geral</TabsTrigger>
-          <TabsTrigger value="webhooks">Webhooks</TabsTrigger>
-          <TabsTrigger value="database">Banco de Dados</TabsTrigger>
-          <TabsTrigger value="appearance">Aparência</TabsTrigger>
-          <TabsTrigger value="categories">Categorias</TabsTrigger>
-          <TabsTrigger value="googlemaps">Google Maps</TabsTrigger>
+        <TabsList className={`grid w-full ${isMobile ? 'grid-cols-3' : 'grid-cols-6'} ${isMobile ? 'gap-1' : ''}`}>
+          <TabsTrigger value="general" className={isMobile ? 'text-xs px-2' : ''}>
+            {isMobile ? 'Geral' : 'Geral'}
+          </TabsTrigger>
+          <TabsTrigger value="webhooks" className={isMobile ? 'text-xs px-2' : ''}>
+            {isMobile ? 'Hooks' : 'Webhooks'}
+          </TabsTrigger>
+          <TabsTrigger value="database" className={isMobile ? 'text-xs px-2' : ''}>
+            {isMobile ? 'BD' : 'Banco de Dados'}
+          </TabsTrigger>
+          {!isMobile && <TabsTrigger value="appearance">Aparência</TabsTrigger>}
+          {!isMobile && <TabsTrigger value="categories">Categorias</TabsTrigger>}
+          {!isMobile && <TabsTrigger value="googlemaps">Google Maps</TabsTrigger>}
         </TabsList>
+
+        {isMobile && (
+          <TabsList className="grid w-full grid-cols-3 gap-1 mt-2">
+            <TabsTrigger value="appearance" className="text-xs px-2">
+              Aparência
+            </TabsTrigger>
+            <TabsTrigger value="categories" className="text-xs px-2">
+              Categorias
+            </TabsTrigger>
+            <TabsTrigger value="googlemaps" className="text-xs px-2">
+              Maps
+            </TabsTrigger>
+          </TabsList>
+        )}
 
         <TabsContent value="general">
           <GeneralSettings 
@@ -101,7 +123,7 @@ export default function Settings() {
           />
         </TabsContent>
 
-        <TabsContent value="categories">
+        <Tabs/Content value="categories">
           <CategorySettings />
         </TabsContent>
 

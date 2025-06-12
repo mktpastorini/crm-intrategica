@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,6 +16,7 @@ import LeadsTable from '@/components/leads/LeadsTable';
 import UserSelector from '@/components/leads/UserSelector';
 import ImportLeadsDialog from '@/components/leads/ImportLeadsDialog';
 import { usePhoneMask } from '@/hooks/usePhoneMask';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface Lead {
   id: string;
@@ -37,6 +39,7 @@ export default function Leads() {
   const { leads, users, loading, actionLoading, createLead, updateLead, deleteLead, loadLeads, loadUsers } = useCrm();
   const { toast } = useToast();
   const { handlePhoneChange } = usePhoneMask();
+  const isMobile = useIsMobile();
   
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -238,24 +241,28 @@ export default function Leads() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className={`flex ${isMobile ? 'flex-col' : 'flex-row'} ${isMobile ? 'items-start' : 'items-center justify-between'} gap-4`}>
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Leads</h2>
           <p className="text-slate-600">Gerencie seus contatos e oportunidades</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setShowImportDialog(true)}>
+        <div className={`flex ${isMobile ? 'flex-col w-full' : 'flex-row'} gap-2`}>
+          <Button 
+            variant="outline" 
+            onClick={() => setShowImportDialog(true)}
+            className={isMobile ? 'w-full' : ''}
+          >
             <Upload className="w-4 h-4 mr-2" />
             Importar em Massa
           </Button>
           <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
             <DialogTrigger asChild>
-              <Button>
+              <Button className={isMobile ? 'w-full' : ''}>
                 <UserPlus className="w-4 h-4 mr-2" />
                 Novo Lead
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+            <DialogContent className={`${isMobile ? 'w-[95vw] max-w-none mx-2' : 'max-w-md'} max-h-[90vh] overflow-y-auto`}>
               <DialogHeader>
                 <DialogTitle>{editingLead ? 'Editar Lead' : 'Novo Lead'}</DialogTitle>
                 <DialogDescription>
@@ -381,7 +388,7 @@ export default function Leads() {
       {/* Filtros */}
       <Card>
         <CardContent className="p-4">
-          <div className="flex gap-4 items-end">
+          <div className={`flex ${isMobile ? 'flex-col' : 'flex-row'} gap-4 items-end`}>
             <div className="flex-1">
               <Label htmlFor="search">Buscar</Label>
               <div className="relative">
@@ -395,10 +402,10 @@ export default function Leads() {
                 />
               </div>
             </div>
-            <div>
+            <div className={isMobile ? 'w-full' : ''}>
               <Label htmlFor="status-filter">Status</Label>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-48">
+                <SelectTrigger className={isMobile ? 'w-full' : 'w-48'}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -419,15 +426,17 @@ export default function Leads() {
                 setStatusFilter('all');
               }}
               size="icon"
+              className={isMobile ? 'w-full' : ''}
             >
               <Filter className="w-4 h-4" />
+              {isMobile && <span className="ml-2">Limpar Filtros</span>}
             </Button>
           </div>
         </CardContent>
       </Card>
 
       {/* Estatísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="text-2xl font-bold text-blue-600">{leads.length}</div>

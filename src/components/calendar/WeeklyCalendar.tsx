@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, ChevronRight, Edit, Trash2, Plus } from 'lucide-react';
 import { format, startOfWeek, addDays, addWeeks, subWeeks, isSameDay, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface Event {
   id: string;
@@ -26,6 +26,8 @@ interface WeeklyCalendarProps {
 
 export default function WeeklyCalendar({ events, onEditEvent, onDeleteEvent, onAddEvent }: WeeklyCalendarProps) {
   const [currentWeek, setCurrentWeek] = useState(new Date());
+  const [selectedDayIndex, setSelectedDayIndex] = useState(0);
+  const isMobile = useIsMobile();
 
   const startDate = startOfWeek(currentWeek, { weekStartsOn: 0 });
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(startDate, i));
@@ -64,6 +66,149 @@ export default function WeeklyCalendar({ events, onEditEvent, onDeleteEvent, onA
 
   const isToday = (date: Date) => isSameDay(date, new Date());
 
+  const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const dayNamesFull = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+
+  if (isMobile) {
+    return (
+      <div className="space-y-4">
+        {/* Header com título da semana */}
+        <div className="text-center">
+          <h3 className="text-lg font-semibold mb-3">
+            {format(startDate, 'dd', { locale: ptBR })} de {format(startDate, 'MMM', { locale: ptBR })}. - {format(addDays(startDate, 6), 'dd', { locale: ptBR })} de {format(addDays(startDate, 6), 'MMM', { locale: ptBR })} de {format(startDate, 'yyyy', { locale: ptBR })}
+          </h3>
+        </div>
+
+        {/* Botões de navegação */}
+        <div className="flex items-center justify-between gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setCurrentWeek(subWeeks(currentWeek, 1))}
+            className="flex-1"
+          >
+            <ChevronLeft className="w-4 h-4 mr-1" />
+            Anterior
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setCurrentWeek(new Date())}
+            className="flex-1"
+          >
+            Hoje
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setCurrentWeek(addWeeks(currentWeek, 1))}
+            className="flex-1"
+          >
+            Próxima
+            <ChevronRight className="w-4 h-4 ml-1" />
+          </Button>
+        </div>
+
+        {/* Carrossel de dias da semana */}
+        <div className="flex gap-2 overflow-x-auto pb-2">
+          {weekDays.map((day, index) => (
+            <button
+              key={index}
+              onClick={() => setSelectedDayIndex(index)}
+              className={`flex-shrink-0 flex flex-col items-center p-3 rounded-lg border min-w-[80px] ${
+                selectedDayIndex === index
+                  ? 'bg-blue-500 text-white border-blue-500'
+                  : isToday(day)
+                  ? 'bg-blue-50 text-blue-600 border-blue-200'
+                  : 'bg-white text-slate-700 border-slate-200'
+              }`}
+            >
+              <span className="text-xs font-medium">{dayNames[index]}</span>
+              <span className="text-lg font-bold">{format(day, 'd')}</span>
+              <div className="flex gap-1 mt-1">
+                {getEventsForDay(day).slice(0, 3).map((_, i) => (
+                  <div key={i} className="w-1 h-1 bg-current rounded-full opacity-60" />
+                ))}
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {/* Detalhes do dia selecionado */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg">
+                {dayNamesFull[selectedDayIndex]}, {format(weekDays[selectedDayIndex], 'd')} de {format(weekDays[selectedDayIndex], 'MMMM', { locale: ptBR })}
+              </CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onAddEvent}
+              >
+                <Plus className="w-4 h-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0 space-y-3">
+            {getEventsForDay(weekDays[selectedDayIndex]).length > 0 ? (
+              getEventsForDay(weekDays[selectedDayIndex]).map((event) => (
+                <div key={event.id} className="p-3 bg-slate-50 rounded border border-slate-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <Badge className={`${getEventTypeBadge(event.type)} text-xs px-2 py-1`}>
+                      {getEventTypeLabel(event.type)}
+                    </Badge>
+                    <div className="flex space-x-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onEditEvent(event)}
+                        className="h-6 w-6 p-0"
+                      >
+                        <Edit className="w-3 h-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onDeleteEvent(event.id)}
+                        className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-semibold text-slate-900 leading-tight">
+                      {event.title}
+                    </h4>
+                    <p className="text-xs text-slate-600 font-medium">
+                      {event.time}
+                    </p>
+                    {event.lead_name && (
+                      <p className="text-xs text-slate-700 leading-tight">
+                        <span className="font-medium">Contato:</span> {event.lead_name}
+                      </p>
+                    )}
+                    {event.company && (
+                      <p className="text-xs text-slate-600 leading-tight">
+                        <span className="font-medium">Empresa:</span> {event.company}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-slate-400 text-center py-8">
+                Nenhum evento neste dia
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header com navegação semanal */}
@@ -92,14 +237,13 @@ export default function WeeklyCalendar({ events, onEditEvent, onDeleteEvent, onA
       <div className="grid grid-cols-7 gap-2">
         {weekDays.map((day, index) => {
           const dayEvents = getEventsForDay(day);
-          const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
           
           return (
             <Card key={index} className={`min-h-[250px] ${isToday(day) ? 'ring-2 ring-blue-500' : ''}`}>
               <CardHeader className="pb-2 px-3 py-2">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-medium text-slate-600">{dayNames[index]}</p>
+                    <p className="text-xs font-medium text-slate-600">{dayNamesFull[index]}</p>
                     <p className={`text-lg font-bold ${isToday(day) ? 'text-blue-600' : 'text-slate-900'}`}>
                       {format(day, 'd')}
                     </p>
