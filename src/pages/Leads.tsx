@@ -1,12 +1,13 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Search, Filter, MoreHorizontal, Upload, Phone, Mail, Calendar, MessageSquare, Trash2, Edit, Download } from 'lucide-react';
+import { Plus, Search, MoreHorizontal, Upload, Phone, Mail, Calendar, MessageSquare, Trash2, Edit, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useSystemSettingsDB } from '@/hooks/useSystemSettingsDB';
 import { supabase } from '@/integrations/supabase/client';
@@ -25,11 +26,16 @@ interface Lead {
   whatsapp: string;
   status: string;
   created_at: string;
-  responsible_id: string | null;
+  updated_at: string;
+  responsible_id: string;
   last_contact: string | null;
   source: string;
   website: string;
   address: string;
+  niche: string;
+  pipeline_stage: string | null;
+  rating: number | null;
+  place_id: string | null;
 }
 
 interface User {
@@ -145,8 +151,19 @@ export default function Leads() {
       const { data, error } = await supabase
         .from('leads')
         .insert([{
-          ...leadData,
+          name: leadData.name || '',
+          company: leadData.company || '',
+          email: leadData.email || '',
+          phone: leadData.phone || '',
+          whatsapp: leadData.whatsapp || '',
+          status: leadData.status || 'novo',
+          responsible_id: leadData.responsible_id || '',
+          source: leadData.source || '',
+          website: leadData.website || '',
+          address: leadData.address || '',
+          niche: leadData.niche || '',
           created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         }])
         .select();
       
@@ -177,7 +194,10 @@ export default function Leads() {
     try {
       const { data, error } = await supabase
         .from('leads')
-        .update(leadData)
+        .update({
+          ...leadData,
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', id)
         .select();
       
@@ -239,9 +259,19 @@ export default function Leads() {
   const handleImportLeads = async (importedLeads: Partial<Lead>[]) => {
     try {
       const leadsWithTimestamp = importedLeads.map(lead => ({
-        ...lead,
+        name: lead.name || '',
+        company: lead.company || '',
+        email: lead.email || '',
+        phone: lead.phone || '',
+        whatsapp: lead.whatsapp || '',
+        status: 'novo',
+        responsible_id: lead.responsible_id || '',
+        source: lead.source || '',
+        website: lead.website || '',
+        address: lead.address || '',
+        niche: lead.niche || '',
         created_at: new Date().toISOString(),
-        status: 'novo'
+        updated_at: new Date().toISOString(),
       }));
       
       const { data, error } = await supabase
