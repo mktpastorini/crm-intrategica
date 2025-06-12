@@ -123,7 +123,7 @@ export default function Settings() {
           />
         </TabsContent>
 
-        <Tabs/Content value="categories">
+        <TabsContent value="categories">
           <CategorySettings />
         </TabsContent>
 
