@@ -26,6 +26,11 @@ interface Lead {
   status: string;
   responsible_id: string;
   created_at: string;
+  website?: string;
+  address?: string;
+  rating?: number;
+  place_id?: string;
+  whatsapp?: string;
 }
 
 export default function Leads() {
@@ -45,7 +50,10 @@ export default function Leads() {
     company: '',
     niche: '',
     status: 'novo',
-    responsible_id: ''
+    responsible_id: '',
+    website: '',
+    address: '',
+    whatsapp: ''
   });
 
   useEffect(() => {
@@ -61,14 +69,20 @@ export default function Leads() {
     e.preventDefault();
     
     try {
+      const submitData = {
+        ...formData,
+        // Se o WhatsApp não foi preenchido, usa o telefone
+        whatsapp: formData.whatsapp || formData.phone
+      };
+
       if (editingLead) {
-        await updateLead(editingLead.id, formData);
+        await updateLead(editingLead.id, submitData);
         toast({
           title: "Lead atualizado",
           description: "Lead foi atualizado com sucesso",
         });
       } else {
-        await createLead(formData);
+        await createLead(submitData);
         toast({
           title: "Lead criado",
           description: "Lead foi criado com sucesso",
@@ -90,7 +104,10 @@ export default function Leads() {
       company: lead.company,
       niche: lead.niche,
       status: lead.status,
-      responsible_id: lead.responsible_id
+      responsible_id: lead.responsible_id,
+      website: lead.website || '',
+      address: lead.address || '',
+      whatsapp: lead.whatsapp || ''
     });
     setShowAddDialog(true);
   };
@@ -119,12 +136,17 @@ export default function Leads() {
       company: '',
       niche: '',
       status: 'novo',
-      responsible_id: ''
+      responsible_id: '',
+      website: '',
+      address: '',
+      whatsapp: ''
     });
   };
 
   const handleImportLeads = async (importedLeads: any[]) => {
     try {
+      console.log('Iniciando importação de leads:', importedLeads);
+      
       // Get the first available user as default responsible
       const defaultUser = users.length > 0 ? users[0] : null;
       
@@ -137,24 +159,51 @@ export default function Leads() {
         return;
       }
 
+      let successCount = 0;
+      let errorCount = 0;
+
       for (const lead of importedLeads) {
-        // Ensure required fields are present
-        const leadData = {
-          ...lead,
-          responsible_id: lead.responsible_id || defaultUser.id,
-          phone: lead.phone || '',
-          company: lead.company || lead.name || 'Empresa não informada',
-          niche: lead.niche || 'Google Maps'
-        };
-        
-        console.log('Importando lead:', leadData);
-        await createLead(leadData);
+        try {
+          // Ensure required fields are present
+          const leadData = {
+            name: lead.name || 'Nome não informado',
+            company: lead.company || lead.name || 'Empresa não informada',
+            phone: lead.phone || '',
+            whatsapp: lead.whatsapp || lead.phone || '',
+            email: lead.email || '',
+            website: lead.website || '',
+            address: lead.address || '',
+            rating: lead.rating || null,
+            place_id: lead.place_id || null,
+            niche: lead.niche || 'Google Maps',
+            status: lead.status || 'novo',
+            responsible_id: lead.responsible_id || defaultUser.id
+          };
+          
+          console.log('Criando lead:', leadData);
+          await createLead(leadData);
+          successCount++;
+        } catch (error: any) {
+          console.error('Erro ao criar lead individual:', error);
+          errorCount++;
+        }
       }
       
-      toast({
-        title: "Importação concluída",
-        description: `${importedLeads.length} leads importados com sucesso`,
-      });
+      if (successCount > 0) {
+        toast({
+          title: "Importação concluída",
+          description: `${successCount} leads importados com sucesso${errorCount > 0 ? ` (${errorCount} falharam)` : ''}`,
+        });
+        
+        // Recarregar a lista de leads
+        await loadLeads();
+      } else {
+        toast({
+          title: "Erro na importação",
+          description: "Nenhum lead foi importado com sucesso",
+          variant: "destructive",
+        });
+      }
     } catch (error: any) {
       console.error('Erro na importação:', error);
       toast({
@@ -170,7 +219,9 @@ export default function Leads() {
       lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       lead.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
       lead.phone.includes(searchTerm) ||
-      (lead.email && lead.email.toLowerCase().includes(searchTerm.toLowerCase()));
+      (lead.email && lead.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (lead.website && lead.website.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (lead.address && lead.address.toLowerCase().includes(searchTerm.toLowerCase()));
     
     const matchesStatus = statusFilter === 'all' || lead.status === statusFilter;
     
@@ -204,7 +255,7 @@ export default function Leads() {
                 Novo Lead
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{editingLead ? 'Editar Lead' : 'Novo Lead'}</DialogTitle>
                 <DialogDescription>
@@ -241,12 +292,41 @@ export default function Leads() {
                   />
                 </div>
                 <div>
+                  <Label htmlFor="whatsapp">WhatsApp (opcional)</Label>
+                  <Input
+                    id="whatsapp"
+                    value={formData.whatsapp}
+                    onChange={(e) => handlePhoneChange(e.target.value, (value) => setFormData(prev => ({ ...prev, whatsapp: value })))}
+                    placeholder="(11) 99999-9999"
+                  />
+                </div>
+                <div>
                   <Label htmlFor="email">Email (opcional)</Label>
                   <Input
                     id="email"
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="website">Website (opcional)</Label>
+                  <Input
+                    id="website"
+                    type="url"
+                    value={formData.website}
+                    onChange={(e) => setFormData(prev => ({ ...prev, website: e.target.value }))}
+                    placeholder="https://exemplo.com"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="address">Endereço (opcional)</Label>
+                  <Textarea
+                    id="address"
+                    value={formData.address}
+                    onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
+                    placeholder="Endereço completo da empresa"
+                    rows={2}
                   />
                 </div>
                 <div>
@@ -308,7 +388,7 @@ export default function Leads() {
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
                 <Input
                   id="search"
-                  placeholder="Buscar por nome, empresa, telefone ou email..."
+                  placeholder="Buscar por nome, empresa, telefone, email, site ou endereço..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"

@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { MapPin, Search, Import, Users, ExternalLink, AlertCircle } from 'lucide-react';
+import { MapPin, Search, Import, Users, ExternalLink, AlertCircle, Phone, Globe, MapPinIcon, Star } from 'lucide-react';
 import LoadingSpinner from '@/components/LoadingSpinner';
 
 interface GoogleMapsLead {
@@ -19,6 +19,10 @@ interface GoogleMapsLead {
   rating?: number;
   business_status: string;
   international_phone_number?: string;
+  types?: string[];
+  opening_hours?: any;
+  reviews?: any[];
+  geometry?: any;
 }
 
 interface GoogleMapsSearchProps {
@@ -95,24 +99,48 @@ export default function GoogleMapsSearch({ apiKey, onImport }: GoogleMapsSearchP
       // Configurar request para busca de texto
       const request = {
         query: `${searchData.query} ${searchData.location}`,
-        fields: ['place_id', 'name', 'formatted_address', 'formatted_phone_number', 'international_phone_number', 'website', 'rating', 'business_status']
+        fields: [
+          'place_id', 
+          'name', 
+          'formatted_address', 
+          'formatted_phone_number', 
+          'international_phone_number', 
+          'website', 
+          'rating', 
+          'business_status',
+          'types',
+          'opening_hours',
+          'reviews',
+          'geometry'
+        ]
       };
 
       // Fazer a busca
-      service.textSearch(request, (results: any[], status: any) => {
+      service.textSearch(request, async (results: any[], status: any) => {
         if (status === window.google.maps.places.PlacesServiceStatus.OK && results) {
           console.log('Resultados encontrados:', results.length);
           
-          const formattedResults = results.map(place => ({
-            place_id: place.place_id,
-            name: place.name,
-            formatted_address: place.formatted_address,
-            phone: place.formatted_phone_number || place.international_phone_number || '',
-            website: place.website || '',
-            rating: place.rating || 0,
-            business_status: place.business_status || 'OPERATIONAL',
-            international_phone_number: place.international_phone_number || ''
-          }));
+          // Para cada resultado, buscar detalhes adicionais
+          const detailedResults = await Promise.all(
+            results.map(place => getPlaceDetails(service, place.place_id))
+          );
+          
+          const formattedResults = detailedResults
+            .filter(place => place !== null)
+            .map(place => ({
+              place_id: place!.place_id,
+              name: place!.name,
+              formatted_address: place!.formatted_address,
+              phone: place!.formatted_phone_number || place!.international_phone_number || '',
+              website: place!.website || '',
+              rating: place!.rating || 0,
+              business_status: place!.business_status || 'OPERATIONAL',
+              international_phone_number: place!.international_phone_number || '',
+              types: place!.types || [],
+              opening_hours: place!.opening_hours,
+              reviews: place!.reviews || [],
+              geometry: place!.geometry
+            }));
           
           setResults(formattedResults);
 
@@ -120,6 +148,11 @@ export default function GoogleMapsSearch({ apiKey, onImport }: GoogleMapsSearchP
             toast({
               title: "Nenhum resultado",
               description: "Nenhum estabelecimento encontrado com os critérios informados",
+            });
+          } else {
+            toast({
+              title: "Busca concluída",
+              description: `${formattedResults.length} estabelecimentos encontrados`,
             });
           }
         } else {
@@ -141,6 +174,37 @@ export default function GoogleMapsSearch({ apiKey, onImport }: GoogleMapsSearchP
       });
       setLoading(false);
     }
+  };
+
+  const getPlaceDetails = (service: any, placeId: string): Promise<any> => {
+    return new Promise((resolve) => {
+      const request = {
+        placeId: placeId,
+        fields: [
+          'place_id',
+          'name',
+          'formatted_address',
+          'formatted_phone_number',
+          'international_phone_number',
+          'website',
+          'rating',
+          'business_status',
+          'types',
+          'opening_hours',
+          'reviews',
+          'geometry'
+        ]
+      };
+
+      service.getDetails(request, (place: any, status: any) => {
+        if (status === window.google.maps.places.PlacesServiceStatus.OK) {
+          resolve(place);
+        } else {
+          console.warn('Erro ao buscar detalhes do lugar:', placeId, status);
+          resolve(null);
+        }
+      });
+    });
   };
 
   const handleSelectLead = (placeId: string) => {
@@ -177,28 +241,70 @@ export default function GoogleMapsSearch({ apiKey, onImport }: GoogleMapsSearchP
         .map(result => {
           // Limpar e formatar o telefone
           let cleanPhone = '';
+          let whatsapp = '';
+          
           if (result.phone) {
             // Remove caracteres especiais e espaços, mantém apenas números
-            cleanPhone = result.phone.replace(/[^\d]/g, '');
-            // Se o telefone brasileiro não tem código do país, adiciona +55
-            if (cleanPhone.length === 11 && cleanPhone.startsWith('11')) {
+            cleanPhone = result.phone.replace(/[^\d+]/g, '');
+            
+            // Se não tem código do país, adiciona +55 para números brasileiros
+            if (cleanPhone.length === 11 && !cleanPhone.startsWith('+')) {
               cleanPhone = `+55${cleanPhone}`;
-            } else if (cleanPhone.length === 10) {
+            } else if (cleanPhone.length === 10 && !cleanPhone.startsWith('+')) {
               cleanPhone = `+55${cleanPhone}`;
             }
+            
+            // O WhatsApp será o mesmo número do telefone
+            whatsapp = cleanPhone;
           }
+
+          // Determinar o nicho baseado nos tipos do Google Maps
+          let niche = searchData.query || 'Google Maps';
+          if (result.types && result.types.length > 0) {
+            const primaryType = result.types[0];
+            // Traduzir alguns tipos comuns
+            const typeTranslations: { [key: string]: string } = {
+              'restaurant': 'Restaurante',
+              'store': 'Loja',
+              'hospital': 'Hospital',
+              'school': 'Escola',
+              'bank': 'Banco',
+              'gas_station': 'Posto de Combustível',
+              'pharmacy': 'Farmácia',
+              'dentist': 'Dentista',
+              'lawyer': 'Advogado',
+              'real_estate_agency': 'Imobiliária',
+              'car_dealer': 'Concessionária',
+              'beauty_salon': 'Salão de Beleza',
+              'gym': 'Academia'
+            };
+            niche = typeTranslations[primaryType] || primaryType.replace(/_/g, ' ') || niche;
+          }
+
+          console.log('Preparando lead para importação:', {
+            name: result.name,
+            company: result.name,
+            phone: cleanPhone,
+            whatsapp: whatsapp,
+            website: result.website,
+            address: result.formatted_address,
+            rating: result.rating,
+            place_id: result.place_id,
+            niche: niche
+          });
 
           return {
             name: result.name || 'Nome não informado',
             company: result.name || 'Empresa não informada',
             phone: cleanPhone,
+            whatsapp: whatsapp,
             email: '', // Google Maps não fornece email através da API
-            niche: searchData.query || 'Google Maps',
-            status: 'novo',
-            address: result.formatted_address || '',
             website: result.website || '',
-            rating: result.rating || 0,
-            place_id: result.place_id
+            address: result.formatted_address || '',
+            rating: result.rating || null,
+            place_id: result.place_id,
+            niche: niche,
+            status: 'novo'
           };
         });
 
@@ -318,40 +424,63 @@ export default function GoogleMapsSearch({ apiKey, onImport }: GoogleMapsSearchP
           <CardContent>
             <div className="space-y-3 max-h-96 overflow-y-auto">
               {results.map((result) => (
-                <div key={result.place_id} className="flex items-center space-x-3 p-3 border rounded-lg">
+                <div key={result.place_id} className="flex items-start space-x-3 p-4 border rounded-lg hover:bg-slate-50">
                   <Checkbox
                     checked={selectedLeads.includes(result.place_id)}
                     onCheckedChange={() => handleSelectLead(result.place_id)}
+                    className="mt-1"
                   />
-                  <div className="flex-1">
-                    <h4 className="font-medium text-slate-900">{result.name}</h4>
-                    <p className="text-sm text-slate-600 mb-2">{result.formatted_address}</p>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {result.phone && (
-                        <Badge variant="outline" className="text-xs">
-                          📞 {result.phone}
-                        </Badge>
-                      )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between mb-2">
+                      <h4 className="font-semibold text-slate-900 text-base">{result.name}</h4>
                       {result.rating && (
-                        <Badge variant="outline" className="text-xs">
-                          ⭐ {result.rating}
-                        </Badge>
+                        <div className="flex items-center gap-1 text-sm">
+                          <Star className="w-4 h-4 text-yellow-500 fill-current" />
+                          <span className="font-medium">{result.rating}</span>
+                        </div>
                       )}
-                      {result.business_status === 'OPERATIONAL' && (
-                        <Badge variant="outline" className="text-xs text-green-600">
-                          Ativo
-                        </Badge>
-                      )}
-                      {result.website && (
-                        <a 
-                          href={result.website} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:underline text-xs flex items-center gap-1"
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                          Site
-                        </a>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex items-start gap-2">
+                        <MapPinIcon className="w-4 h-4 text-slate-500 mt-0.5 flex-shrink-0" />
+                        <p className="text-sm text-slate-600 leading-relaxed">{result.formatted_address}</p>
+                      </div>
+                      
+                      <div className="flex items-center gap-4 flex-wrap">
+                        {result.phone && (
+                          <div className="flex items-center gap-1">
+                            <Phone className="w-4 h-4 text-slate-500" />
+                            <span className="text-sm text-slate-700 font-medium">{result.phone}</span>
+                          </div>
+                        )}
+                        
+                        {result.website && (
+                          <a 
+                            href={result.website} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline text-sm"
+                          >
+                            <Globe className="w-4 h-4" />
+                            Site
+                          </a>
+                        )}
+                        
+                        {result.business_status === 'OPERATIONAL' && (
+                          <Badge variant="outline" className="text-xs text-green-700 border-green-300">
+                            ✓ Ativo
+                          </Badge>
+                        )}
+                      </div>
+                      
+                      {result.types && result.types.length > 0 && (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs text-slate-500">Categoria:</span>
+                          <Badge variant="secondary" className="text-xs">
+                            {result.types[0].replace(/_/g, ' ')}
+                          </Badge>
+                        </div>
                       )}
                     </div>
                   </div>

@@ -2,7 +2,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Edit, Trash2, Phone, Mail } from 'lucide-react';
+import { Edit, Trash2, Phone, Mail, Globe, MapPin, Star } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -16,6 +16,11 @@ interface Lead {
   status: string;
   responsible_id: string;
   created_at: string;
+  website?: string;
+  address?: string;
+  rating?: number;
+  place_id?: string;
+  whatsapp?: string;
 }
 
 interface LeadsTableProps {
@@ -67,13 +72,13 @@ export default function LeadsTable({ leads, onEditLead, onDeleteLead, actionLoad
             <thead className="bg-slate-50 border-b">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                  Nome
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                  Empresa
+                  Empresa/Contato
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                   Contato
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                  Localização
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                   Nicho
@@ -92,30 +97,59 @@ export default function LeadsTable({ leads, onEditLead, onDeleteLead, actionLoad
             <tbody className="bg-white divide-y divide-slate-200">
               {leads.map((lead) => (
                 <tr key={lead.id} className="hover:bg-slate-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div>
-                      <div className="text-sm font-medium text-slate-900">{lead.name}</div>
+                  <td className="px-6 py-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <div className="text-sm font-medium text-slate-900">{lead.company}</div>
+                        {lead.rating && (
+                          <div className="flex items-center gap-1">
+                            <Star className="w-3 h-3 text-yellow-500 fill-current" />
+                            <span className="text-xs text-slate-600 font-medium">{lead.rating}</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-xs text-slate-600">{lead.name}</div>
                       <div className="text-xs text-slate-500">
                         Criado em {formatDate(lead.created_at)}
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-slate-900">{lead.company}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="space-y-1">
-                      <div className="flex items-center text-sm text-slate-600">
-                        <Phone className="w-3 h-3 mr-1" />
-                        {lead.phone}
-                      </div>
+                  <td className="px-6 py-4">
+                    <div className="space-y-2">
+                      {lead.phone && (
+                        <div className="flex items-center text-sm text-slate-600">
+                          <Phone className="w-3 h-3 mr-1 text-slate-400" />
+                          <span className="font-medium">{lead.phone}</span>
+                        </div>
+                      )}
                       {lead.email && (
                         <div className="flex items-center text-sm text-slate-600">
-                          <Mail className="w-3 h-3 mr-1" />
-                          {lead.email}
+                          <Mail className="w-3 h-3 mr-1 text-slate-400" />
+                          <span>{lead.email}</span>
+                        </div>
+                      )}
+                      {lead.website && (
+                        <div className="flex items-center">
+                          <Globe className="w-3 h-3 mr-1 text-slate-400" />
+                          <a 
+                            href={lead.website} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                          >
+                            Site
+                          </a>
                         </div>
                       )}
                     </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    {lead.address && (
+                      <div className="flex items-start gap-1 max-w-xs">
+                        <MapPin className="w-3 h-3 text-slate-400 mt-0.5 flex-shrink-0" />
+                        <span className="text-sm text-slate-600 leading-relaxed">{lead.address}</span>
+                      </div>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-slate-900">{lead.niche}</div>

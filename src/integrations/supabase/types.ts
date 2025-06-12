@@ -65,6 +65,7 @@ export type Database = {
       }
       leads: {
         Row: {
+          address: string | null
           company: string
           created_at: string
           email: string | null
@@ -73,11 +74,16 @@ export type Database = {
           niche: string
           phone: string
           pipeline_stage: string | null
+          place_id: string | null
+          rating: number | null
           responsible_id: string
           status: string
           updated_at: string
+          website: string | null
+          whatsapp: string | null
         }
         Insert: {
+          address?: string | null
           company: string
           created_at?: string
           email?: string | null
@@ -86,11 +92,16 @@ export type Database = {
           niche: string
           phone: string
           pipeline_stage?: string | null
+          place_id?: string | null
+          rating?: number | null
           responsible_id: string
           status?: string
           updated_at?: string
+          website?: string | null
+          whatsapp?: string | null
         }
         Update: {
+          address?: string | null
           company?: string
           created_at?: string
           email?: string | null
@@ -99,9 +110,13 @@ export type Database = {
           niche?: string
           phone?: string
           pipeline_stage?: string | null
+          place_id?: string | null
+          rating?: number | null
           responsible_id?: string
           status?: string
           updated_at?: string
+          website?: string | null
+          whatsapp?: string | null
         }
         Relationships: [
           {
