@@ -1,495 +1,522 @@
 import { useState, useEffect } from 'react';
-import { useCrm } from '@/contexts/CrmContext';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Plus, Search, Filter, MoreHorizontal, Upload, Phone, Mail, Calendar, MessageSquare, Trash2, Edit, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { UserPlus, Filter, Search, Users as UsersIcon, Upload } from 'lucide-react';
+import { useSystemSettingsDB } from '@/hooks/useSystemSettingsDB';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import LoadingSpinner from '@/components/LoadingSpinner';
-import LeadsTable from '@/components/leads/LeadsTable';
-import UserSelector from '@/components/leads/UserSelector';
+import LeadDialog from '@/components/leads/LeadDialog';
 import ImportLeadsDialog from '@/components/leads/ImportLeadsDialog';
-import { usePhoneMask } from '@/hooks/usePhoneMask';
+import UserSelector from '@/components/leads/UserSelector';
 
 interface Lead {
   id: string;
   name: string;
-  email?: string;
-  phone: string;
   company: string;
-  niche: string;
+  email: string;
+  phone: string;
+  whatsapp: string;
   status: string;
-  responsible_id: string;
   created_at: string;
-  website?: string;
-  address?: string;
-  rating?: number;
-  place_id?: string;
-  whatsapp?: string;
+  responsible_id: string | null;
+  last_contact: string | null;
+  source: string;
+  website: string;
+  address: string;
+}
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: string;
 }
 
 export default function Leads() {
-  const { leads, users, loading, actionLoading, createLead, updateLead, deleteLead, loadLeads, loadUsers } = useCrm();
   const { toast } = useToast();
-  const { handlePhoneChange } = usePhoneMask();
+  const { settings } = useSystemSettingsDB();
+  const { user, profile } = useAuth();
   
-  const [showAddDialog, setShowAddDialog] = useState(false);
-  const [showImportDialog, setShowImportDialog] = useState(false);
-  const [editingLead, setEditingLead] = useState<Lead | null>(null);
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [filteredLeads, setFilteredLeads] = useState<Lead[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    company: '',
-    niche: '',
-    status: 'novo',
-    responsible_id: '',
-    website: '',
-    address: '',
-    whatsapp: ''
-  });
+  const [responsibleFilter, setResponsibleFilter] = useState('');
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [editingLead, setEditingLead] = useState<Lead | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
 
   useEffect(() => {
-    loadUsers();
-  }, [loadUsers]);
+    fetchLeads();
+    fetchUsers();
+  }, []);
 
-  const getUserName = (userId: string) => {
-    const user = users.find(u => u.id === userId);
-    return user?.name || 'Não atribuído';
-  };
+  useEffect(() => {
+    applyFilters();
+  }, [leads, searchTerm, statusFilter, responsibleFilter]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
+  const fetchLeads = async () => {
     try {
-      const submitData = {
-        ...formData,
-        // Se o WhatsApp não foi preenchido, usa o telefone
-        whatsapp: formData.whatsapp || formData.phone
-      };
-
-      if (editingLead) {
-        await updateLead(editingLead.id, submitData);
-        toast({
-          title: "Lead atualizado",
-          description: "Lead foi atualizado com sucesso",
-        });
-      } else {
-        await createLead(submitData);
-        toast({
-          title: "Lead criado",
-          description: "Lead foi criado com sucesso",
-        });
+      setLoading(true);
+      
+      let query = supabase.from('leads').select('*');
+      
+      // If user is not admin or supervisor, only show their leads
+      if (profile?.role !== 'admin' && profile?.role !== 'supervisor') {
+        query = query.eq('responsible_id', user?.id);
       }
       
-      handleCloseDialog();
+      const { data, error } = await query.order('created_at', { ascending: false });
+      
+      if (error) {
+        throw error;
+      }
+      
+      setLeads(data || []);
     } catch (error) {
-      // Erro já tratado no contexto
+      console.error('Error fetching leads:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar os leads",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleEdit = (lead: Lead) => {
-    setEditingLead(lead);
-    setFormData({
-      name: lead.name,
-      email: lead.email || '',
-      phone: lead.phone,
-      company: lead.company,
-      niche: lead.niche,
-      status: lead.status,
-      responsible_id: lead.responsible_id,
-      website: lead.website || '',
-      address: lead.address || '',
-      whatsapp: lead.whatsapp || ''
-    });
-    setShowAddDialog(true);
+  const fetchUsers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('status', 'active')
+        .order('name');
+      
+      if (error) {
+        throw error;
+      }
+      
+      setUsers(data || []);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
   };
 
-  const handleDelete = async (leadId: string) => {
-    if (!confirm('Tem certeza que deseja excluir este lead?')) return;
+  const applyFilters = () => {
+    let filtered = [...leads];
     
+    // Apply search filter
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(lead => 
+        lead.name.toLowerCase().includes(term) || 
+        lead.company.toLowerCase().includes(term) || 
+        lead.email.toLowerCase().includes(term) ||
+        lead.phone.includes(term)
+      );
+    }
+    
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(lead => lead.status === statusFilter);
+    }
+    
+    // Apply responsible filter
+    if (responsibleFilter) {
+      filtered = filtered.filter(lead => lead.responsible_id === responsibleFilter);
+    }
+    
+    setFilteredLeads(filtered);
+  };
+
+  const handleCreateLead = async (leadData: Partial<Lead>) => {
     try {
-      await deleteLead(leadId);
+      const { data, error } = await supabase
+        .from('leads')
+        .insert([{
+          ...leadData,
+          created_at: new Date().toISOString(),
+        }])
+        .select();
+      
+      if (error) {
+        throw error;
+      }
+      
+      setLeads(prev => [data[0], ...prev]);
+      
+      toast({
+        title: "Lead criado",
+        description: "O lead foi criado com sucesso",
+      });
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error creating lead:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível criar o lead",
+        variant: "destructive",
+      });
+      return { success: false, error };
+    }
+  };
+
+  const handleUpdateLead = async (id: string, leadData: Partial<Lead>) => {
+    try {
+      const { data, error } = await supabase
+        .from('leads')
+        .update(leadData)
+        .eq('id', id)
+        .select();
+      
+      if (error) {
+        throw error;
+      }
+      
+      setLeads(prev => prev.map(lead => lead.id === id ? data[0] : lead));
+      
+      toast({
+        title: "Lead atualizado",
+        description: "O lead foi atualizado com sucesso",
+      });
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating lead:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível atualizar o lead",
+        variant: "destructive",
+      });
+      return { success: false, error };
+    }
+  };
+
+  const handleDeleteLead = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('leads')
+        .delete()
+        .eq('id', id);
+      
+      if (error) {
+        throw error;
+      }
+      
+      setLeads(prev => prev.filter(lead => lead.id !== id));
+      
       toast({
         title: "Lead excluído",
-        description: "Lead foi excluído com sucesso",
+        description: "O lead foi excluído com sucesso",
       });
     } catch (error) {
-      // Erro já tratado no contexto
-    }
-  };
-
-  const handleCloseDialog = () => {
-    setShowAddDialog(false);
-    setEditingLead(null);
-    setFormData({
-      name: '',
-      email: '',
-      phone: '',
-      company: '',
-      niche: '',
-      status: 'novo',
-      responsible_id: '',
-      website: '',
-      address: '',
-      whatsapp: ''
-    });
-  };
-
-  const handleImportLeads = async (importedLeads: any[]) => {
-    try {
-      console.log('Iniciando importação de leads:', importedLeads);
-      
-      // Get the first available user as default responsible
-      const defaultUser = users.length > 0 ? users[0] : null;
-      
-      if (!defaultUser) {
-        toast({
-          title: "Erro na importação",
-          description: "Nenhum usuário disponível para atribuir os leads. Cadastre um usuário primeiro.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      let successCount = 0;
-      let errorCount = 0;
-
-      for (const lead of importedLeads) {
-        try {
-          // Ensure required fields are present
-          const leadData = {
-            name: lead.name || 'Nome não informado',
-            company: lead.company || lead.name || 'Empresa não informada',
-            phone: lead.phone || '',
-            whatsapp: lead.whatsapp || lead.phone || '',
-            email: lead.email || '',
-            website: lead.website || '',
-            address: lead.address || '',
-            rating: lead.rating || null,
-            place_id: lead.place_id || null,
-            niche: lead.niche || 'Google Maps',
-            status: lead.status || 'novo',
-            responsible_id: lead.responsible_id || defaultUser.id
-          };
-          
-          console.log('Criando lead:', leadData);
-          await createLead(leadData);
-          successCount++;
-        } catch (error: any) {
-          console.error('Erro ao criar lead individual:', error);
-          errorCount++;
-        }
-      }
-      
-      if (successCount > 0) {
-        toast({
-          title: "Importação concluída",
-          description: `${successCount} leads importados com sucesso${errorCount > 0 ? ` (${errorCount} falharam)` : ''}`,
-        });
-        
-        // Recarregar a lista de leads
-        await loadLeads();
-      } else {
-        toast({
-          title: "Erro na importação",
-          description: "Nenhum lead foi importado com sucesso",
-          variant: "destructive",
-        });
-      }
-    } catch (error: any) {
-      console.error('Erro na importação:', error);
+      console.error('Error deleting lead:', error);
       toast({
-        title: "Erro na importação",
-        description: error.message || "Erro ao importar leads",
+        title: "Erro",
+        description: "Não foi possível excluir o lead",
         variant: "destructive",
       });
     }
   };
 
-  const filteredLeads = leads.filter(lead => {
-    const matchesSearch = 
-      lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      lead.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      lead.phone.includes(searchTerm) ||
-      (lead.email && lead.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (lead.website && lead.website.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (lead.address && lead.address.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    const matchesStatus = statusFilter === 'all' || lead.status === statusFilter;
-    
-    return matchesSearch && matchesStatus;
-  });
+  const handleEditLead = (lead: Lead) => {
+    setEditingLead(lead);
+    setDialogOpen(true);
+  };
 
-  if (loading) {
+  const handleImportLeads = async (importedLeads: Partial<Lead>[]) => {
+    try {
+      const leadsWithTimestamp = importedLeads.map(lead => ({
+        ...lead,
+        created_at: new Date().toISOString(),
+        status: 'novo'
+      }));
+      
+      const { data, error } = await supabase
+        .from('leads')
+        .insert(leadsWithTimestamp)
+        .select();
+      
+      if (error) {
+        throw error;
+      }
+      
+      fetchLeads();
+      
+      toast({
+        title: "Leads importados",
+        description: `${importedLeads.length} leads foram importados com sucesso`,
+      });
+    } catch (error) {
+      console.error('Error importing leads:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível importar os leads",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const exportLeads = () => {
+    const csvContent = [
+      ['Nome', 'Empresa', 'Email', 'Telefone', 'WhatsApp', 'Status', 'Origem', 'Website', 'Endereço', 'Data de Criação'].join(','),
+      ...filteredLeads.map(lead => [
+        lead.name,
+        lead.company,
+        lead.email,
+        lead.phone,
+        lead.whatsapp,
+        lead.status,
+        lead.source,
+        lead.website,
+        lead.address,
+        new Date(lead.created_at).toLocaleDateString('pt-BR')
+      ].join(','))
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `leads_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const getStatusBadge = (status: string) => {
+    const statusMap: Record<string, { label: string, className: string }> = {
+      'novo': { label: 'Novo', className: 'bg-blue-100 text-blue-800' },
+      'contato': { label: 'Em Contato', className: 'bg-yellow-100 text-yellow-800' },
+      'qualificado': { label: 'Qualificado', className: 'bg-green-100 text-green-800' },
+      'perdido': { label: 'Perdido', className: 'bg-red-100 text-red-800' },
+      'convertido': { label: 'Convertido', className: 'bg-purple-100 text-purple-800' }
+    };
+    
+    const statusInfo = statusMap[status] || { label: status, className: 'bg-gray-100 text-gray-800' };
+    
     return (
-      <div className="flex items-center justify-center h-64">
-        <LoadingSpinner size="lg" text="Carregando leads..." />
-      </div>
+      <Badge className={`${statusInfo.className} capitalize`}>
+        {statusInfo.label}
+      </Badge>
     );
-  }
+  };
+
+  const getResponsibleName = (id: string | null) => {
+    if (!id) return '-';
+    const user = users.find(u => u.id === id);
+    return user ? user.name : '-';
+  };
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Leads</h2>
-          <p className="text-slate-600">Gerencie seus contatos e oportunidades</p>
+          <p className="text-slate-600">Gerencie seus leads e prospects</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setShowImportDialog(true)}>
-            <Upload className="w-4 h-4 mr-2" />
-            Importar em Massa
-          </Button>
-          <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-            <DialogTrigger asChild>
-              <Button>
-                <UserPlus className="w-4 h-4 mr-2" />
-                Novo Lead
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>{editingLead ? 'Editar Lead' : 'Novo Lead'}</DialogTitle>
-                <DialogDescription>
-                  {editingLead ? 'Edite as informações do lead' : 'Adicione um novo lead ao sistema'}
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <Label htmlFor="name">Nome do Contato</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="company">Empresa</Label>
-                  <Input
-                    id="company"
-                    value={formData.company}
-                    onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="phone">Telefone</Label>
-                  <Input
-                    id="phone"
-                    value={formData.phone}
-                    onChange={(e) => handlePhoneChange(e.target.value, (value) => setFormData(prev => ({ ...prev, phone: value })))}
-                    required
-                    placeholder="(11) 99999-9999"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="whatsapp">WhatsApp (opcional)</Label>
-                  <Input
-                    id="whatsapp"
-                    value={formData.whatsapp}
-                    onChange={(e) => handlePhoneChange(e.target.value, (value) => setFormData(prev => ({ ...prev, whatsapp: value })))}
-                    placeholder="(11) 99999-9999"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="email">Email (opcional)</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="website">Website (opcional)</Label>
-                  <Input
-                    id="website"
-                    type="url"
-                    value={formData.website}
-                    onChange={(e) => setFormData(prev => ({ ...prev, website: e.target.value }))}
-                    placeholder="https://exemplo.com"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="address">Endereço (opcional)</Label>
-                  <Textarea
-                    id="address"
-                    value={formData.address}
-                    onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
-                    placeholder="Endereço completo da empresa"
-                    rows={2}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="niche">Nicho</Label>
-                  <Input
-                    id="niche"
-                    value={formData.niche}
-                    onChange={(e) => setFormData(prev => ({ ...prev, niche: e.target.value }))}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="status">Status</Label>
-                  <Select value={formData.status} onValueChange={(value) => setFormData(prev => ({ ...prev, status: value }))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="novo">Novo</SelectItem>
-                      <SelectItem value="contatado">Contatado</SelectItem>
-                      <SelectItem value="qualificado">Qualificado</SelectItem>
-                      <SelectItem value="proposta">Proposta</SelectItem>
-                      <SelectItem value="fechado">Fechado</SelectItem>
-                      <SelectItem value="perdido">Perdido</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <UserSelector
-                  users={users}
-                  value={formData.responsible_id}
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, responsible_id: value }))}
-                  placeholder="Selecionar responsável"
-                />
-                <div className="flex gap-2 pt-4">
-                  <Button type="submit" className="flex-1" disabled={actionLoading === 'create-lead' || actionLoading === 'submit'}>
-                    {(actionLoading === 'create-lead' || actionLoading === 'submit') ? (
-                      <LoadingSpinner size="sm" />
-                    ) : (
-                      editingLead ? 'Atualizar' : 'Criar Lead'
-                    )}
-                  </Button>
-                  <Button type="button" variant="outline" onClick={handleCloseDialog} className="flex-1">
-                    Cancelar
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
+        
+        <div className="flex flex-col md:flex-row gap-2 md:space-x-4">
+          {/* Mobile: Buttons stacked vertically */}
+          <div className="flex flex-col md:flex-row gap-2 md:gap-4">
+            <Button
+              onClick={() => setImportDialogOpen(true)}
+              variant="outline"
+              className="w-full md:w-auto"
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              Importar em Massa
+            </Button>
+            <Button 
+              onClick={() => setDialogOpen(true)}
+              className="w-full md:w-auto"
+              style={{ backgroundColor: settings.primaryColor }}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Novo Lead
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Filtros */}
       <Card>
-        <CardContent className="p-4">
-          <div className="flex gap-4 items-end">
-            <div className="flex-1">
-              <Label htmlFor="search">Buscar</Label>
+        <CardHeader className="pb-3">
+          <CardTitle>Filtros</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
                 <Input
-                  id="search"
-                  placeholder="Buscar por nome, empresa, telefone, email, site ou endereço..."
+                  placeholder="Buscar leads..."
+                  className="pl-8"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
                 />
               </div>
             </div>
+            
             <div>
-              <Label htmlFor="status-filter">Status</Label>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-48">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os status</SelectItem>
-                  <SelectItem value="novo">Novo</SelectItem>
-                  <SelectItem value="contatado">Contatado</SelectItem>
-                  <SelectItem value="qualificado">Qualificado</SelectItem>
-                  <SelectItem value="proposta">Proposta</SelectItem>
-                  <SelectItem value="fechado">Fechado</SelectItem>
-                  <SelectItem value="perdido">Perdido</SelectItem>
-                </SelectContent>
-              </Select>
+              <Tabs defaultValue="all" onValueChange={setStatusFilter}>
+                <TabsList className="grid grid-cols-5 h-9">
+                  <TabsTrigger value="all" className="text-xs">Todos</TabsTrigger>
+                  <TabsTrigger value="novo" className="text-xs">Novos</TabsTrigger>
+                  <TabsTrigger value="contato" className="text-xs">Em Contato</TabsTrigger>
+                  <TabsTrigger value="qualificado" className="text-xs">Qualificados</TabsTrigger>
+                  <TabsTrigger value="convertido" className="text-xs">Convertidos</TabsTrigger>
+                </TabsList>
+              </Tabs>
             </div>
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                setSearchTerm('');
-                setStatusFilter('all');
-              }}
-              size="icon"
-            >
-              <Filter className="w-4 h-4" />
-            </Button>
+            
+            <div>
+              <UserSelector
+                users={users}
+                value={responsibleFilter}
+                onValueChange={setResponsibleFilter}
+                placeholder="Filtrar por responsável"
+              />
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Estatísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-blue-600">{leads.length}</div>
-            <p className="text-sm text-slate-600">Total de Leads</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-green-600">
-              {leads.filter(l => l.status === 'novo').length}
+      <Card>
+        <CardHeader className="pb-3 flex flex-row items-center justify-between">
+          <CardTitle>Leads ({filteredLeads.length})</CardTitle>
+          <Button variant="outline" size="sm" onClick={exportLeads}>
+            <Download className="w-4 h-4 mr-2" />
+            Exportar
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex justify-center py-8">
+              <LoadingSpinner size="lg" text="Carregando leads..." />
             </div>
-            <p className="text-sm text-slate-600">Novos</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-orange-600">
-              {leads.filter(l => l.status === 'qualificado').length}
+          ) : filteredLeads.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-slate-500">Nenhum lead encontrado</p>
+              <p className="text-sm text-slate-400 mt-1">
+                {searchTerm || statusFilter !== 'all' || responsibleFilter ? 
+                  'Tente ajustar os filtros' : 
+                  'Clique em "Novo Lead" para adicionar um lead'}
+              </p>
             </div>
-            <p className="text-sm text-slate-600">Qualificados</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-emerald-600">
-              {leads.filter(l => l.status === 'fechado').length}
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nome / Empresa</TableHead>
+                    <TableHead>Contato</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Responsável</TableHead>
+                    <TableHead>Criado em</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredLeads.map((lead) => (
+                    <TableRow key={lead.id}>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{lead.name}</div>
+                          <div className="text-sm text-slate-500">{lead.company}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          {lead.email && (
+                            <div className="flex items-center text-sm">
+                              <Mail className="w-3 h-3 mr-1 text-slate-400" />
+                              <span>{lead.email}</span>
+                            </div>
+                          )}
+                          {lead.phone && (
+                            <div className="flex items-center text-sm">
+                              <Phone className="w-3 h-3 mr-1 text-slate-400" />
+                              <span>{lead.phone}</span>
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {getStatusBadge(lead.status)}
+                      </TableCell>
+                      <TableCell>
+                        {getResponsibleName(lead.responsible_id)}
+                      </TableCell>
+                      <TableCell>
+                        {new Date(lead.created_at).toLocaleDateString('pt-BR')}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <MoreHorizontal className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleEditLead(lead)}>
+                              <Edit className="w-4 h-4 mr-2" />
+                              Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <Calendar className="w-4 h-4 mr-2" />
+                              Agendar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <MessageSquare className="w-4 h-4 mr-2" />
+                              Mensagem
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDeleteLead(lead.id)}>
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Excluir
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
-            <p className="text-sm text-slate-600">Fechados</p>
-          </CardContent>
-        </Card>
-      </div>
+          )}
+        </CardContent>
+      </Card>
 
-      {/* Tabela de Leads */}
-      {filteredLeads.length > 0 ? (
-        <LeadsTable
-          leads={filteredLeads}
-          onEditLead={handleEdit}
-          onDeleteLead={handleDelete}
-          actionLoading={actionLoading}
-          getUserName={getUserName}
-        />
-      ) : (
-        <Card>
-          <CardContent className="p-12 text-center">
-            <UsersIcon className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-slate-900 mb-2">
-              {searchTerm || statusFilter !== 'all' ? 'Nenhum lead encontrado' : 'Nenhum lead cadastrado'}
-            </h3>
-            <p className="text-slate-600">
-              {searchTerm || statusFilter !== 'all' 
-                ? 'Tente ajustar os filtros de busca.' 
-                : 'Comece adicionando um novo lead ao sistema.'
-              }
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      <ImportLeadsDialog
-        open={showImportDialog}
-        onOpenChange={setShowImportDialog}
+      {/* Import Dialog */}
+      <ImportLeadsDialog 
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
         onImport={handleImportLeads}
+      />
+
+      {/* Create/Edit Lead Dialog */}
+      <LeadDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        lead={editingLead}
+        onSave={editingLead ? 
+          (data) => handleUpdateLead(editingLead.id, data) : 
+          handleCreateLead
+        }
+        onClose={() => setEditingLead(null)}
+        users={users}
       />
     </div>
   );
