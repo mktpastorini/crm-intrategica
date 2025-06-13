@@ -1,4 +1,3 @@
-
 import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -28,14 +27,13 @@ export function useActivityTracker() {
         } else if (type === 'events_created') {
           updateData.events_created = (existing?.events_created || 0) + 1;
         } else if (type === 'events_completed' && data?.previousStage && data?.newStage) {
-          // Rastrear movimentação de leads entre estágios
+          // Rastrear apenas estágios que receberam leads (destino)
           const currentMoved = existing?.leads_moved || {};
-          // Garantir que currentMoved seja um objeto válido
           const safeCurrentMoved = typeof currentMoved === 'object' && currentMoved !== null ? currentMoved : {};
-          const stageKey = `${data.previousStage} -> ${data.newStage}`;
+          const destinationStage = data.newStage;
           updateData.leads_moved = {
             ...safeCurrentMoved,
-            [stageKey]: (safeCurrentMoved[stageKey] || 0) + 1
+            [destinationStage]: (safeCurrentMoved[destinationStage] || 0) + 1
           };
         }
 

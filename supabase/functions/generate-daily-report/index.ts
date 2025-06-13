@@ -91,8 +91,14 @@ serve(async (req) => {
     const eventsCompleted = completedEvents?.length || 0;
     const messagesSent = dailyActivity?.messages_sent || 0;
     
-    // Leads movidos entre estágios (dados rastreados automaticamente)
+    // Formatar leads movidos no novo formato
     const leadsMovedData = dailyActivity?.leads_moved || {};
+    const leadsMovedFormatted = Object.entries(leadsMovedData)
+      .filter(([_, count]) => (count as number) > 0)
+      .reduce((acc, [stage, count]) => {
+        acc[stage] = `${count} lead${(count as number) > 1 ? 's' : ''} movido${(count as number) > 1 ? 's' : ''} para ${stage}`;
+        return acc;
+      }, {} as Record<string, string>);
     
     // Estatísticas dos leads por estágio
     const leadsByStage: Record<string, number> = {};
@@ -120,7 +126,7 @@ serve(async (req) => {
       },
       summary: {
         leads_added: leadsAdded,
-        leads_moved: leadsMovedData,
+        leads_moved: leadsMovedFormatted,
         messages_sent: messagesSent,
         events_created: eventsCreated,
         events_completed: eventsCompleted

@@ -1,4 +1,3 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -113,6 +112,32 @@ export default function ApiDocumentation() {
   "lead_name": "João Silva",
   "responsible_id": "uuid-do-responsavel"
 }`
+        }
+      ]
+    },
+    {
+      title: "Report API",
+      description: "Gera relatórios automaticamente baseado no horário",
+      method: "GET",
+      url: `${baseUrl}/report-api`,
+      actions: [
+        {
+          action: "daily",
+          method: "GET",
+          description: "Gera relatório diário (padrão)",
+          url: "?tipo=dia"
+        },
+        {
+          action: "weekly",
+          method: "GET",
+          description: "Gera relatório semanal",
+          url: "?tipo=semana"
+        },
+        {
+          action: "monthly",
+          method: "GET",
+          description: "Gera relatório mensal",
+          url: "?tipo=mes"
         }
       ]
     }
@@ -276,6 +301,7 @@ export default function ApiDocumentation() {
           <li>• Para usar com IA, integre os endpoints conforme necessário</li>
           <li>• Todas as datas devem estar no formato YYYY-MM-DD</li>
           <li>• Horários no formato HH:MM (24h)</li>
+          <li>• Report API reconhece automaticamente o período baseado no parâmetro 'tipo'</li>
         </ul>
       </div>
     </div>
