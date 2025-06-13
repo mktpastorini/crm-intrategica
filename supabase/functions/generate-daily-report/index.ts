@@ -35,45 +35,102 @@ serve(async (req) => {
       );
     }
 
-    const today = new Date().toISOString().split('T')[0];
-    console.log('Coletando dados do dia:', today);
+    // Calcular janela de tempo do dia atual
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    const reportTime = settings.report_webhook_time || '18:00';
+    const [reportHour, reportMinute] = reportTime.split(':').map(Number);
+    
+    // Início do dia (00:00:00)
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    
+    // Horário programado do relatório ou agora (o que for menor)
+    const reportDateTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), reportHour, reportMinute, 0);
+    const endOfPeriod = now < reportDateTime ? now : reportDateTime;
 
-    // Buscar dados de atividades do dia atual
+    console.log(`Coletando dados do período: ${startOfDay.toISOString()} até ${endOfPeriod.toISOString()}`);
+
+    // Coletar dados diretamente das tabelas principais para maior precisão
+    
+    // 1. Leads adicionados hoje
+    const { data: leadsToday, error: leadsError } = await supabase
+      .from('leads')
+      .select('id, pipeline_stage, created_at')
+      .gte('created_at', startOfDay.toISOString())
+      .lt('created_at', endOfPeriod.toISOString());
+
+    if (leadsError) {
+      console.error('Erro ao buscar leads:', leadsError);
+    }
+
+    // 2. Leads movidos entre estágios hoje (através da tabela daily_activities como backup)
     const { data: dailyActivity } = await supabase
       .from('daily_activities')
-      .select('*')
+      .select('leads_moved')
       .eq('date', today)
       .maybeSingle();
 
-    // Se não houver atividades registradas, criar com valores zerados
-    const activityData = dailyActivity || {
-      leads_added: 0,
-      leads_moved: {},
-      messages_sent: 0,
-      events_created: 0
-    };
+    // 3. Eventos criados hoje
+    const { data: eventsToday, error: eventsError } = await supabase
+      .from('events')
+      .select('id, created_at')
+      .gte('created_at', startOfDay.toISOString())
+      .lt('created_at', endOfPeriod.toISOString());
+
+    if (eventsError) {
+      console.error('Erro ao buscar eventos:', eventsError);
+    }
+
+    // 4. Contagem de mensagens da tabela daily_activities (pois não temos tabela específica)
+    const messagesSent = dailyActivity?.messages_sent || 0;
+
+    // Processar dados coletados
+    const leadsAdded = leadsToday?.length || 0;
+    const eventsCreated = eventsToday?.length || 0;
+    
+    // Leads movidos entre estágios (usar dados do rastreamento automático)
+    const leadsMovedData = dailyActivity?.leads_moved || {};
+    
+    // Calcular estatísticas adicionais dos leads
+    const leadsByStage: Record<string, number> = {};
+    if (leadsToday) {
+      leadsToday.forEach(lead => {
+        const stage = lead.pipeline_stage || 'Sem estágio';
+        leadsByStage[stage] = (leadsByStage[stage] || 0) + 1;
+      });
+    }
 
     // Preparar dados do relatório
     const reportData = {
       date: today,
+      period: {
+        start: startOfDay.toISOString(),
+        end: endOfPeriod.toISOString(),
+        generated_at: now.toISOString()
+      },
       summary: {
-        leads_added: activityData.leads_added || 0,
-        leads_moved: activityData.leads_moved || {},
-        messages_sent: activityData.messages_sent || 0,
-        events_created: activityData.events_created || 0
+        leads_added: leadsAdded,
+        leads_moved: leadsMovedData,
+        messages_sent: messagesSent,
+        events_created: eventsCreated
       },
       details: {
-        total_activities: (activityData.leads_added || 0) + 
-                         (activityData.messages_sent || 0) + 
-                         (activityData.events_created || 0),
+        total_activities: leadsAdded + messagesSent + eventsCreated,
+        leads_by_stage: leadsByStage,
         system_name: settings.system_name || "Sistema CRM",
-        generated_at: new Date().toISOString()
+        report_scheduled_time: reportTime,
+        data_completeness: {
+          leads_data: leadsToday ? 'complete' : 'unavailable',
+          events_data: eventsToday ? 'complete' : 'unavailable',
+          messages_data: dailyActivity ? 'tracked' : 'not_tracked',
+          leads_movement_data: dailyActivity?.leads_moved ? 'tracked' : 'not_tracked'
+        }
       },
       whatsapp_number: settings.report_whatsapp_number || '',
       test: false
     };
 
-    console.log('Dados do relatório preparados:', reportData);
+    console.log('Dados do relatório preparados:', JSON.stringify(reportData, null, 2));
 
     // Enviar para o webhook
     const response = await fetch(settings.report_webhook_url, {
@@ -86,23 +143,27 @@ serve(async (req) => {
     });
 
     if (!response.ok) {
-      console.error('Erro ao enviar relatório:', response.status, response.statusText);
+      const errorText = await response.text();
+      console.error('Erro ao enviar relatório:', response.status, response.statusText, errorText);
       return new Response(
         JSON.stringify({ 
           error: 'Erro ao enviar relatório',
-          status: response.status
+          status: response.status,
+          details: errorText
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Relatório enviado com sucesso');
+    const responseText = await response.text();
+    console.log('Relatório enviado com sucesso. Resposta:', responseText);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         message: 'Relatório diário enviado com sucesso',
-        data: reportData
+        data: reportData,
+        webhook_response: responseText
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
