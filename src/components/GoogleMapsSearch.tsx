@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -99,7 +98,7 @@ export default function GoogleMapsSearch({ apiKey, onImport }: GoogleMapsSearchP
       const service = new window.google.maps.places.PlacesService(map);
       
       // Função para buscar e processar resultados progressivamente
-      const processResultsProgressively = async (request: any) => {
+      const processResultsProgressively = async () => {
         let allResults: any[] = [];
         let currentResults: any[] = [];
         
@@ -184,7 +183,7 @@ export default function GoogleMapsSearch({ apiKey, onImport }: GoogleMapsSearchP
         });
       };
 
-      await processResultsProgressively(request);
+      await processResultsProgressively();
 
       if (results.length === 0) {
         toast({
