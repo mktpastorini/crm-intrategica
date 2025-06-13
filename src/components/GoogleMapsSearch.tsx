@@ -30,7 +30,6 @@ interface GoogleMapsSearchProps {
   onImport: (leads: any[]) => Promise<void>;
 }
 
-// Declare global google object
 declare global {
   interface Window {
     google: any;
@@ -50,6 +49,7 @@ export default function GoogleMapsSearch({ apiKey, onImport }: GoogleMapsSearchP
   const [results, setResults] = useState<GoogleMapsLead[]>([]);
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
   const [googleMapsLoaded, setGoogleMapsLoaded] = useState(false);
+  const [searchProgress, setSearchProgress] = useState('');
 
   // Load Google Maps API
   const loadGoogleMapsAPI = () => {
@@ -86,120 +86,121 @@ export default function GoogleMapsSearch({ apiKey, onImport }: GoogleMapsSearchP
 
     try {
       setLoading(true);
-      console.log('Carregando Google Maps API...');
+      setResults([]);
+      setSelectedLeads([]);
+      setSearchProgress('Carregando Google Maps API...');
       
       await loadGoogleMapsAPI();
       
-      console.log('Buscando lugares no Google Maps...', searchData);
+      setSearchProgress('Buscando estabelecimentos...');
       
       // Criar um mapa temporário (invisível) para usar o PlacesService
       const map = new window.google.maps.Map(document.createElement('div'));
       const service = new window.google.maps.places.PlacesService(map);
       
-      // Função para buscar todas as páginas de resultados
-      const getAllResults = async (request: any, allResults: any[] = []): Promise<any[]> => {
+      // Função para buscar e processar resultados progressivamente
+      const processResultsProgressively = async (request: any) => {
+        let allResults: any[] = [];
+        let currentResults: any[] = [];
+        
         return new Promise((resolve, reject) => {
-          service.textSearch(request, async (results: any[], status: any, pagination: any) => {
+          const searchCallback = async (results: any[], status: any, pagination: any) => {
             if (status === window.google.maps.places.PlacesServiceStatus.OK && results) {
-              const newResults = [...allResults, ...results];
-              console.log(`Página processada: ${results.length} resultados. Total: ${newResults.length}`);
+              currentResults = results;
+              setSearchProgress(`Processando ${currentResults.length} resultados encontrados...`);
+              
+              // Processar detalhes dos resultados atuais
+              const detailedResults = await Promise.all(
+                currentResults.map(place => getPlaceDetails(service, place.place_id))
+              );
+              
+              const formattedResults = detailedResults
+                .filter(place => place !== null)
+                .map(place => ({
+                  place_id: place!.place_id,
+                  name: place!.name,
+                  formatted_address: place!.formatted_address,
+                  phone: place!.formatted_phone_number || place!.international_phone_number || '',
+                  website: place!.website || '',
+                  rating: place!.rating || 0,
+                  business_status: place!.business_status || 'OPERATIONAL',
+                  international_phone_number: place!.international_phone_number || '',
+                  types: place!.types || [],
+                  opening_hours: place!.opening_hours,
+                  reviews: place!.reviews || [],
+                  geometry: place!.geometry
+                }));
+              
+              // Adicionar resultados progressivamente
+              allResults = [...allResults, ...formattedResults];
+              setResults(prevResults => [...prevResults, ...formattedResults]);
+              
+              setSearchProgress(`${allResults.length} estabelecimentos encontrados`);
               
               // Se há mais páginas disponíveis, buscar a próxima
               if (pagination && pagination.hasNextPage) {
-                console.log('Buscando próxima página...');
-                // Aguardar um pequeno delay antes de buscar a próxima página (recomendação do Google)
+                setSearchProgress(`Buscando mais resultados... (${allResults.length} encontrados)`);
+                // Aguardar um pequeno delay antes de buscar a próxima página
                 setTimeout(() => {
                   pagination.nextPage();
                 }, 2000);
-                
-                // Aguardar os resultados da próxima página
-                const nextResults = await getAllResults(request, newResults);
-                resolve(nextResults);
               } else {
-                console.log('Busca completa. Total de resultados:', newResults.length);
-                resolve(newResults);
+                setSearchProgress(`Busca concluída! ${allResults.length} estabelecimentos encontrados`);
+                setLoading(false);
+                resolve(allResults);
               }
             } else if (status === window.google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
-              console.log('Nenhum resultado encontrado');
+              setSearchProgress('Nenhum resultado encontrado');
+              setLoading(false);
               resolve(allResults);
             } else {
               console.error('Erro na busca:', status);
+              setSearchProgress('Erro na busca');
+              setLoading(false);
               reject(new Error(`Erro na busca: ${status}`));
             }
-          });
+          };
+
+          // Configurar request para busca de texto
+          const searchRequest = {
+            query: `${searchData.query} ${searchData.location}`,
+            fields: [
+              'place_id', 
+              'name', 
+              'formatted_address', 
+              'formatted_phone_number', 
+              'international_phone_number', 
+              'website', 
+              'rating', 
+              'business_status',
+              'types',
+              'opening_hours',
+              'reviews',
+              'geometry'
+            ]
+          };
+
+          service.textSearch(searchRequest, searchCallback);
         });
       };
 
-      // Configurar request para busca de texto
-      const request = {
-        query: `${searchData.query} ${searchData.location}`,
-        fields: [
-          'place_id', 
-          'name', 
-          'formatted_address', 
-          'formatted_phone_number', 
-          'international_phone_number', 
-          'website', 
-          'rating', 
-          'business_status',
-          'types',
-          'opening_hours',
-          'reviews',
-          'geometry'
-        ]
-      };
+      await processResultsProgressively(request);
 
-      // Buscar todos os resultados (incluindo paginação)
-      const allResults = await getAllResults(request);
-      
-      if (allResults.length > 0) {
-        console.log('Buscando detalhes dos lugares encontrados...');
-        
-        // Para cada resultado, buscar detalhes adicionais
-        const detailedResults = await Promise.all(
-          allResults.map(place => getPlaceDetails(service, place.place_id))
-        );
-        
-        const formattedResults = detailedResults
-          .filter(place => place !== null)
-          .map(place => ({
-            place_id: place!.place_id,
-            name: place!.name,
-            formatted_address: place!.formatted_address,
-            phone: place!.formatted_phone_number || place!.international_phone_number || '',
-            website: place!.website || '',
-            rating: place!.rating || 0,
-            business_status: place!.business_status || 'OPERATIONAL',
-            international_phone_number: place!.international_phone_number || '',
-            types: place!.types || [],
-            opening_hours: place!.opening_hours,
-            reviews: place!.reviews || [],
-            geometry: place!.geometry
-          }));
-        
-        setResults(formattedResults);
-
-        if (formattedResults.length === 0) {
-          toast({
-            title: "Nenhum resultado",
-            description: "Nenhum estabelecimento encontrado com os critérios informados",
-          });
-        } else {
-          toast({
-            title: "Busca concluída",
-            description: `${formattedResults.length} estabelecimentos encontrados`,
-          });
-        }
-      } else {
+      if (results.length === 0) {
         toast({
           title: "Nenhum resultado",
           description: "Nenhum estabelecimento encontrado com os critérios informados",
         });
+      } else {
+        toast({
+          title: "Busca concluída",
+          description: `${results.length} estabelecimentos encontrados`,
+        });
       }
       
-      setLoading(false);
     } catch (error: any) {
       console.error('Erro na busca:', error);
+      setSearchProgress('');
       toast({
         title: "Erro na busca",
         description: error.message || "Erro ao buscar no Google Maps. Verifique a chave da API.",
@@ -314,18 +315,6 @@ export default function GoogleMapsSearch({ apiKey, onImport }: GoogleMapsSearchP
             niche = typeTranslations[primaryType] || primaryType.replace(/_/g, ' ') || niche;
           }
 
-          console.log('Preparando lead para importação:', {
-            name: result.name,
-            company: result.name,
-            phone: cleanPhone,
-            whatsapp: whatsapp,
-            website: result.website,
-            address: result.formatted_address,
-            rating: result.rating,
-            place_id: result.place_id,
-            niche: niche
-          });
-
           return {
             name: result.name || 'Nome não informado',
             company: result.name || 'Empresa não informada',
@@ -341,13 +330,12 @@ export default function GoogleMapsSearch({ apiKey, onImport }: GoogleMapsSearchP
           };
         });
 
-      console.log('Leads preparados para importação:', leadsToImport);
-
       await onImport(leadsToImport);
       
       // Limpar seleções após importação bem-sucedida
       setResults([]);
       setSelectedLeads([]);
+      setSearchProgress('');
       
       toast({
         title: "Sucesso",
@@ -418,7 +406,10 @@ export default function GoogleMapsSearch({ apiKey, onImport }: GoogleMapsSearchP
           </div>
           <Button onClick={searchPlaces} disabled={loading} className="w-full">
             {loading ? (
-              <LoadingSpinner size="sm" />
+              <div className="flex items-center gap-2">
+                <LoadingSpinner size="sm" />
+                <span>{searchProgress || 'Buscando...'}</span>
+              </div>
             ) : (
               <>
                 <Search className="w-4 h-4 mr-2" />
@@ -426,6 +417,16 @@ export default function GoogleMapsSearch({ apiKey, onImport }: GoogleMapsSearchP
               </>
             )}
           </Button>
+          
+          {/* Progress indicator */}
+          {(loading || searchProgress) && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <div className="flex items-center gap-2">
+                {loading && <LoadingSpinner size="sm" />}
+                <p className="text-blue-800 text-sm">{searchProgress}</p>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

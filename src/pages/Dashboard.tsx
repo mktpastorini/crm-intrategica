@@ -26,11 +26,12 @@ export default function Dashboard() {
     return user?.name || 'Usuário desconhecido';
   };
 
-  // Função para obter a imagem do usuário pelo ID
+  // Função para obter a imagem do usuário pelo ID - corrigida
   const getUserAvatar = (userId: string | null) => {
     if (!userId || !users || users.length === 0) return null;
     const foundUser = users.find(u => u.id === userId);
-    return foundUser?.avatar_url || null;
+    // Buscar no array de usuários que tem a propriedade avatar_url
+    return foundUser ? (foundUser as any).avatar_url : null;
   };
 
   // Função para obter as iniciais do nome do usuário
