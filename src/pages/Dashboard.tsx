@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { Users, Target, Calendar, TrendingUp, Phone, Mail, Clock, Award, CheckCircle, Eye } from 'lucide-react';
 import UserDetailsModal from '@/components/dashboard/UserDetailsModal';
+import { Event } from '@/types/event';
 
 export default function Dashboard() {
   const { leads, pipelineStages, events, users } = useCrm();
