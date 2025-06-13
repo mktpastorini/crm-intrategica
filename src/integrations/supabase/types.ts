@@ -207,6 +207,7 @@ export type Database = {
           report_webhook_enabled: boolean | null
           report_webhook_time: string | null
           report_webhook_url: string | null
+          report_whatsapp_number: string | null
           secondary_color: string | null
           system_name: string | null
           updated_at: string
@@ -224,6 +225,7 @@ export type Database = {
           report_webhook_enabled?: boolean | null
           report_webhook_time?: string | null
           report_webhook_url?: string | null
+          report_whatsapp_number?: string | null
           secondary_color?: string | null
           system_name?: string | null
           updated_at?: string
@@ -241,6 +243,7 @@ export type Database = {
           report_webhook_enabled?: boolean | null
           report_webhook_time?: string | null
           report_webhook_url?: string | null
+          report_whatsapp_number?: string | null
           secondary_color?: string | null
           system_name?: string | null
           updated_at?: string
