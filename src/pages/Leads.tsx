@@ -1,6 +1,6 @@
-
 import { useState, useEffect } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,6 +37,7 @@ interface Lead {
 
 export default function Leads() {
   const { leads, users, loading, actionLoading, createLead, updateLead, deleteLead, loadLeads, loadUsers } = useCrm();
+  const { user } = useAuth();
   const { toast } = useToast();
   const { handlePhoneChange } = usePhoneMask();
   const isMobile = useIsMobile();
@@ -53,7 +54,7 @@ export default function Leads() {
     company: '',
     niche: '',
     status: 'novo',
-    responsible_id: '',
+    responsible_id: user?.id || '',
     website: '',
     address: '',
     whatsapp: ''
@@ -62,6 +63,13 @@ export default function Leads() {
   useEffect(() => {
     loadUsers();
   }, [loadUsers]);
+
+  // Atualizar o responsável padrão quando o usuário for carregado
+  useEffect(() => {
+    if (user?.id && !editingLead) {
+      setFormData(prev => ({ ...prev, responsible_id: user.id }));
+    }
+  }, [user?.id, editingLead]);
 
   const getUserName = (userId: string) => {
     const user = users.find(u => u.id === userId);
@@ -75,7 +83,9 @@ export default function Leads() {
       const submitData = {
         ...formData,
         // Se o WhatsApp não foi preenchido, usa o telefone
-        whatsapp: formData.whatsapp || formData.phone
+        whatsapp: formData.whatsapp || formData.phone,
+        // Se não há responsável selecionado, usa o usuário logado
+        responsible_id: formData.responsible_id || user?.id || ''
       };
 
       if (editingLead) {
@@ -139,7 +149,7 @@ export default function Leads() {
       company: '',
       niche: '',
       status: 'novo',
-      responsible_id: '',
+      responsible_id: user?.id || '',
       website: '',
       address: '',
       whatsapp: ''
@@ -150,13 +160,13 @@ export default function Leads() {
     try {
       console.log('Iniciando importação de leads:', importedLeads);
       
-      // Get the first available user as default responsible
-      const defaultUser = users.length > 0 ? users[0] : null;
+      // Usar o usuário logado como responsável padrão
+      const defaultResponsibleId = user?.id || null;
       
-      if (!defaultUser) {
+      if (!defaultResponsibleId) {
         toast({
           title: "Erro na importação",
-          description: "Nenhum usuário disponível para atribuir os leads. Cadastre um usuário primeiro.",
+          description: "Você precisa estar logado para importar leads.",
           variant: "destructive",
         });
         return;
@@ -180,7 +190,7 @@ export default function Leads() {
             place_id: lead.place_id || null,
             niche: lead.niche || 'Google Maps',
             status: lead.status || 'novo',
-            responsible_id: lead.responsible_id || defaultUser.id
+            responsible_id: defaultResponsibleId // Sempre usar o usuário logado
           };
           
           console.log('Criando lead:', leadData);

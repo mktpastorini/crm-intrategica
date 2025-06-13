@@ -57,7 +57,8 @@ serve(async (req) => {
 
     const leads = [];
     
-    for (const place of data.results.slice(0, 20)) {
+    // Process all results from the first page
+    for (const place of data.results) {
       // Get place details for contact information
       const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=name,formatted_address,formatted_phone_number,website,rating&key=${googleMapsApiKey}`;
       
@@ -89,6 +90,58 @@ serve(async (req) => {
             .from('leads')
             .insert([leadData]);
         }
+      }
+    }
+
+    // Handle pagination to get all results
+    let nextPageToken = data.next_page_token;
+    while (nextPageToken) {
+      // Wait before making the next request (Google's requirement)
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      const nextPageUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?pagetoken=${nextPageToken}&key=${googleMapsApiKey}`;
+      const nextPageResponse = await fetch(nextPageUrl);
+      const nextPageData = await nextPageResponse.json();
+      
+      if (nextPageData.status === 'OK') {
+        for (const place of nextPageData.results) {
+          // Get place details for contact information
+          const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=name,formatted_address,formatted_phone_number,website,rating&key=${googleMapsApiKey}`;
+          
+          const detailsResponse = await fetch(detailsUrl);
+          const detailsData = await detailsResponse.json();
+          
+          if (detailsData.status === 'OK') {
+            const placeDetails = detailsData.result;
+            
+            const leadData = {
+              name: 'Contato',
+              company: placeDetails.name || place.name,
+              phone: placeDetails.formatted_phone_number || 'Não informado',
+              email: null,
+              niche: niche,
+              address: placeDetails.formatted_address || place.formatted_address,
+              website: placeDetails.website || null,
+              rating: placeDetails.rating || null,
+              place_id: place.place_id,
+              status: 'novo',
+              responsible_id: '00000000-0000-0000-0000-000000000000' // Default user ID
+            };
+
+            leads.push(leadData);
+
+            // Import to database if requested
+            if (import_leads) {
+              await supabase
+                .from('leads')
+                .insert([leadData]);
+            }
+          }
+        }
+        
+        nextPageToken = nextPageData.next_page_token;
+      } else {
+        break;
       }
     }
 

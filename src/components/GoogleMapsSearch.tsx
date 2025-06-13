@@ -96,6 +96,40 @@ export default function GoogleMapsSearch({ apiKey, onImport }: GoogleMapsSearchP
       const map = new window.google.maps.Map(document.createElement('div'));
       const service = new window.google.maps.places.PlacesService(map);
       
+      // Função para buscar todas as páginas de resultados
+      const getAllResults = async (request: any, allResults: any[] = []): Promise<any[]> => {
+        return new Promise((resolve, reject) => {
+          service.textSearch(request, async (results: any[], status: any, pagination: any) => {
+            if (status === window.google.maps.places.PlacesServiceStatus.OK && results) {
+              const newResults = [...allResults, ...results];
+              console.log(`Página processada: ${results.length} resultados. Total: ${newResults.length}`);
+              
+              // Se há mais páginas disponíveis, buscar a próxima
+              if (pagination && pagination.hasNextPage) {
+                console.log('Buscando próxima página...');
+                // Aguardar um pequeno delay antes de buscar a próxima página (recomendação do Google)
+                setTimeout(() => {
+                  pagination.nextPage();
+                }, 2000);
+                
+                // Aguardar os resultados da próxima página
+                const nextResults = await getAllResults(request, newResults);
+                resolve(nextResults);
+              } else {
+                console.log('Busca completa. Total de resultados:', newResults.length);
+                resolve(newResults);
+              }
+            } else if (status === window.google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+              console.log('Nenhum resultado encontrado');
+              resolve(allResults);
+            } else {
+              console.error('Erro na busca:', status);
+              reject(new Error(`Erro na busca: ${status}`));
+            }
+          });
+        });
+      };
+
       // Configurar request para busca de texto
       const request = {
         query: `${searchData.query} ${searchData.location}`,
@@ -115,56 +149,55 @@ export default function GoogleMapsSearch({ apiKey, onImport }: GoogleMapsSearchP
         ]
       };
 
-      // Fazer a busca
-      service.textSearch(request, async (results: any[], status: any) => {
-        if (status === window.google.maps.places.PlacesServiceStatus.OK && results) {
-          console.log('Resultados encontrados:', results.length);
-          
-          // Para cada resultado, buscar detalhes adicionais
-          const detailedResults = await Promise.all(
-            results.map(place => getPlaceDetails(service, place.place_id))
-          );
-          
-          const formattedResults = detailedResults
-            .filter(place => place !== null)
-            .map(place => ({
-              place_id: place!.place_id,
-              name: place!.name,
-              formatted_address: place!.formatted_address,
-              phone: place!.formatted_phone_number || place!.international_phone_number || '',
-              website: place!.website || '',
-              rating: place!.rating || 0,
-              business_status: place!.business_status || 'OPERATIONAL',
-              international_phone_number: place!.international_phone_number || '',
-              types: place!.types || [],
-              opening_hours: place!.opening_hours,
-              reviews: place!.reviews || [],
-              geometry: place!.geometry
-            }));
-          
-          setResults(formattedResults);
+      // Buscar todos os resultados (incluindo paginação)
+      const allResults = await getAllResults(request);
+      
+      if (allResults.length > 0) {
+        console.log('Buscando detalhes dos lugares encontrados...');
+        
+        // Para cada resultado, buscar detalhes adicionais
+        const detailedResults = await Promise.all(
+          allResults.map(place => getPlaceDetails(service, place.place_id))
+        );
+        
+        const formattedResults = detailedResults
+          .filter(place => place !== null)
+          .map(place => ({
+            place_id: place!.place_id,
+            name: place!.name,
+            formatted_address: place!.formatted_address,
+            phone: place!.formatted_phone_number || place!.international_phone_number || '',
+            website: place!.website || '',
+            rating: place!.rating || 0,
+            business_status: place!.business_status || 'OPERATIONAL',
+            international_phone_number: place!.international_phone_number || '',
+            types: place!.types || [],
+            opening_hours: place!.opening_hours,
+            reviews: place!.reviews || [],
+            geometry: place!.geometry
+          }));
+        
+        setResults(formattedResults);
 
-          if (formattedResults.length === 0) {
-            toast({
-              title: "Nenhum resultado",
-              description: "Nenhum estabelecimento encontrado com os critérios informados",
-            });
-          } else {
-            toast({
-              title: "Busca concluída",
-              description: `${formattedResults.length} estabelecimentos encontrados`,
-            });
-          }
-        } else {
-          console.error('Erro na busca:', status);
+        if (formattedResults.length === 0) {
           toast({
-            title: "Erro na busca",
-            description: "Erro ao buscar no Google Maps. Verifique a chave da API e tente novamente.",
-            variant: "destructive",
+            title: "Nenhum resultado",
+            description: "Nenhum estabelecimento encontrado com os critérios informados",
+          });
+        } else {
+          toast({
+            title: "Busca concluída",
+            description: `${formattedResults.length} estabelecimentos encontrados`,
           });
         }
-        setLoading(false);
-      });
+      } else {
+        toast({
+          title: "Nenhum resultado",
+          description: "Nenhum estabelecimento encontrado com os critérios informados",
+        });
+      }
+      
+      setLoading(false);
     } catch (error: any) {
       console.error('Erro na busca:', error);
       toast({

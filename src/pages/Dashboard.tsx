@@ -1,12 +1,14 @@
-
 import { useCrm } from '@/contexts/CrmContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { Users, Target, Calendar, TrendingUp, Phone, Mail, Clock, Award } from 'lucide-react';
 
 export default function Dashboard() {
   const { leads, pipelineStages, events, users } = useCrm();
+  const { user } = useAuth();
 
   const totalLeads = leads.length;
   const leadsInPipeline = leads.filter(lead => lead.pipeline_stage !== 'contrato-assinado').length;
@@ -22,6 +24,23 @@ export default function Dashboard() {
     if (!userId || !users || users.length === 0) return 'Não atribuído';
     const user = users.find(u => u.id === userId);
     return user?.name || 'Usuário desconhecido';
+  };
+
+  // Função para obter a imagem do usuário pelo ID
+  const getUserAvatar = (userId: string | null) => {
+    if (!userId || !users || users.length === 0) return null;
+    const user = users.find(u => u.id === userId);
+    return user?.avatar_url || null;
+  };
+
+  // Função para obter as iniciais do nome do usuário
+  const getUserInitials = (userName: string) => {
+    return userName
+      .split(' ')
+      .map(name => name.charAt(0))
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
   };
 
   // Dados reais para gráficos baseados nos dados atuais
@@ -283,6 +302,12 @@ export default function Dashboard() {
                     }`}>
                       <span className="text-white text-sm font-bold">{index + 1}</span>
                     </div>
+                    <Avatar className="h-10 w-10">
+                      <AvatarImage src={getUserAvatar(user.userId)} alt={user.userName} />
+                      <AvatarFallback className="bg-gradient-to-br from-blue-100 to-indigo-100 text-blue-700 font-semibold">
+                        {getUserInitials(user.userName)}
+                      </AvatarFallback>
+                    </Avatar>
                     <div>
                       <p className="font-medium text-slate-900">{user.userName}</p>
                       <p className="text-sm text-slate-600">{user.fechamentos} fechamentos</p>
