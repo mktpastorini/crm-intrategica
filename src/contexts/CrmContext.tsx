@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { securityHelpers } from '@/utils/securityHelpers';
 import { inputValidation } from '@/utils/inputValidation';
+import { useDailyActivityTracker } from '@/hooks/useDailyActivityTracker';
 
 interface Lead {
   id: string;
@@ -124,6 +125,7 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const { toast } = useToast();
+  const { trackLeadMoved } = useDailyActivityTracker();
 
   // Helper function to send webhook with security validation
   const sendWebhook = async (webhookUrl: string, data: any) => {
@@ -407,15 +409,80 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
   }, [toast]);
 
   // Move Lead
-  const moveLead = useCallback(async (leadId: string, newStage: string) => {
+  const moveLead = async (leadId: string, newStage: string) => {
+    setActionLoading(leadId);
     try {
-      await updateLead(leadId, { pipeline_stage: newStage });
-      // Send journey message when lead moves to new stage
-      await sendJourneyMessage(leadId, newStage);
+      const leadToMove = leads.find(lead => lead.id === leadId);
+      const oldStage = leadToMove?.pipeline_stage;
+      
+      const { error } = await supabase
+        .from('leads')
+        .update({ pipeline_stage: newStage })
+        .eq('id', leadId);
+
+      if (error) throw error;
+
+      // Rastrear a movimentação para atividades diárias
+      if (oldStage && oldStage !== newStage) {
+        await trackLeadMoved(oldStage, newStage);
+        console.log(`Lead movido de ${oldStage} para ${newStage} - rastreamento enviado`);
+      }
+
+      // Atualizar estado local
+      setLeads(prevLeads => 
+        prevLeads.map(lead => 
+          lead.id === leadId 
+            ? { ...lead, pipeline_stage: newStage }
+            : lead
+        )
+      );
+
+      // Buscar configurações e enviar webhook se configurado
+      const { data: settings } = await supabase
+        .from('system_settings')
+        .select('journey_webhook_url')
+        .single();
+
+      if (settings?.journey_webhook_url) {
+        const lead = leads.find(l => l.id === leadId);
+        if (lead) {
+          const webhookData = {
+            lead: {
+              id: lead.id,
+              name: lead.name,
+              company: lead.company,
+              phone: lead.phone,
+              email: lead.email,
+              previous_stage: oldStage,
+              new_stage: newStage,
+              moved_at: new Date().toISOString()
+            },
+            system: {
+              name: "Sistema CRM",
+              timestamp: new Date().toISOString()
+            }
+          };
+
+          try {
+            await fetch(settings.journey_webhook_url, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(webhookData)
+            });
+          } catch (webhookError) {
+            console.error('Erro ao enviar webhook da jornada:', webhookError);
+          }
+        }
+      }
     } catch (error) {
       console.error('Erro ao mover lead:', error);
+      throw error;
+    } finally {
+      setActionLoading(null);
     }
-  }, [updateLead, leads]);
+  };
 
   // Load Events
   const loadEvents = useCallback(async () => {

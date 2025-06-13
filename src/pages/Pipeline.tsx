@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -11,8 +10,12 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Phone, Mail, Calendar, User, Building, Archive } from 'lucide-react';
+import { useActivityTracker } from '@/hooks/useActivityTracker';
 
 export default function Pipeline() {
+  // Inicializar o rastreador de atividades
+  useActivityTracker();
+  
   const { leads, pipelineStages, moveLead, addEvent, users } = useCrm();
   const { user, profile } = useAuth();
   const { toast } = useToast();
@@ -39,6 +42,8 @@ export default function Pipeline() {
     const lead = leads.find(l => l.id === leadId);
     
     if (lead && lead.pipeline_stage !== newStage) {
+      console.log(`Movendo lead ${lead.name} de ${lead.pipeline_stage} para ${newStage}`);
+      
       // Se movendo para estágio "reunião", abrir modal de agendamento
       if (newStage === 'reuniao') {
         setSelectedLead(leadId);

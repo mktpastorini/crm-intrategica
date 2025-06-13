@@ -1,8 +1,11 @@
+
 import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 export function useActivityTracker() {
   useEffect(() => {
+    console.log('Iniciando rastreador de atividades...');
+    
     // Função para atualizar atividades diárias
     const updateDailyActivity = async (type: 'leads_added' | 'events_created' | 'events_completed', data?: any) => {
       const today = new Date().toISOString().split('T')[0];
@@ -24,8 +27,10 @@ export function useActivityTracker() {
         
         if (type === 'leads_added') {
           updateData.leads_added = (existing?.leads_added || 0) + 1;
+          console.log('Rastreando lead adicionado');
         } else if (type === 'events_created') {
           updateData.events_created = (existing?.events_created || 0) + 1;
+          console.log('Rastreando evento criado');
         } else if (type === 'events_completed' && data?.previousStage && data?.newStage) {
           // Rastrear apenas estágios que receberam leads (destino)
           const currentMoved = existing?.leads_moved || {};
@@ -35,6 +40,7 @@ export function useActivityTracker() {
             ...safeCurrentMoved,
             [destinationStage]: (safeCurrentMoved[destinationStage] || 0) + 1
           };
+          console.log(`Rastreando lead movido para ${destinationStage}`);
         }
 
         if (existing) {
@@ -46,6 +52,8 @@ export function useActivityTracker() {
             
           if (updateError) {
             console.error('Erro ao atualizar atividades diárias:', updateError);
+          } else {
+            console.log('Atividade diária atualizada:', updateData);
           }
         } else {
           // Criar novo registro
@@ -55,6 +63,8 @@ export function useActivityTracker() {
             
           if (insertError) {
             console.error('Erro ao inserir atividades diárias:', insertError);
+          } else {
+            console.log('Nova atividade diária criada:', updateData);
           }
         }
       } catch (error) {
@@ -68,7 +78,7 @@ export function useActivityTracker() {
       .on('postgres_changes', 
         { event: 'INSERT', schema: 'public', table: 'leads' },
         () => {
-          console.log('Novo lead adicionado, atualizando estatísticas...');
+          console.log('Novo lead adicionado via realtime, atualizando estatísticas...');
           updateDailyActivity('leads_added');
         }
       )
@@ -80,7 +90,7 @@ export function useActivityTracker() {
           
           // Verificar se houve mudança de estágio
           if (oldRecord.pipeline_stage !== newRecord.pipeline_stage) {
-            console.log('Lead movido entre estágios:', oldRecord.pipeline_stage, '->', newRecord.pipeline_stage);
+            console.log('Lead movido entre estágios via realtime:', oldRecord.pipeline_stage, '->', newRecord.pipeline_stage);
             updateDailyActivity('events_completed', {
               previousStage: oldRecord.pipeline_stage,
               newStage: newRecord.pipeline_stage
@@ -96,7 +106,7 @@ export function useActivityTracker() {
       .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'events' },
         () => {
-          console.log('Novo evento criado, atualizando estatísticas...');
+          console.log('Novo evento criado via realtime, atualizando estatísticas...');
           updateDailyActivity('events_created');
         }
       )
@@ -108,14 +118,14 @@ export function useActivityTracker() {
           
           // Verificar se o evento foi marcado como concluído
           if (!oldRecord.completed && newRecord.completed) {
-            console.log('Evento marcado como concluído');
-            // Pode adicionar lógica específica para eventos concluídos se necessário
+            console.log('Evento marcado como concluído via realtime');
           }
         }
       )
       .subscribe();
 
     return () => {
+      console.log('Desconectando rastreador de atividades...');
       leadsSubscription.unsubscribe();
       eventsSubscription.unsubscribe();
     };
