@@ -58,7 +58,8 @@ export function useDailyActivityTracker() {
         return;
       }
 
-      const currentLeadsMoved = data?.leads_moved || {};
+      // Garantir que leads_moved seja sempre um objeto
+      const currentLeadsMoved = (data?.leads_moved as Record<string, number>) || {};
       const updatedLeadsMoved = {
         ...currentLeadsMoved,
         [toStage]: (currentLeadsMoved[toStage] || 0) + 1
