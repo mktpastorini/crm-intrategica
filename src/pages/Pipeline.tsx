@@ -13,7 +13,6 @@ import { Phone, Mail, Calendar, User, Building, Archive } from 'lucide-react';
 
 export default function Pipeline() {
   // Inicializar o rastreador de atividades
-  useActivityTracker();
   
   const { leads, pipelineStages, moveLead, addEvent, users } = useCrm();
   const { user, profile } = useAuth();
