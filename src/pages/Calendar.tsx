@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Calendar as CalendarIcon, Users, Phone, Mail, MapPin, Clock } from 'lucide-react';
+import { Plus, Calendar as CalendarIcon, Users, Phone, Mail, MapPin, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import WeeklyCalendar from '@/components/calendar/WeeklyCalendar';
 import UpcomingEvents from '@/components/calendar/UpcomingEvents';
@@ -37,6 +37,7 @@ export default function Calendar() {
   
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingEvent, setEditingEvent] = useState<any>(null);
+  const [showUpcomingEvents, setShowUpcomingEvents] = useState(true);
   const [formData, setFormData] = useState({
     title: '',
     type: 'reuniao',
@@ -145,133 +146,153 @@ export default function Calendar() {
           <h2 className="text-2xl font-bold text-slate-900">Agenda</h2>
           <p className="text-slate-600">Visualização semanal dos eventos</p>
         </div>
-        <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-          <DialogTrigger asChild>
-            <Button style={{ backgroundColor: settings.primaryColor }}>
-              <Plus className="w-4 h-4 mr-2" />
-              Novo Evento
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>{editingEvent ? 'Editar Evento' : 'Novo Evento'}</DialogTitle>
-              <DialogDescription>
-                {editingEvent ? 'Edite as informações do evento' : 'Adicione um novo evento ao calendário'}
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <Label htmlFor="title">Título</Label>
-                <Input
-                  id="title"
-                  value={formData.title}
-                  onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="type">Tipo de Evento</Label>
-                <Select value={formData.type} onValueChange={(value) => setFormData(prev => ({ ...prev, type: value }))}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {eventTypeOptions.map((option) => {
-                      const Icon = option.icon;
-                      return (
-                        <SelectItem key={option.value} value={option.value}>
-                          <div className="flex items-center gap-2">
-                            <Icon className="w-4 h-4" style={{ color: option.color }} />
-                            <span>{option.label}</span>
-                          </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowUpcomingEvents(!showUpcomingEvents)}
+            className="flex items-center gap-2"
+          >
+            {showUpcomingEvents ? (
+              <>
+                <ChevronRight className="w-4 h-4" />
+                Ocultar Próximos Eventos
+              </>
+            ) : (
+              <>
+                <ChevronLeft className="w-4 h-4" />
+                Mostrar Próximos Eventos
+              </>
+            )}
+          </Button>
+          <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+            <DialogTrigger asChild>
+              <Button style={{ backgroundColor: settings.primaryColor }}>
+                <Plus className="w-4 h-4 mr-2" />
+                Novo Evento
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>{editingEvent ? 'Editar Evento' : 'Novo Evento'}</DialogTitle>
+                <DialogDescription>
+                  {editingEvent ? 'Edite as informações do evento' : 'Adicione um novo evento ao calendário'}
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <Label htmlFor="title">Título</Label>
+                  <Input
+                    id="title"
+                    value={formData.title}
+                    onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="type">Tipo de Evento</Label>
+                  <Select value={formData.type} onValueChange={(value) => setFormData(prev => ({ ...prev, type: value }))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {eventTypeOptions.map((option) => {
+                        const Icon = option.icon;
+                        return (
+                          <SelectItem key={option.value} value={option.value}>
+                            <div className="flex items-center gap-2">
+                              <Icon className="w-4 h-4" style={{ color: option.color }} />
+                              <span>{option.label}</span>
+                            </div>
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="date">Data</Label>
+                    <Input
+                      id="date"
+                      type="date"
+                      value={formData.date}
+                      onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="time">Hora</Label>
+                    <Input
+                      id="time"
+                      type="time"
+                      value={formData.time}
+                      onChange={(e) => setFormData(prev => ({ ...prev, time: e.target.value }))}
+                      required
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="lead_id">Lead (opcional)</Label>
+                  <Select value={formData.lead_id} onValueChange={(value) => setFormData(prev => ({ ...prev, lead_id: value }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um lead" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Nenhum lead</SelectItem>
+                      {leads.map((lead) => (
+                        <SelectItem key={lead.id} value={lead.id}>
+                          {lead.name} - {lead.company}
                         </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="date">Data</Label>
-                  <Input
-                    id="date"
-                    type="date"
-                    value={formData.date}
-                    onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                    required
-                  />
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div>
-                  <Label htmlFor="time">Hora</Label>
-                  <Input
-                    id="time"
-                    type="time"
-                    value={formData.time}
-                    onChange={(e) => setFormData(prev => ({ ...prev, time: e.target.value }))}
-                    required
-                  />
+                {formData.lead_id === 'none' && (
+                  <>
+                    <div>
+                      <Label htmlFor="lead_name">Nome do Contato</Label>
+                      <Input
+                        id="lead_name"
+                        value={formData.lead_name}
+                        onChange={(e) => setFormData(prev => ({ ...prev, lead_name: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="company">Empresa</Label>
+                      <Input
+                        id="company"
+                        value={formData.company}
+                        onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
+                      />
+                    </div>
+                  </>
+                )}
+                <div className="flex gap-2 pt-4">
+                  <Button 
+                    type="submit" 
+                    className="flex-1" 
+                    disabled={actionLoading === 'create-event' || actionLoading === editingEvent?.id}
+                    style={{ backgroundColor: settings.primaryColor }}
+                  >
+                    {(actionLoading === 'create-event' || actionLoading === editingEvent?.id) ? (
+                      <LoadingSpinner size="sm" />
+                    ) : (
+                      editingEvent ? 'Atualizar' : 'Criar Evento'
+                    )}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={handleCloseDialog} className="flex-1">
+                    Cancelar
+                  </Button>
                 </div>
-              </div>
-              <div>
-                <Label htmlFor="lead_id">Lead (opcional)</Label>
-                <Select value={formData.lead_id} onValueChange={(value) => setFormData(prev => ({ ...prev, lead_id: value }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione um lead" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nenhum lead</SelectItem>
-                    {leads.map((lead) => (
-                      <SelectItem key={lead.id} value={lead.id}>
-                        {lead.name} - {lead.company}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {formData.lead_id === 'none' && (
-                <>
-                  <div>
-                    <Label htmlFor="lead_name">Nome do Contato</Label>
-                    <Input
-                      id="lead_name"
-                      value={formData.lead_name}
-                      onChange={(e) => setFormData(prev => ({ ...prev, lead_name: e.target.value }))}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="company">Empresa</Label>
-                    <Input
-                      id="company"
-                      value={formData.company}
-                      onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
-                    />
-                  </div>
-                </>
-              )}
-              <div className="flex gap-2 pt-4">
-                <Button 
-                  type="submit" 
-                  className="flex-1" 
-                  disabled={actionLoading === 'create-event' || actionLoading === editingEvent?.id}
-                  style={{ backgroundColor: settings.primaryColor }}
-                >
-                  {(actionLoading === 'create-event' || actionLoading === editingEvent?.id) ? (
-                    <LoadingSpinner size="sm" />
-                  ) : (
-                    editingEvent ? 'Atualizar' : 'Criar Evento'
-                  )}
-                </Button>
-                <Button type="button" variant="outline" onClick={handleCloseDialog} className="flex-1">
-                  Cancelar
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-        <div className="xl:col-span-3">
+      <div className={`grid gap-6 ${showUpcomingEvents ? 'grid-cols-1 xl:grid-cols-4' : 'grid-cols-1'}`}>
+        <div className={showUpcomingEvents ? 'xl:col-span-3' : 'col-span-1'}>
           <WeeklyCalendar
             events={events}
             onEditEvent={handleEdit}
@@ -280,13 +301,15 @@ export default function Calendar() {
             onCompleteEvent={handleCompleteEvent}
           />
         </div>
-        <div className="xl:col-span-1">
-          <UpcomingEvents
-            events={events}
-            onEditEvent={handleEdit}
-            onDeleteEvent={handleDelete}
-          />
-        </div>
+        {showUpcomingEvents && (
+          <div className="xl:col-span-1">
+            <UpcomingEvents
+              events={events}
+              onEditEvent={handleEdit}
+              onDeleteEvent={handleDelete}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
