@@ -40,7 +40,7 @@ export default function Messages() {
   const [message, setMessage] = useState('');
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedNiche, setSelectedNiche] = useState<string>('');
+  const [selectedNiche, setSelectedNiche] = useState<string>('all');
   const [sending, setSending] = useState(false);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [templateName, setTemplateName] = useState('');
@@ -61,13 +61,13 @@ export default function Messages() {
       lead.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
       lead.phone.includes(searchTerm);
     
-    const matchesNiche = !selectedNiche || lead.niche === selectedNiche;
+    const matchesNiche = selectedNiche === 'all' || lead.niche === selectedNiche;
     
     return matchesSearch && matchesNiche;
   });
 
-  // Obter nichos únicos
-  const uniqueNiches = Array.from(new Set(leads.map(lead => lead.niche))).filter(Boolean);
+  // Obter nichos únicos (filtrar valores vazios)
+  const uniqueNiches = Array.from(new Set(leads.map(lead => lead.niche))).filter(niche => niche && niche.trim() !== '');
 
   const handleLeadSelection = (leadId: string, checked: boolean) => {
     setSelectedLeads(prev => {
@@ -277,7 +277,7 @@ export default function Messages() {
                   <SelectValue placeholder="Filtrar por nicho" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos os nichos</SelectItem>
+                  <SelectItem value="all">Todos os nichos</SelectItem>
                   {uniqueNiches.map((niche) => (
                     <SelectItem key={niche} value={niche}>
                       {niche}
@@ -295,7 +295,7 @@ export default function Messages() {
               <Button variant="outline" size="sm" onClick={clearSelection}>
                 Limpar
               </Button>
-              {selectedNiche && (
+              {selectedNiche !== 'all' && (
                 <Button variant="outline" size="sm" onClick={() => selectByNiche(selectedNiche)}>
                   Todos do Nicho
                 </Button>
