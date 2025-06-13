@@ -10,7 +10,6 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Phone, Mail, Calendar, User, Building, Archive } from 'lucide-react';
-import { useActivityTracker } from '@/hooks/useActivityTracker';
 
 export default function Pipeline() {
   // Inicializar o rastreador de atividades
