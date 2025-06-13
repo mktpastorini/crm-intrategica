@@ -11,8 +11,12 @@ const defaultSettings: SystemSettings = {
   primaryColor: '#1d0029',
   secondaryColor: '',
   webhookUrl: '',
+  webhookHoursBefore: 2,
   messageWebhookUrl: '',
   journeyWebhookUrl: '',
+  reportWebhookUrl: '',
+  reportWebhookTime: '18:00',
+  reportWebhookEnabled: false,
   dbUrl: '',
   dbAnonKey: '',
   dbServiceRoleKey: '',
@@ -53,8 +57,12 @@ export function useSystemSettingsDB() {
           primaryColor: data.primary_color || '#1d0029',
           secondaryColor: data.secondary_color || '',
           webhookUrl: data.webhook_url || '',
+          webhookHoursBefore: 2,
           messageWebhookUrl: data.message_webhook_url || '',
           journeyWebhookUrl: data.journey_webhook_url || '',
+          reportWebhookUrl: data.report_webhook_url || '',
+          reportWebhookTime: data.report_webhook_time || '18:00',
+          reportWebhookEnabled: data.report_webhook_enabled || false,
           google_maps_api_key: data.google_maps_api_key || '',
           dbUrl: '',
           dbAnonKey: '',
@@ -90,6 +98,9 @@ export function useSystemSettingsDB() {
       if ('webhookUrl' in updates) dbUpdates.webhook_url = updates.webhookUrl;
       if ('messageWebhookUrl' in updates) dbUpdates.message_webhook_url = updates.messageWebhookUrl;
       if ('journeyWebhookUrl' in updates) dbUpdates.journey_webhook_url = updates.journeyWebhookUrl;
+      if ('reportWebhookUrl' in updates) dbUpdates.report_webhook_url = updates.reportWebhookUrl;
+      if ('reportWebhookTime' in updates) dbUpdates.report_webhook_time = updates.reportWebhookTime;
+      if ('reportWebhookEnabled' in updates) dbUpdates.report_webhook_enabled = updates.reportWebhookEnabled;
       if ('google_maps_api_key' in updates) dbUpdates.google_maps_api_key = updates.google_maps_api_key;
 
       let result;

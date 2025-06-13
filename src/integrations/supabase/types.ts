@@ -9,6 +9,39 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      daily_activities: {
+        Row: {
+          created_at: string | null
+          date: string
+          events_created: number | null
+          id: string
+          leads_added: number | null
+          leads_moved: Json | null
+          messages_sent: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          date?: string
+          events_created?: number | null
+          id?: string
+          leads_added?: number | null
+          leads_moved?: Json | null
+          messages_sent?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          events_created?: number | null
+          id?: string
+          leads_added?: number | null
+          leads_moved?: Json | null
+          messages_sent?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       events: {
         Row: {
           company: string | null
@@ -171,6 +204,9 @@ export type Database = {
           logo_url: string | null
           message_webhook_url: string | null
           primary_color: string | null
+          report_webhook_enabled: boolean | null
+          report_webhook_time: string | null
+          report_webhook_url: string | null
           secondary_color: string | null
           system_name: string | null
           updated_at: string
@@ -185,6 +221,9 @@ export type Database = {
           logo_url?: string | null
           message_webhook_url?: string | null
           primary_color?: string | null
+          report_webhook_enabled?: boolean | null
+          report_webhook_time?: string | null
+          report_webhook_url?: string | null
           secondary_color?: string | null
           system_name?: string | null
           updated_at?: string
@@ -199,6 +238,9 @@ export type Database = {
           logo_url?: string | null
           message_webhook_url?: string | null
           primary_color?: string | null
+          report_webhook_enabled?: boolean | null
+          report_webhook_time?: string | null
+          report_webhook_url?: string | null
           secondary_color?: string | null
           system_name?: string | null
           updated_at?: string

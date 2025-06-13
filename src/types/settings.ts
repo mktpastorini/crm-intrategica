@@ -7,8 +7,12 @@ export interface SystemSettings {
   primaryColor: string;
   secondaryColor: string;
   webhookUrl: string;
+  webhookHoursBefore?: number;
   messageWebhookUrl: string;
   journeyWebhookUrl: string;
+  reportWebhookUrl?: string;
+  reportWebhookTime?: string;
+  reportWebhookEnabled?: boolean;
   dbUrl: string;
   dbAnonKey: string;
   dbServiceRoleKey: string;

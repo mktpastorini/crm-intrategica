@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Save } from 'lucide-react';
+import ReportSettings from './ReportSettings';
 
 interface WebhookSettingsProps {
   settings: any;
@@ -101,6 +102,12 @@ export default function WebhookSettings({ settings, onInputChange, onSave }: Web
           </Button>
         </CardContent>
       </Card>
+
+      <ReportSettings 
+        settings={settings}
+        onInputChange={onInputChange}
+        onSave={onSave}
+      />
     </div>
   );
 }
