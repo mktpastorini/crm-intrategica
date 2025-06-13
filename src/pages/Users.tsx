@@ -1,7 +1,5 @@
-
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +11,9 @@ import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { UserPlus, Edit, Trash2, UserX, Users as UsersIcon, UserCheck } from 'lucide-react';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import { secureUsersService } from '@/services/secureUsersService';
+import { inputValidation } from '@/utils/inputValidation';
+import { useAuthCheck } from '@/hooks/useAuthCheck';
 
 interface User {
   id: string;
@@ -33,6 +34,7 @@ export default function Users() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -41,28 +43,24 @@ export default function Users() {
     status: 'active'
   });
 
+  // Check if user has admin access
+  const { isAuthenticated, hasRequiredRole, isLoading: authLoading } = useAuthCheck({ 
+    requiredRole: ['admin'] 
+  });
+
   const loadUsers = async () => {
     try {
       console.log('Carregando usuários...');
       setLoading(true);
       
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Erro ao carregar usuários:', error);
-        throw error;
-      }
-
+      const data = await secureUsersService.getAll();
       console.log('Usuários carregados:', data?.length || 0);
       setUsers(data || []);
     } catch (error: any) {
       console.error('Erro ao carregar usuários:', error);
       toast({
         title: "Erro",
-        description: "Erro ao carregar usuários",
+        description: error.message || "Erro ao carregar usuários",
         variant: "destructive",
       });
     } finally {
@@ -71,36 +69,62 @@ export default function Users() {
   };
 
   useEffect(() => {
-    loadUsers();
-  }, []);
+    if (hasRequiredRole) {
+      loadUsers();
+    }
+  }, [hasRequiredRole]);
+
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    if (!inputValidation.validateRequired(formData.name)) {
+      errors.name = 'Nome é obrigatório';
+    }
+
+    if (!inputValidation.validateEmail(formData.email)) {
+      errors.email = 'Email inválido';
+    }
+
+    if (!editingUser && !inputValidation.validateLength(formData.password, 6, 100)) {
+      errors.password = 'Senha deve ter entre 6 e 100 caracteres';
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleInputChange = (field: string, value: string) => {
+    const sanitizedValue = inputValidation.sanitizeHtml(value);
+    setFormData(prev => ({ ...prev, [field]: sanitizedValue }));
+    
+    // Clear error for this field
+    if (formErrors[field]) {
+      setFormErrors(prev => ({ ...prev, [field]: '' }));
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!validateForm()) {
+      toast({
+        title: "Erro de validação",
+        description: "Corrija os erros no formulário antes de continuar",
+        variant: "destructive",
+      });
+      return;
+    }
     
     try {
       setActionLoading('submit');
       
       if (editingUser) {
         console.log('Atualizando usuário:', editingUser.id, formData);
-        
-        const { data, error } = await supabase
-          .from('profiles')
-          .update({
-            name: formData.name,
-            role: formData.role,
-            status: formData.status
-          })
-          .eq('id', editingUser.id)
-          .select()
-          .single();
-
-        if (error) {
-          console.error('Erro ao atualizar usuário:', error);
-          throw error;
-        }
-
-        console.log('Usuário atualizado:', data);
-        setUsers(prev => prev.map(u => u.id === editingUser.id ? data : u));
+        await secureUsersService.update(editingUser.id, {
+          name: formData.name,
+          role: formData.role as any,
+          status: formData.status as any
+        });
 
         toast({
           title: "Usuário atualizado",
@@ -108,53 +132,12 @@ export default function Users() {
         });
       } else {
         console.log('Criando novo usuário:', formData);
-
-        // Criar usuário no Supabase Auth
-        const { data: authData, error: authError } = await supabase.auth.signUp({
+        await secureUsersService.create({
+          name: formData.name,
           email: formData.email,
           password: formData.password,
-          options: {
-            data: {
-              name: formData.name,
-              role: formData.role,
-              status: formData.status
-            }
-          }
+          role: formData.role as any
         });
-
-        if (authError) {
-          console.error('Erro ao criar usuário no Auth:', authError);
-          throw authError;
-        }
-
-        console.log('Usuário criado no Auth:', authData);
-
-        // Aguardar um pouco para o trigger criar o perfil
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // Verificar se o perfil foi criado e atualizar com os dados corretos
-        if (authData.user) {
-          const { data: profileData, error: updateError } = await supabase
-            .from('profiles')
-            .update({
-              name: formData.name,
-              role: formData.role,
-              status: formData.status
-            })
-            .eq('id', authData.user.id)
-            .select()
-            .single();
-
-          if (updateError) {
-            console.error('Erro ao atualizar perfil criado:', updateError);
-            // Mesmo com erro na atualização, vamos recarregar a lista
-          }
-
-          console.log('Perfil atualizado:', profileData);
-        }
-
-        // Recarregar a lista
-        await loadUsers();
 
         toast({
           title: "Usuário criado",
@@ -163,6 +146,7 @@ export default function Users() {
       }
 
       handleCloseDialog();
+      await loadUsers();
     } catch (error: any) {
       console.error('Erro ao salvar usuário:', error);
       toast({
@@ -193,19 +177,7 @@ export default function Users() {
       console.log('Ativando usuário:', userId);
       setActionLoading(`activate-${userId}`);
       
-      const { data, error } = await supabase
-        .from('profiles')
-        .update({ status: 'active' })
-        .eq('id', userId)
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Erro ao ativar usuário:', error);
-        throw error;
-      }
-
-      console.log('Usuário ativado:', data);
+      await secureUsersService.toggleStatus(userId);
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: 'active' } : u));
 
       toast({
@@ -231,19 +203,7 @@ export default function Users() {
       console.log('Desativando usuário:', userId);
       setActionLoading(`deactivate-${userId}`);
       
-      const { data, error } = await supabase
-        .from('profiles')
-        .update({ status: 'inactive' })
-        .eq('id', userId)
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Erro ao desativar usuário:', error);
-        throw error;
-      }
-
-      console.log('Usuário desativado:', data);
+      await secureUsersService.toggleStatus(userId);
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: 'inactive' } : u));
 
       toast({
@@ -269,18 +229,7 @@ export default function Users() {
       console.log('Excluindo usuário:', userId);
       setActionLoading(`delete-${userId}`);
       
-      // Primeiro, exclua o perfil
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', userId);
-
-      if (profileError) {
-        console.error('Erro ao excluir perfil:', profileError);
-        throw profileError;
-      }
-
-      // Remove da lista local
+      await secureUsersService.delete(userId);
       setUsers(prev => prev.filter(u => u.id !== userId));
 
       toast({
@@ -309,6 +258,7 @@ export default function Users() {
       role: 'comercial',
       status: 'active'
     });
+    setFormErrors({});
   };
 
   const getRoleBadgeColor = (role: string) => {
@@ -324,11 +274,23 @@ export default function Users() {
     return status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800';
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <LoadingSpinner size="lg" text="Carregando usuários..." />
       </div>
+    );
+  }
+
+  if (!isAuthenticated || !hasRequiredRole) {
+    return (
+      <Card>
+        <CardContent className="p-12 text-center">
+          <UsersIcon className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-slate-900 mb-2">Acesso Restrito</h3>
+          <p className="text-slate-600">Você precisa ser administrador para gerenciar usuários.</p>
+        </CardContent>
+      </Card>
     );
   }
 
@@ -359,9 +321,13 @@ export default function Users() {
                 <Input
                   id="name"
                   value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                  onChange={(e) => handleInputChange('name', e.target.value)}
+                  className={formErrors.name ? 'border-red-500' : ''}
                   required
                 />
+                {formErrors.name && (
+                  <p className="text-red-500 text-sm mt-1">{formErrors.name}</p>
+                )}
               </div>
               <div>
                 <Label htmlFor="email">Email</Label>
@@ -369,10 +335,14 @@ export default function Users() {
                   id="email"
                   type="email"
                   value={formData.email}
-                  onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                  onChange={(e) => handleInputChange('email', e.target.value)}
+                  className={formErrors.email ? 'border-red-500' : ''}
                   disabled={!!editingUser}
                   required
                 />
+                {formErrors.email && (
+                  <p className="text-red-500 text-sm mt-1">{formErrors.email}</p>
+                )}
               </div>
               {!editingUser && (
                 <div>
@@ -381,11 +351,15 @@ export default function Users() {
                     id="password"
                     type="password"
                     value={formData.password}
-                    onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                    onChange={(e) => handleInputChange('password', e.target.value)}
+                    className={formErrors.password ? 'border-red-500' : ''}
                     required
                     minLength={6}
                     placeholder="Mínimo 6 caracteres"
                   />
+                  {formErrors.password && (
+                    <p className="text-red-500 text-sm mt-1">{formErrors.password}</p>
+                  )}
                 </div>
               )}
               <div>

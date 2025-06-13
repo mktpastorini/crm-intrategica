@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { securityHelpers } from '@/utils/securityHelpers';
+import { inputValidation } from '@/utils/inputValidation';
 
 interface Lead {
   id: string;
@@ -122,18 +124,33 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const { toast } = useToast();
 
-  // Helper function to send webhook
+  // Helper function to send webhook with security validation
   const sendWebhook = async (webhookUrl: string, data: any) => {
     if (!webhookUrl) return;
+    
+    // Validate webhook URL
+    if (!inputValidation.validateWebhookUrl(webhookUrl)) {
+      console.error('Invalid webhook URL:', webhookUrl);
+      return;
+    }
+
+    // Check rate limiting
+    const rateLimitKey = `webhook_${webhookUrl}`;
+    if (!securityHelpers.rateLimiter.isAllowed(rateLimitKey, 10, 60000)) {
+      console.error('Webhook rate limit exceeded for:', webhookUrl);
+      return;
+    }
     
     try {
       await fetch(webhookUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: securityHelpers.generateWebhookHeaders(),
         mode: 'no-cors',
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          timestamp: new Date().toISOString(),
+          source: 'crm-system'
+        }),
       });
     } catch (error) {
       console.error('Erro ao enviar webhook:', error);
@@ -213,7 +230,7 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     }
   }, [toast]);
 
-  // Load Leads
+  // Load Leads with proper validation
   const loadLeads = useCallback(async () => {
     try {
       console.log('Carregando leads...');
@@ -235,7 +252,7 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
       console.error('Erro ao carregar leads:', error);
       toast({
         title: "Erro",
-        description: "Erro ao carregar leads",
+        description: error.message || "Erro ao carregar leads",
         variant: "destructive",
       });
     } finally {
@@ -243,20 +260,46 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     }
   }, [toast]);
 
-  // Create Lead
+  // Create Lead with validation and sanitization
   const createLead = useCallback(async (leadData: Omit<Lead, 'id' | 'created_at' | 'updated_at'>) => {
     try {
       console.log('Criando lead:', leadData);
       setActionLoading('create-lead');
-      
-      const leadWithStage = {
+
+      // Validate input data
+      if (!inputValidation.validateRequired(leadData.name)) {
+        throw new Error('Nome é obrigatório');
+      }
+
+      if (!inputValidation.validateRequired(leadData.company)) {
+        throw new Error('Empresa é obrigatória');
+      }
+
+      if (!inputValidation.validatePhone(leadData.phone)) {
+        throw new Error('Telefone inválido');
+      }
+
+      if (leadData.email && !inputValidation.validateEmail(leadData.email)) {
+        throw new Error('Email inválido');
+      }
+
+      if (leadData.website && !inputValidation.validateUrl(leadData.website)) {
+        throw new Error('Website inválido');
+      }
+
+      // Sanitize input data
+      const sanitizedLeadData = {
         ...leadData,
+        name: inputValidation.sanitizeHtml(leadData.name),
+        company: inputValidation.sanitizeHtml(leadData.company),
+        niche: inputValidation.sanitizeHtml(leadData.niche),
+        email: leadData.email?.toLowerCase().trim(),
         pipeline_stage: 'aguardando-inicio'
       };
       
       const { data, error } = await supabase
         .from('leads')
-        .insert([leadWithStage])
+        .insert([sanitizedLeadData])
         .select()
         .single();
 
