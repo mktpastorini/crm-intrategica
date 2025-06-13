@@ -45,6 +45,7 @@ export type Database = {
       events: {
         Row: {
           company: string | null
+          completed: boolean | null
           created_at: string
           date: string
           id: string
@@ -57,6 +58,7 @@ export type Database = {
         }
         Insert: {
           company?: string | null
+          completed?: boolean | null
           created_at?: string
           date: string
           id?: string
@@ -69,6 +71,7 @@ export type Database = {
         }
         Update: {
           company?: string | null
+          completed?: boolean | null
           created_at?: string
           date?: string
           id?: string

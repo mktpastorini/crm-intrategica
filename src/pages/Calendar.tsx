@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -12,6 +11,7 @@ import { Plus, Calendar as CalendarIcon, Users, Phone, Mail, MapPin, Clock } fro
 import LoadingSpinner from '@/components/LoadingSpinner';
 import WeeklyCalendar from '@/components/calendar/WeeklyCalendar';
 import UpcomingEvents from '@/components/calendar/UpcomingEvents';
+import { useToast } from '@/hooks/use-toast';
 
 const eventTypeOptions = [
   { value: 'reuniao', label: 'Reunião', icon: Users, color: '#1d0029' },
@@ -24,6 +24,7 @@ const eventTypeOptions = [
 export default function Calendar() {
   const { user } = useAuth();
   const { settings } = useSystemSettingsDB();
+  const { toast } = useToast();
   const { 
     events, 
     leads,
@@ -94,6 +95,23 @@ export default function Calendar() {
       await deleteEvent(eventId);
     } catch (error) {
       console.error('Erro ao excluir evento:', error);
+    }
+  };
+
+  const handleCompleteEvent = async (eventId: string) => {
+    try {
+      await updateEvent(eventId, { completed: true });
+      toast({
+        title: "Evento marcado como realizado",
+        description: "O evento foi registrado como concluído com sucesso.",
+      });
+    } catch (error) {
+      console.error('Erro ao marcar evento como realizado:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível marcar o evento como realizado.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -259,6 +277,7 @@ export default function Calendar() {
             onEditEvent={handleEdit}
             onDeleteEvent={handleDelete}
             onAddEvent={() => setShowAddDialog(true)}
+            onCompleteEvent={handleCompleteEvent}
           />
         </div>
         <div className="xl:col-span-1">

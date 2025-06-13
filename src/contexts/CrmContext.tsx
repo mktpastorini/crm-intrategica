@@ -79,7 +79,7 @@ interface CrmContextType {
   // Events
   loadEvents: () => Promise<void>;
   createEvent: (eventData: Omit<Event, 'id' | 'created_at'>) => Promise<void>;
-  updateEvent: (id: string, eventData: Partial<Event>) => Promise<void>;
+  updateEvent: (eventId: string, updates: any) => Promise<void>;
   deleteEvent: (id: string) => Promise<void>;
   addEvent: (eventData: Omit<Event, 'id' | 'created_at'>) => Promise<void>;
   
@@ -508,43 +508,42 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
   }, [toast]);
 
   // Update Event
-  const updateEvent = useCallback(async (id: string, eventData: Partial<Event>) => {
+  const updateEvent = async (eventId: string, updates: any) => {
     try {
-      console.log('Atualizando evento:', id, eventData);
-      setActionLoading(id);
-      
+      setActionLoading(eventId);
+      console.log('Atualizando evento:', eventId, updates);
+
       const { data, error } = await supabase
         .from('events')
-        .update(eventData)
-        .eq('id', id)
+        .update(updates)
+        .eq('id', eventId)
         .select()
         .single();
 
       if (error) {
-        console.error('Erro ao atualizar evento:', error);
+        console.error('Erro do Supabase ao atualizar evento:', error);
         throw error;
       }
 
       console.log('Evento atualizado:', data);
-      setEvents(prev => prev.map(event => event.id === id ? data : event)
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+      setEvents(prev => prev.map(event => event.id === eventId ? data : event));
       
       toast({
         title: "Evento atualizado",
-        description: "Evento foi atualizado com sucesso",
+        description: "As informações do evento foram atualizadas com sucesso.",
       });
-    } catch (error: any) {
+    } catch (error) {
       console.error('Erro ao atualizar evento:', error);
       toast({
-        title: "Erro",
-        description: error.message || "Erro ao atualizar evento",
+        title: "Erro ao atualizar evento",
+        description: error instanceof Error ? error.message : "Ocorreu um erro inesperado.",
         variant: "destructive",
       });
       throw error;
     } finally {
       setActionLoading(null);
     }
-  }, [toast]);
+  };
 
   // Delete Event
   const deleteEvent = useCallback(async (id: string) => {

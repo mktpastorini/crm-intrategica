@@ -1,20 +1,28 @@
+
+import { useState } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useMeetingMetrics } from '@/hooks/useMeetingMetrics';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
-import { Users, Target, Calendar, TrendingUp, Phone, Mail, Clock, Award } from 'lucide-react';
+import { Users, Target, Calendar, TrendingUp, Phone, Mail, Clock, Award, CheckCircle, Eye } from 'lucide-react';
+import UserDetailsModal from '@/components/dashboard/UserDetailsModal';
 
 export default function Dashboard() {
   const { leads, pipelineStages, events, users } = useCrm();
   const { user, profile } = useAuth();
+  const meetingMetrics = useMeetingMetrics(events);
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [showDetails, setShowDetails] = useState(false);
 
   const totalLeads = leads.length;
   const leadsInPipeline = leads.filter(lead => lead.pipeline_stage !== 'contrato-assinado').length;
   const proposalsSent = leads.filter(lead => lead.pipeline_stage === 'proposta-enviada').length;
   const meetingsScheduled = events.filter(event => 
-    event.type === 'reunion' && 
+    event.type === 'reuniao' && 
     new Date(event.date + 'T' + event.time) >= new Date() &&
     new Date(event.date + 'T' + event.time) <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
   ).length;
@@ -135,7 +143,7 @@ export default function Dashboard() {
       const responsibleName = getUserName(event.responsible_id);
       activities.push({
         type: 'event',
-        message: `${event.type === 'reunion' ? 'Reunião agendada' : 'Evento agendado'} com ${event.lead_name || 'cliente'} (${responsibleName})`,
+        message: `${event.type === 'reuniao' ? 'Reunião agendada' : 'Evento agendado'} com ${event.lead_name || 'cliente'} (${responsibleName})`,
         time: new Date(event.date).toLocaleDateString('pt-BR')
       });
     });
@@ -145,10 +153,29 @@ export default function Dashboard() {
 
   const recentActivities = getRecentActivities();
 
+  const handleUserDetails = (userId: string) => {
+    const userLeads = leads.filter(lead => lead.responsible_id === userId);
+    const userEvents = events.filter(event => event.responsible_id === userId);
+    const foundUser = users.find(u => u.id === userId);
+    
+    if (foundUser) {
+      setSelectedUser({
+        ...foundUser,
+        leads: userLeads,
+        events: userEvents,
+        closedDeals: userLeads.filter(lead => lead.pipeline_stage === 'contrato-assinado').length,
+        totalLeads: userLeads.length,
+        completedMeetings: userEvents.filter(event => event.completed === true).length,
+        scheduledMeetings: userEvents.length
+      });
+      setShowDetails(true);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
         <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-blue-700">Total de Leads</CardTitle>
@@ -197,6 +224,32 @@ export default function Dashboard() {
             <div className="text-2xl font-bold text-green-900">{meetingsScheduled}</div>
             <p className="text-xs text-green-600 mt-1">
               Próximos 7 dias
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-emerald-700">Reuniões Hoje</CardTitle>
+            <CheckCircle className="h-4 w-4 text-emerald-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-emerald-900">{meetingMetrics.today}</div>
+            <p className="text-xs text-emerald-600 mt-1">
+              Realizadas hoje
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-teal-50 to-teal-100 border-teal-200">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-teal-700">Total Reuniões</CardTitle>
+            <Award className="h-4 w-4 text-teal-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-teal-900">{meetingMetrics.total}</div>
+            <p className="text-xs text-teal-600 mt-1">
+              Semana: {meetingMetrics.thisWeek} | Mês: {meetingMetrics.thisMonth}
             </p>
           </CardContent>
         </Card>
@@ -285,9 +338,20 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
           <CardHeader>
-            <CardTitle className="text-lg font-semibold text-green-800 flex items-center">
-              <Award className="mr-2 h-5 w-5" />
-              Top Performers
+            <CardTitle className="text-lg font-semibold text-green-800 flex items-center justify-between">
+              <div className="flex items-center">
+                <Award className="mr-2 h-5 w-5" />
+                Top Performers
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => console.log('Toggle details')}
+                className="text-xs"
+              >
+                <Eye className="w-3 h-3 mr-1" />
+                Detalhamento
+              </Button>
             </CardTitle>
             <CardDescription>Usuários com mais fechamentos</CardDescription>
           </CardHeader>
@@ -314,10 +378,20 @@ export default function Dashboard() {
                       <p className="text-sm text-slate-600">{user.fechamentos} fechamentos</p>
                     </div>
                   </div>
-                  <Progress 
-                    value={userStats.length > 0 ? (user.fechamentos / Math.max(...userStats.map(u => u.fechamentos))) * 100 : 0} 
-                    className="w-20" 
-                  />
+                  <div className="flex items-center space-x-2">
+                    <Progress 
+                      value={userStats.length > 0 ? (user.fechamentos / Math.max(...userStats.map(u => u.fechamentos))) * 100 : 0} 
+                      className="w-20" 
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleUserDetails(user.userId)}
+                      className="h-8 w-8 p-0"
+                    >
+                      <Eye className="w-3 h-3" />
+                    </Button>
+                  </div>
                 </div>
               ))
             ) : (
@@ -358,6 +432,12 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <UserDetailsModal
+        isOpen={showDetails}
+        onClose={() => setShowDetails(false)}
+        userData={selectedUser}
+      />
     </div>
   );
 }

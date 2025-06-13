@@ -1,8 +1,9 @@
+
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, Edit, Trash2, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Edit, Trash2, Plus, Check } from 'lucide-react';
 import { format, startOfWeek, addDays, addWeeks, subWeeks, isSameDay, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -15,6 +16,7 @@ interface Event {
   time: string;
   company?: string;
   lead_name?: string;
+  completed?: boolean;
 }
 
 interface WeeklyCalendarProps {
@@ -22,9 +24,10 @@ interface WeeklyCalendarProps {
   onEditEvent: (event: Event) => void;
   onDeleteEvent: (eventId: string) => void;
   onAddEvent: () => void;
+  onCompleteEvent?: (eventId: string) => void;
 }
 
-export default function WeeklyCalendar({ events, onEditEvent, onDeleteEvent, onAddEvent }: WeeklyCalendarProps) {
+export default function WeeklyCalendar({ events, onEditEvent, onDeleteEvent, onAddEvent, onCompleteEvent }: WeeklyCalendarProps) {
   const [currentWeek, setCurrentWeek] = useState(new Date());
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
   const isMobile = useIsMobile();
@@ -65,9 +68,73 @@ export default function WeeklyCalendar({ events, onEditEvent, onDeleteEvent, onA
   };
 
   const isToday = (date: Date) => isSameDay(date, new Date());
+  const isEventToday = (event: Event) => isSameDay(parseISO(event.date), new Date());
 
   const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
   const dayNamesFull = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+
+  const EventCard = ({ event }: { event: Event }) => (
+    <div className={`p-3 rounded border ${event.completed ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-200'}`}>
+      <div className="flex items-center justify-between mb-2">
+        <Badge className={`${getEventTypeBadge(event.type)} text-xs px-2 py-1`}>
+          {getEventTypeLabel(event.type)}
+        </Badge>
+        <div className="flex space-x-1">
+          {isEventToday(event) && !event.completed && onCompleteEvent && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onCompleteEvent(event.id)}
+              className="h-6 w-6 p-0 text-green-600 hover:text-green-700"
+              title="Marcar como realizado"
+            >
+              <Check className="w-3 h-3" />
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onEditEvent(event)}
+            className="h-6 w-6 p-0"
+          >
+            <Edit className="w-3 h-3" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onDeleteEvent(event.id)}
+            className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+          >
+            <Trash2 className="w-3 h-3" />
+          </Button>
+        </div>
+      </div>
+      
+      <div className="space-y-1">
+        <h4 className={`text-sm font-semibold leading-tight ${event.completed ? 'text-green-900 line-through' : 'text-slate-900'}`}>
+          {event.title}
+        </h4>
+        <p className="text-xs text-slate-600 font-medium">
+          {event.time}
+        </p>
+        {event.lead_name && (
+          <p className="text-xs text-slate-700 leading-tight">
+            <span className="font-medium">Contato:</span> {event.lead_name}
+          </p>
+        )}
+        {event.company && (
+          <p className="text-xs text-slate-600 leading-tight">
+            <span className="font-medium">Empresa:</span> {event.company}
+          </p>
+        )}
+        {event.completed && (
+          <p className="text-xs text-green-600 font-medium">
+            ✓ Realizado
+          </p>
+        )}
+      </div>
+    </div>
+  );
 
   if (isMobile) {
     return (
@@ -153,50 +220,7 @@ export default function WeeklyCalendar({ events, onEditEvent, onDeleteEvent, onA
           <CardContent className="pt-0 space-y-3">
             {getEventsForDay(weekDays[selectedDayIndex]).length > 0 ? (
               getEventsForDay(weekDays[selectedDayIndex]).map((event) => (
-                <div key={event.id} className="p-3 bg-slate-50 rounded border border-slate-200">
-                  <div className="flex items-center justify-between mb-2">
-                    <Badge className={`${getEventTypeBadge(event.type)} text-xs px-2 py-1`}>
-                      {getEventTypeLabel(event.type)}
-                    </Badge>
-                    <div className="flex space-x-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onEditEvent(event)}
-                        className="h-6 w-6 p-0"
-                      >
-                        <Edit className="w-3 h-3" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onDeleteEvent(event.id)}
-                        className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-1">
-                    <h4 className="text-sm font-semibold text-slate-900 leading-tight">
-                      {event.title}
-                    </h4>
-                    <p className="text-xs text-slate-600 font-medium">
-                      {event.time}
-                    </p>
-                    {event.lead_name && (
-                      <p className="text-xs text-slate-700 leading-tight">
-                        <span className="font-medium">Contato:</span> {event.lead_name}
-                      </p>
-                    )}
-                    {event.company && (
-                      <p className="text-xs text-slate-600 leading-tight">
-                        <span className="font-medium">Empresa:</span> {event.company}
-                      </p>
-                    )}
-                  </div>
-                </div>
+                <EventCard key={event.id} event={event} />
               ))
             ) : (
               <p className="text-sm text-slate-400 text-center py-8">
@@ -260,50 +284,7 @@ export default function WeeklyCalendar({ events, onEditEvent, onDeleteEvent, onA
               </CardHeader>
               <CardContent className="pt-0 px-3 pb-3 space-y-2">
                 {dayEvents.map((event) => (
-                  <div key={event.id} className="p-3 bg-slate-50 rounded border border-slate-200">
-                    <div className="flex items-center justify-between mb-2">
-                      <Badge className={`${getEventTypeBadge(event.type)} text-xs px-2 py-1`}>
-                        {getEventTypeLabel(event.type)}
-                      </Badge>
-                      <div className="flex space-x-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => onEditEvent(event)}
-                          className="h-6 w-6 p-0"
-                        >
-                          <Edit className="w-3 h-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => onDeleteEvent(event.id)}
-                          className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-1">
-                      <h4 className="text-sm font-semibold text-slate-900 leading-tight">
-                        {event.title}
-                      </h4>
-                      <p className="text-xs text-slate-600 font-medium">
-                        {event.time}
-                      </p>
-                      {event.lead_name && (
-                        <p className="text-xs text-slate-700 leading-tight">
-                          <span className="font-medium">Contato:</span> {event.lead_name}
-                        </p>
-                      )}
-                      {event.company && (
-                        <p className="text-xs text-slate-600 leading-tight">
-                          <span className="font-medium">Empresa:</span> {event.company}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+                  <EventCard key={event.id} event={event} />
                 ))}
                 {dayEvents.length === 0 && (
                   <p className="text-xs text-slate-400 text-center py-6">
