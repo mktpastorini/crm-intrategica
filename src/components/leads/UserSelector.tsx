@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Check, ChevronsUpDown, User } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 
 interface User {
@@ -14,6 +15,7 @@ interface User {
   email: string;
   role: string;
   status: string;
+  avatar_url?: string;
 }
 
 interface UserSelectorProps {
@@ -52,25 +54,29 @@ export default function UserSelector({ users, value, onValueChange, placeholder 
 
   return (
     <div className="space-y-2">
-      <Label>Responsável</Label>
+      <Label className="text-sm font-medium">Responsável</Label>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            className="w-full justify-between"
+            className="w-full justify-between mt-1"
             disabled={disabled}
           >
             <div className="flex items-center space-x-2">
               {selectedUser ? (
                 <>
-                  <div className="w-6 h-6 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full flex items-center justify-center">
-                    <span className="text-white text-xs font-medium">
+                  <Avatar className="w-6 h-6">
+                    <AvatarImage 
+                      src={selectedUser.avatar_url} 
+                      alt={selectedUser.name}
+                    />
+                    <AvatarFallback className="text-xs bg-gradient-to-r from-blue-400 to-purple-500 text-white">
                       {selectedUser.name.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <span>{selectedUser.name}</span>
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="truncate">{selectedUser.name}</span>
                 </>
               ) : (
                 <>
@@ -99,11 +105,15 @@ export default function UserSelector({ users, value, onValueChange, placeholder 
                     className="flex items-center justify-between p-3"
                   >
                     <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full flex items-center justify-center">
-                        <span className="text-white text-sm font-medium">
+                      <Avatar className="w-8 h-8">
+                        <AvatarImage 
+                          src={user.avatar_url} 
+                          alt={user.name}
+                        />
+                        <AvatarFallback className="text-sm bg-gradient-to-r from-blue-400 to-purple-500 text-white">
                           {user.name.charAt(0).toUpperCase()}
-                        </span>
-                      </div>
+                        </AvatarFallback>
+                      </Avatar>
                       <div>
                         <div className="font-medium text-slate-900">{user.name}</div>
                         <div className="text-sm text-slate-500">{user.email}</div>

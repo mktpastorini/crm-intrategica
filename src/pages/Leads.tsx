@@ -33,6 +33,7 @@ interface Lead {
   rating?: number;
   place_id?: string;
   whatsapp?: string;
+  instagram?: string;
 }
 
 export default function Leads() {
@@ -57,7 +58,8 @@ export default function Leads() {
     responsible_id: user?.id || '',
     website: '',
     address: '',
-    whatsapp: ''
+    whatsapp: '',
+    instagram: ''
   });
 
   useEffect(() => {
@@ -120,7 +122,8 @@ export default function Leads() {
       responsible_id: lead.responsible_id,
       website: lead.website || '',
       address: lead.address || '',
-      whatsapp: lead.whatsapp || ''
+      whatsapp: lead.whatsapp || '',
+      instagram: lead.instagram || ''
     });
     setShowAddDialog(true);
   };
@@ -152,7 +155,8 @@ export default function Leads() {
       responsible_id: user?.id || '',
       website: '',
       address: '',
-      whatsapp: ''
+      whatsapp: '',
+      instagram: ''
     });
   };
 
@@ -272,112 +276,145 @@ export default function Leads() {
                 Novo Lead
               </Button>
             </DialogTrigger>
-            <DialogContent className={`${isMobile ? 'w-[95vw] max-w-none mx-2' : 'max-w-md'} max-h-[90vh] overflow-y-auto`}>
+            <DialogContent className={`${isMobile ? 'w-[95vw] max-w-none mx-2' : 'max-w-lg'} max-h-[90vh] overflow-y-auto`}>
               <DialogHeader>
                 <DialogTitle>{editingLead ? 'Editar Lead' : 'Novo Lead'}</DialogTitle>
                 <DialogDescription>
                   {editingLead ? 'Edite as informações do lead' : 'Adicione um novo lead ao sistema'}
                 </DialogDescription>
               </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <Label htmlFor="name">Nome do Contato</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                    required
-                  />
+              <form onSubmit={handleSubmit} className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <Label htmlFor="name" className="text-sm font-medium">Nome do Contato</Label>
+                    <Input
+                      id="name"
+                      value={formData.name}
+                      onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                      required
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="company" className="text-sm font-medium">Empresa</Label>
+                    <Input
+                      id="company"
+                      value={formData.company}
+                      onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
+                      required
+                      className="mt-1"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="company">Empresa</Label>
-                  <Input
-                    id="company"
-                    value={formData.company}
-                    onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
-                    required
-                  />
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <Label htmlFor="phone" className="text-sm font-medium">Telefone</Label>
+                    <Input
+                      id="phone"
+                      value={formData.phone}
+                      onChange={(e) => handlePhoneChange(e.target.value, (value) => setFormData(prev => ({ ...prev, phone: value })))}
+                      required
+                      placeholder="(11) 99999-9999"
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="whatsapp" className="text-sm font-medium">WhatsApp</Label>
+                    <Input
+                      id="whatsapp"
+                      value={formData.whatsapp}
+                      onChange={(e) => handlePhoneChange(e.target.value, (value) => setFormData(prev => ({ ...prev, whatsapp: value })))}
+                      placeholder="(11) 99999-9999"
+                      className="mt-1"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="phone">Telefone</Label>
-                  <Input
-                    id="phone"
-                    value={formData.phone}
-                    onChange={(e) => handlePhoneChange(e.target.value, (value) => setFormData(prev => ({ ...prev, phone: value })))}
-                    required
-                    placeholder="(11) 99999-9999"
-                  />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <Label htmlFor="email" className="text-sm font-medium">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="instagram" className="text-sm font-medium">Instagram</Label>
+                    <Input
+                      id="instagram"
+                      value={formData.instagram}
+                      onChange={(e) => setFormData(prev => ({ ...prev, instagram: e.target.value }))}
+                      placeholder="@usuario ou link"
+                      className="mt-1"
+                    />
+                  </div>
                 </div>
+
                 <div>
-                  <Label htmlFor="whatsapp">WhatsApp (opcional)</Label>
-                  <Input
-                    id="whatsapp"
-                    value={formData.whatsapp}
-                    onChange={(e) => handlePhoneChange(e.target.value, (value) => setFormData(prev => ({ ...prev, whatsapp: value })))}
-                    placeholder="(11) 99999-9999"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="email">Email (opcional)</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="website">Website (opcional)</Label>
+                  <Label htmlFor="website" className="text-sm font-medium">Website</Label>
                   <Input
                     id="website"
                     type="url"
                     value={formData.website}
                     onChange={(e) => setFormData(prev => ({ ...prev, website: e.target.value }))}
                     placeholder="https://exemplo.com"
+                    className="mt-1"
                   />
                 </div>
+
                 <div>
-                  <Label htmlFor="address">Endereço (opcional)</Label>
+                  <Label htmlFor="address" className="text-sm font-medium">Endereço</Label>
                   <Textarea
                     id="address"
                     value={formData.address}
                     onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
                     placeholder="Endereço completo da empresa"
                     rows={2}
+                    className="mt-1"
                   />
                 </div>
-                <div>
-                  <Label htmlFor="niche">Nicho</Label>
-                  <Input
-                    id="niche"
-                    value={formData.niche}
-                    onChange={(e) => setFormData(prev => ({ ...prev, niche: e.target.value }))}
-                    required
-                  />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <Label htmlFor="niche" className="text-sm font-medium">Nicho</Label>
+                    <Input
+                      id="niche"
+                      value={formData.niche}
+                      onChange={(e) => setFormData(prev => ({ ...prev, niche: e.target.value }))}
+                      required
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="status" className="text-sm font-medium">Status</Label>
+                    <Select value={formData.status} onValueChange={(value) => setFormData(prev => ({ ...prev, status: value }))}>
+                      <SelectTrigger className="mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="novo">Novo</SelectItem>
+                        <SelectItem value="contatado">Contatado</SelectItem>
+                        <SelectItem value="qualificado">Qualificado</SelectItem>
+                        <SelectItem value="proposta">Proposta</SelectItem>
+                        <SelectItem value="fechado">Fechado</SelectItem>
+                        <SelectItem value="perdido">Perdido</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="status">Status</Label>
-                  <Select value={formData.status} onValueChange={(value) => setFormData(prev => ({ ...prev, status: value }))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="novo">Novo</SelectItem>
-                      <SelectItem value="contatado">Contatado</SelectItem>
-                      <SelectItem value="qualificado">Qualificado</SelectItem>
-                      <SelectItem value="proposta">Proposta</SelectItem>
-                      <SelectItem value="fechado">Fechado</SelectItem>
-                      <SelectItem value="perdido">Perdido</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+
                 <UserSelector
                   users={users}
                   value={formData.responsible_id}
                   onValueChange={(value) => setFormData(prev => ({ ...prev, responsible_id: value }))}
                   placeholder="Selecionar responsável"
                 />
-                <div className="flex gap-2 pt-4">
+
+                <div className="flex gap-2 pt-2">
                   <Button type="submit" className="flex-1" disabled={actionLoading === 'create-lead' || actionLoading === 'submit'}>
                     {(actionLoading === 'create-lead' || actionLoading === 'submit') ? (
                       <LoadingSpinner size="sm" />
