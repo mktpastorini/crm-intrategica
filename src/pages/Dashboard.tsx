@@ -8,7 +8,7 @@ import { Users, Target, Calendar, TrendingUp, Phone, Mail, Clock, Award } from '
 
 export default function Dashboard() {
   const { leads, pipelineStages, events, users } = useCrm();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   const totalLeads = leads.length;
   const leadsInPipeline = leads.filter(lead => lead.pipeline_stage !== 'contrato-assinado').length;
@@ -29,8 +29,8 @@ export default function Dashboard() {
   // Função para obter a imagem do usuário pelo ID
   const getUserAvatar = (userId: string | null) => {
     if (!userId || !users || users.length === 0) return null;
-    const user = users.find(u => u.id === userId);
-    return user?.avatar_url || null;
+    const foundUser = users.find(u => u.id === userId);
+    return foundUser?.avatar_url || null;
   };
 
   // Função para obter as iniciais do nome do usuário
