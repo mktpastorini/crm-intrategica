@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { FileText, Send, TestTube } from 'lucide-react';
+import { FileText, Send, TestTube, Phone } from 'lucide-react';
 
 interface ReportSettingsProps {
   settings: any;
@@ -45,6 +45,7 @@ export default function ReportSettings({ settings, onInputChange, onSave }: Repo
           total_activities: 24,
           system_name: settings.systemName || "Sistema CRM"
         },
+        whatsapp_number: settings.reportWhatsappNumber || '',
         test: true
       };
 
@@ -120,6 +121,22 @@ export default function ReportSettings({ settings, onInputChange, onSave }: Repo
             </p>
           </div>
 
+          <div>
+            <Label htmlFor="report-whatsapp" className="flex items-center gap-2">
+              <Phone className="w-4 h-4" />
+              Número do WhatsApp
+            </Label>
+            <Input
+              id="report-whatsapp"
+              value={settings.reportWhatsappNumber || ''}
+              onChange={(e) => onInputChange('reportWhatsappNumber', e.target.value)}
+              placeholder="5511999999999"
+            />
+            <p className="text-sm text-slate-600 mt-1">
+              Número do WhatsApp que será enviado junto com o relatório (formato: 5511999999999)
+            </p>
+          </div>
+
           <div className="border-t pt-4">
             <h4 className="font-medium mb-2">O que será incluído no relatório:</h4>
             <ul className="text-sm text-slate-600 space-y-1">
@@ -127,6 +144,7 @@ export default function ReportSettings({ settings, onInputChange, onSave }: Repo
               <li>• Leads movidos entre estágios do pipeline</li>
               <li>• Número de mensagens enviadas</li>
               <li>• Eventos da agenda criados</li>
+              <li>• Número do WhatsApp configurado</li>
             </ul>
           </div>
 

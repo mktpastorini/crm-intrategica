@@ -13,6 +13,7 @@ export interface SystemSettings {
   reportWebhookUrl?: string;
   reportWebhookTime?: string;
   reportWebhookEnabled?: boolean;
+  reportWhatsappNumber?: string;
   dbUrl: string;
   dbAnonKey: string;
   dbServiceRoleKey: string;

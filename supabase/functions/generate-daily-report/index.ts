@@ -69,6 +69,7 @@ serve(async (req) => {
         system_name: settings.system_name || "Sistema CRM",
         generated_at: new Date().toISOString()
       },
+      whatsapp_number: settings.report_whatsapp_number || '',
       test: false
     };
 

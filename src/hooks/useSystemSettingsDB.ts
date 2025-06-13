@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { SystemSettings } from '@/types/settings';
@@ -17,6 +16,7 @@ const defaultSettings: SystemSettings = {
   reportWebhookUrl: '',
   reportWebhookTime: '18:00',
   reportWebhookEnabled: false,
+  reportWhatsappNumber: '',
   dbUrl: '',
   dbAnonKey: '',
   dbServiceRoleKey: '',
@@ -63,6 +63,7 @@ export function useSystemSettingsDB() {
           reportWebhookUrl: data.report_webhook_url || '',
           reportWebhookTime: data.report_webhook_time || '18:00',
           reportWebhookEnabled: data.report_webhook_enabled || false,
+          reportWhatsappNumber: data.report_whatsapp_number || '',
           google_maps_api_key: data.google_maps_api_key || '',
           dbUrl: '',
           dbAnonKey: '',
@@ -101,6 +102,7 @@ export function useSystemSettingsDB() {
       if ('reportWebhookUrl' in updates) dbUpdates.report_webhook_url = updates.reportWebhookUrl;
       if ('reportWebhookTime' in updates) dbUpdates.report_webhook_time = updates.reportWebhookTime;
       if ('reportWebhookEnabled' in updates) dbUpdates.report_webhook_enabled = updates.reportWebhookEnabled;
+      if ('reportWhatsappNumber' in updates) dbUpdates.report_whatsapp_number = updates.reportWhatsappNumber;
       if ('google_maps_api_key' in updates) dbUpdates.google_maps_api_key = updates.google_maps_api_key;
 
       let result;
