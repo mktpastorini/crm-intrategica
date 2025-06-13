@@ -30,10 +30,12 @@ export function useActivityTracker() {
         } else if (type === 'events_completed' && data?.previousStage && data?.newStage) {
           // Rastrear movimentação de leads entre estágios
           const currentMoved = existing?.leads_moved || {};
+          // Garantir que currentMoved seja um objeto válido
+          const safeCurrentMoved = typeof currentMoved === 'object' && currentMoved !== null ? currentMoved : {};
           const stageKey = `${data.previousStage} -> ${data.newStage}`;
           updateData.leads_moved = {
-            ...currentMoved,
-            [stageKey]: (currentMoved[stageKey] || 0) + 1
+            ...safeCurrentMoved,
+            [stageKey]: (safeCurrentMoved[stageKey] || 0) + 1
           };
         }
 
