@@ -1,4 +1,3 @@
-
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -79,6 +78,48 @@ export default function ReportSettings({ settings, onInputChange, onSave }: Repo
     }
   };
 
+  const handleGenerateReport = async () => {
+    if (!settings.reportWebhookUrl) {
+      toast({
+        title: "URL necessária",
+        description: "Configure a URL do webhook antes de gerar o relatório",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      toast({
+        title: "Gerando relatório",
+        description: "Processando dados e enviando relatório...",
+      });
+
+      const { data, error } = await supabase.functions.invoke('generate-daily-report');
+
+      if (error) {
+        console.error('Erro ao gerar relatório:', error);
+        toast({
+          title: "Erro ao gerar relatório",
+          description: "Erro ao processar o relatório diário",
+          variant: "destructive",
+        });
+      } else {
+        console.log('Relatório gerado:', data);
+        toast({
+          title: "Relatório enviado",
+          description: "Relatório diário foi gerado e enviado com sucesso",
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao gerar relatório:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao gerar relatório diário",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -144,6 +185,7 @@ export default function ReportSettings({ settings, onInputChange, onSave }: Repo
               <li>• Leads movidos entre estágios do pipeline</li>
               <li>• Número de mensagens enviadas</li>
               <li>• Eventos da agenda criados</li>
+              <li>• Eventos marcados como concluídos</li>
               <li>• Número do WhatsApp configurado</li>
             </ul>
           </div>
@@ -160,6 +202,14 @@ export default function ReportSettings({ settings, onInputChange, onSave }: Repo
             >
               <TestTube className="w-4 h-4 mr-2" />
               Testar
+            </Button>
+            <Button 
+              onClick={handleGenerateReport} 
+              variant="outline"
+              disabled={!settings.reportWebhookUrl}
+            >
+              <FileText className="w-4 h-4 mr-2" />
+              Gerar Agora
             </Button>
           </div>
         </CardContent>
