@@ -106,7 +106,12 @@ export default function Leads() {
       
       handleCloseDialog();
     } catch (error) {
-      // Erro já tratado no contexto
+      console.error('Erro ao salvar lead:', error);
+      toast({
+        title: "Erro",
+        description: "Ocorreu um erro ao salvar o lead. Tente novamente.",
+        variant: "destructive",
+      });
     }
   };
 
