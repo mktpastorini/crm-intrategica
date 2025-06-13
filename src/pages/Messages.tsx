@@ -2,87 +2,146 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSystemSettingsDB } from '@/hooks/useSystemSettingsDB';
-import { supabase } from '@/integrations/supabase/client';
+import { useCrm } from '@/contexts/CrmContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Send, MessageSquare, Users } from 'lucide-react';
+import { Send, MessageSquare, Users, Search, Save, Trash2 } from 'lucide-react';
 import LoadingSpinner from '@/components/LoadingSpinner';
 
-interface User {
+interface Lead {
   id: string;
   name: string;
-  email: string;
-  role: string;
+  email?: string;
+  phone: string;
+  company: string;
+  niche: string;
   status: string;
+  pipeline_stage?: string;
+}
+
+interface MessageTemplate {
+  id: string;
+  name: string;
+  message: string;
+  created_at: string;
 }
 
 export default function Messages() {
   const { user, profile } = useAuth();
   const { settings } = useSystemSettingsDB();
+  const { leads, loading: leadsLoading } = useCrm();
   const { toast } = useToast();
   
   const [message, setMessage] = useState('');
-  const [users, setUsers] = useState<User[]>([]);
-  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedNiche, setSelectedNiche] = useState<string>('');
   const [sending, setSending] = useState(false);
+  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [templateName, setTemplateName] = useState('');
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
 
-  const loadUsers = async () => {
-    try {
-      console.log('Carregando usuários para mensagens...');
-      setLoading(true);
-      
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, name, email, role, status')
-        .eq('status', 'active')
-        .order('name', { ascending: true });
-
-      if (error) {
-        console.error('Erro ao carregar usuários:', error);
-        throw error;
-      }
-
-      console.log('Usuários carregados:', data?.length || 0);
-      setUsers(data || []);
-    } catch (error: any) {
-      console.error('Erro ao carregar usuários:', error);
-      toast({
-        title: "Erro",
-        description: "Erro ao carregar usuários",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Carregar templates salvos
   useEffect(() => {
-    loadUsers();
+    const savedTemplates = localStorage.getItem('messageTemplates');
+    if (savedTemplates) {
+      setTemplates(JSON.parse(savedTemplates));
+    }
   }, []);
 
-  const handleUserSelection = (userId: string, checked: boolean) => {
-    setSelectedUsers(prev => {
+  // Filtrar leads baseado na busca e nicho
+  const filteredLeads = leads.filter(lead => {
+    const matchesSearch = !searchTerm || 
+      lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      lead.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      lead.phone.includes(searchTerm);
+    
+    const matchesNiche = !selectedNiche || lead.niche === selectedNiche;
+    
+    return matchesSearch && matchesNiche;
+  });
+
+  // Obter nichos únicos
+  const uniqueNiches = Array.from(new Set(leads.map(lead => lead.niche))).filter(Boolean);
+
+  const handleLeadSelection = (leadId: string, checked: boolean) => {
+    setSelectedLeads(prev => {
       if (checked) {
-        return [...prev, userId];
+        return [...prev, leadId];
       } else {
-        return prev.filter(id => id !== userId);
+        return prev.filter(id => id !== leadId);
       }
     });
   };
 
-  const selectAllUsers = () => {
-    setSelectedUsers(users.map(u => u.id));
+  const selectAllFilteredLeads = () => {
+    setSelectedLeads(filteredLeads.map(lead => lead.id));
+  };
+
+  const selectByNiche = (niche: string) => {
+    const leadsInNiche = leads.filter(lead => lead.niche === niche);
+    setSelectedLeads(leadsInNiche.map(lead => lead.id));
   };
 
   const clearSelection = () => {
-    setSelectedUsers([]);
+    setSelectedLeads([]);
   };
 
-  const sendWebhookMessage = async () => {
+  const saveTemplate = () => {
+    if (!templateName.trim() || !message.trim()) {
+      toast({
+        title: "Campos obrigatórios",
+        description: "Nome do template e mensagem são obrigatórios",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const newTemplate: MessageTemplate = {
+      id: crypto.randomUUID(),
+      name: templateName.trim(),
+      message: message.trim(),
+      created_at: new Date().toISOString()
+    };
+
+    const updatedTemplates = [...templates, newTemplate];
+    setTemplates(updatedTemplates);
+    localStorage.setItem('messageTemplates', JSON.stringify(updatedTemplates));
+    
+    setTemplateName('');
+    setShowSaveTemplate(false);
+    
+    toast({
+      title: "Template salvo",
+      description: "Template de mensagem salvo com sucesso",
+    });
+  };
+
+  const loadTemplate = (template: MessageTemplate) => {
+    setMessage(template.message);
+    toast({
+      title: "Template carregado",
+      description: `Template "${template.name}" carregado`,
+    });
+  };
+
+  const deleteTemplate = (templateId: string) => {
+    const updatedTemplates = templates.filter(t => t.id !== templateId);
+    setTemplates(updatedTemplates);
+    localStorage.setItem('messageTemplates', JSON.stringify(updatedTemplates));
+    
+    toast({
+      title: "Template excluído",
+      description: "Template removido com sucesso",
+    });
+  };
+
+  const sendMessage = async () => {
     if (!settings.messageWebhookUrl) {
       toast({
         title: "Webhook não configurado",
@@ -92,10 +151,10 @@ export default function Messages() {
       return;
     }
 
-    if (selectedUsers.length === 0) {
+    if (selectedLeads.length === 0) {
       toast({
-        title: "Nenhum usuário selecionado",
-        description: "Selecione pelo menos um usuário para enviar a mensagem",
+        title: "Nenhum lead selecionado",
+        description: "Selecione pelo menos um lead para enviar a mensagem",
         variant: "destructive",
       });
       return;
@@ -112,23 +171,24 @@ export default function Messages() {
 
     try {
       setSending(true);
-      console.log('Enviando mensagem via webhook:', settings.messageWebhookUrl);
+      console.log('Enviando mensagem para leads via webhook:', settings.messageWebhookUrl);
 
-      const selectedUsersData = users.filter(u => selectedUsers.includes(u.id));
+      const selectedLeadsData = leads.filter(lead => selectedLeads.includes(lead.id));
       
       const webhookData = {
         message: message.trim(),
-        users: selectedUsersData,
+        leads: selectedLeadsData,
         sender: {
           id: user?.id,
           name: profile?.name,
           email: user?.email,
           role: profile?.role
         },
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        total_leads: selectedLeads.length
       };
 
-      console.log('Dados do webhook:', webhookData);
+      console.log('Dados do webhook para leads:', webhookData);
 
       const response = await fetch(settings.messageWebhookUrl, {
         method: 'POST',
@@ -144,12 +204,12 @@ export default function Messages() {
 
       toast({
         title: "Mensagem enviada",
-        description: `Mensagem enviada para ${selectedUsers.length} usuário(s) via webhook`,
+        description: `Mensagem enviada para ${selectedLeads.length} lead(s) via webhook`,
       });
 
       // Limpar formulário
       setMessage('');
-      setSelectedUsers([]);
+      setSelectedLeads([]);
 
     } catch (error: any) {
       console.error('Erro ao enviar webhook:', error);
@@ -163,10 +223,10 @@ export default function Messages() {
     }
   };
 
-  if (loading) {
+  if (leadsLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <LoadingSpinner size="lg" text="Carregando mensagens..." />
+        <LoadingSpinner size="lg" text="Carregando leads..." />
       </div>
     );
   }
@@ -174,8 +234,8 @@ export default function Messages() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-slate-900">Mensagens</h2>
-        <p className="text-slate-600">Envie mensagens para usuários do sistema</p>
+        <h2 className="text-2xl font-bold text-slate-900">Mensagens para Leads</h2>
+        <p className="text-slate-600">Envie mensagens personalizadas para seus leads</p>
       </div>
 
       {!settings.messageWebhookUrl && (
@@ -191,109 +251,210 @@ export default function Messages() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Seleção de Usuários */}
-        <Card>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Seleção de Leads */}
+        <Card className="lg:col-span-1">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <Users className="w-5 h-5" />
-              <span>Selecionar Usuários</span>
+              <span>Selecionar Leads</span>
             </CardTitle>
-            <div className="flex space-x-2">
-              <Button variant="outline" size="sm" onClick={selectAllUsers}>
-                Selecionar Todos
+            
+            {/* Busca e Filtros */}
+            <div className="space-y-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Input
+                  placeholder="Buscar por nome, empresa ou telefone..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              
+              <Select value={selectedNiche} onValueChange={setSelectedNiche}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por nicho" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Todos os nichos</SelectItem>
+                  {uniqueNiches.map((niche) => (
+                    <SelectItem key={niche} value={niche}>
+                      {niche}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {/* Botões de Seleção */}
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={selectAllFilteredLeads}>
+                Todos Filtrados
               </Button>
               <Button variant="outline" size="sm" onClick={clearSelection}>
-                Limpar Seleção
+                Limpar
               </Button>
+              {selectedNiche && (
+                <Button variant="outline" size="sm" onClick={() => selectByNiche(selectedNiche)}>
+                  Todos do Nicho
+                </Button>
+              )}
             </div>
           </CardHeader>
+          
           <CardContent>
             <div className="space-y-3 max-h-64 overflow-y-auto">
-              {users.map((userItem) => (
-                <div key={userItem.id} className="flex items-center space-x-3">
+              {filteredLeads.map((lead) => (
+                <div key={lead.id} className="flex items-center space-x-3">
                   <Checkbox
-                    id={`user-${userItem.id}`}
-                    checked={selectedUsers.includes(userItem.id)}
-                    onCheckedChange={(checked) => handleUserSelection(userItem.id, !!checked)}
+                    id={`lead-${lead.id}`}
+                    checked={selectedLeads.includes(lead.id)}
+                    onCheckedChange={(checked) => handleLeadSelection(lead.id, !!checked)}
                   />
                   <label 
-                    htmlFor={`user-${userItem.id}`}
+                    htmlFor={`lead-${lead.id}`}
                     className="flex-1 cursor-pointer"
                   >
                     <div>
-                      <p className="font-medium">{userItem.name}</p>
+                      <p className="font-medium">{lead.name}</p>
                       <p className="text-sm text-slate-600">
-                        {userItem.email} • {userItem.role === 'admin' ? 'Admin' : 
-                         userItem.role === 'supervisor' ? 'Supervisor' : 'Comercial'}
+                        {lead.company} • {lead.niche}
                       </p>
+                      <p className="text-xs text-slate-500">{lead.phone}</p>
                     </div>
                   </label>
                 </div>
               ))}
             </div>
             
-            {selectedUsers.length > 0 && (
+            {selectedLeads.length > 0 && (
               <div className="mt-4 p-3 bg-blue-50 rounded-lg">
                 <p className="text-sm text-blue-800">
-                  <strong>{selectedUsers.length}</strong> usuário(s) selecionado(s)
+                  <strong>{selectedLeads.length}</strong> lead(s) selecionado(s)
                 </p>
               </div>
+            )}
+            
+            {filteredLeads.length === 0 && (
+              <p className="text-center text-slate-500 py-4">
+                Nenhum lead encontrado
+              </p>
             )}
           </CardContent>
         </Card>
 
-        {/* Composição da Mensagem */}
-        <Card>
+        {/* Composição da Mensagem e Templates */}
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <MessageSquare className="w-5 h-5" />
               <span>Compor Mensagem</span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
+          
+          <CardContent className="space-y-4">
+            {/* Templates Salvos */}
+            {templates.length > 0 && (
               <div>
-                <Textarea
-                  placeholder="Digite sua mensagem aqui..."
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  rows={8}
-                  className="resize-none"
-                />
+                <h4 className="font-medium mb-2">Templates Salvos</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {templates.map((template) => (
+                    <div key={template.id} className="flex items-center space-x-2 p-2 border rounded">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => loadTemplate(template)}
+                        className="flex-1 justify-start text-left"
+                      >
+                        {template.name}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => deleteTemplate(template.id)}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
               </div>
-              
-              <Button 
-                onClick={sendWebhookMessage}
-                disabled={sending || !settings.messageWebhookUrl || selectedUsers.length === 0 || !message.trim()}
-                className="w-full"
-              >
-                {sending ? (
-                  <LoadingSpinner size="sm" />
-                ) : (
-                  <>
-                    <Send className="w-4 h-4 mr-2" />
-                    Enviar Mensagem
-                  </>
-                )}
-              </Button>
-              
-              {!settings.messageWebhookUrl && (
-                <p className="text-sm text-red-600">
-                  Configure o webhook de mensagens nas configurações para enviar
-                </p>
+            )}
+            
+            {/* Área de Mensagem */}
+            <div>
+              <Textarea
+                placeholder="Digite sua mensagem aqui..."
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                rows={8}
+                className="resize-none"
+              />
+            </div>
+            
+            {/* Salvar Template */}
+            <div className="space-y-2">
+              {showSaveTemplate ? (
+                <div className="flex space-x-2">
+                  <Input
+                    placeholder="Nome do template"
+                    value={templateName}
+                    onChange={(e) => setTemplateName(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Button onClick={saveTemplate} size="sm">
+                    <Save className="w-4 h-4 mr-2" />
+                    Salvar
+                  </Button>
+                  <Button variant="outline" onClick={() => setShowSaveTemplate(false)} size="sm">
+                    Cancelar
+                  </Button>
+                </div>
+              ) : (
+                <Button 
+                  variant="outline" 
+                  onClick={() => setShowSaveTemplate(true)}
+                  disabled={!message.trim()}
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  Salvar como Template
+                </Button>
               )}
             </div>
+            
+            {/* Botão Enviar */}
+            <Button 
+              onClick={sendMessage}
+              disabled={sending || !settings.messageWebhookUrl || selectedLeads.length === 0 || !message.trim()}
+              className="w-full"
+            >
+              {sending ? (
+                <LoadingSpinner size="sm" />
+              ) : (
+                <>
+                  <Send className="w-4 h-4 mr-2" />
+                  Enviar Mensagem
+                </>
+              )}
+            </Button>
+            
+            {!settings.messageWebhookUrl && (
+              <p className="text-sm text-red-600 text-center">
+                Configure o webhook de mensagens nas configurações para enviar
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {users.length === 0 && (
+      {leads.length === 0 && (
         <Card>
           <CardContent className="p-12 text-center">
             <Users className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-slate-900 mb-2">Nenhum usuário ativo</h3>
-            <p className="text-slate-600">Não há usuários ativos para enviar mensagens.</p>
+            <h3 className="text-lg font-medium text-slate-900 mb-2">Nenhum lead cadastrado</h3>
+            <p className="text-slate-600">Cadastre leads primeiro para poder enviar mensagens.</p>
           </CardContent>
         </Card>
       )}
