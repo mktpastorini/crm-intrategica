@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
@@ -69,6 +70,15 @@ interface PipelineStage {
   name: string;
   color: string;
   order: number;
+}
+
+// Interfaces para type casting dos detalhes das ações pendentes
+interface ActionDetails {
+  leadId?: string;
+  leadName?: string;
+  eventId?: string;
+  eventTitle?: string;
+  changes?: Record<string, any>;
 }
 
 interface CrmContextType {
@@ -685,16 +695,19 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
 
       console.log('Aprovando ação:', actionData);
 
+      // Type cast dos detalhes da ação
+      const details = actionData.details as ActionDetails;
+
       // Execute the action based on type
       switch (actionData.type) {
         case 'edit_lead':
-          if (actionData.details?.changes && actionData.details?.leadId) {
-            const leadToUpdate = leads.find(l => l.id === actionData.details.leadId);
+          if (details?.changes && details?.leadId) {
+            const leadToUpdate = leads.find(l => l.id === details.leadId);
             if (leadToUpdate) {
               const { data, error } = await supabase
                 .from('leads')
-                .update(actionData.details.changes)
-                .eq('id', actionData.details.leadId)
+                .update(details.changes)
+                .eq('id', details.leadId)
                 .select()
                 .single();
 
@@ -702,35 +715,35 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
 
               if (data) {
                 setLeads(prev => prev.map(lead => 
-                  lead.id === actionData.details.leadId ? data : lead
+                  lead.id === details.leadId ? data : lead
                 ));
               }
             }
           }
           break;
         case 'delete_lead':
-          if (actionData.details?.leadId) {
-            const leadToDelete = leads.find(l => l.id === actionData.details.leadId);
+          if (details?.leadId) {
+            const leadToDelete = leads.find(l => l.id === details.leadId);
             if (leadToDelete) {
               const { error } = await supabase
                 .from('leads')
                 .delete()
-                .eq('id', actionData.details.leadId);
+                .eq('id', details.leadId);
 
               if (error) throw error;
 
-              setLeads(prev => prev.filter(lead => lead.id !== actionData.details.leadId));
+              setLeads(prev => prev.filter(lead => lead.id !== details.leadId));
             }
           }
           break;
         case 'edit_event':
-          if (actionData.details?.changes && actionData.details?.eventId) {
-            const eventToUpdate = events.find(e => e.id === actionData.details.eventId);
+          if (details?.changes && details?.eventId) {
+            const eventToUpdate = events.find(e => e.id === details.eventId);
             if (eventToUpdate) {
               const { data, error } = await supabase
                 .from('events')
-                .update(actionData.details.changes)
-                .eq('id', actionData.details.eventId)
+                .update(details.changes)
+                .eq('id', details.eventId)
                 .select()
                 .single();
 
@@ -738,24 +751,24 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
 
               if (data) {
                 setEvents(prev => prev.map(event => 
-                  event.id === actionData.details.eventId ? data : event
+                  event.id === details.eventId ? data : event
                 ));
               }
             }
           }
           break;
         case 'delete_event':
-          if (actionData.details?.eventId) {
-            const eventToDelete = events.find(e => e.id === actionData.details.eventId);
+          if (details?.eventId) {
+            const eventToDelete = events.find(e => e.id === details.eventId);
             if (eventToDelete) {
               const { error } = await supabase
                 .from('events')
                 .delete()
-                .eq('id', actionData.details.eventId);
+                .eq('id', details.eventId);
 
               if (error) throw error;
 
-              setEvents(prev => prev.filter(event => event.id !== actionData.details.eventId));
+              setEvents(prev => prev.filter(event => event.id !== details.eventId));
             }
           }
           break;
