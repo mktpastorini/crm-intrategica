@@ -1,4 +1,5 @@
 
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -8,7 +9,6 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -164,16 +164,24 @@ serve(async (req) => {
         }
       },
 
+      // Informações de contato incluindo WhatsApp
+      contato: {
+        whatsapp: settings.report_whatsapp_number || '',
+        sistema: settings.system_name || "Sistema CRM"
+      },
+
       // Observações importantes
       observacoes: {
         diferenca_leads_novos_vs_movidos: "Os 'novos_leads_criados' são leads que foram adicionados hoje. A 'movimentacao_pipeline' mostra leads que mudaram de estágio (podem ser leads antigos ou novos).",
-        total_atividades_explicacao: "Soma de todos os tipos de atividades: criação de leads + movimentação + mensagens + eventos criados + eventos concluídos"
+        total_atividades_explicacao: "Soma de todos os tipos de atividades: criação de leads + movimentação + mensagens + eventos criados + eventos concluídos",
+        whatsapp_contato: `Contato do WhatsApp: ${settings.report_whatsapp_number || 'Não configurado'}`
       },
 
       // Dados técnicos (para compatibilidade)
       _metadata: {
         test: false,
-        version: "2.0"
+        version: "2.1",
+        whatsapp_included: true
       }
     };
 
@@ -186,7 +194,7 @@ serve(async (req) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'User-Agent': 'CRM-System-Daily-Report/2.0'
+        'User-Agent': 'CRM-System-Daily-Report/2.1'
       },
       body: JSON.stringify(reportData)
     });

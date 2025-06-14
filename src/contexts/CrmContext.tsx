@@ -285,6 +285,7 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     const existingLead = leads.find(l => l.id === id);
     if (!existingLead) return;
 
+    // Para usuários comerciais, sempre enviar para aprovação
     if (profile?.role === 'comercial') {
       await requestAction({
         type: 'edit_lead',
@@ -335,6 +336,7 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     const leadToDelete = leads.find(l => l.id === id);
     if (!leadToDelete) return;
 
+    // Para usuários comerciais, sempre enviar para aprovação
     if (profile?.role === 'comercial') {
       await requestAction({
         type: 'delete_lead',
@@ -501,6 +503,7 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     const existingEvent = events.find(e => e.id === id);
     if (!existingEvent) return;
 
+    // Para usuários comerciais, sempre enviar para aprovação
     if (profile?.role === 'comercial') {
       await requestAction({
         type: 'edit_event',
@@ -551,6 +554,7 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     const eventToDelete = events.find(e => e.id === id);
     if (!eventToDelete) return;
 
+    // Para usuários comerciais, sempre enviar para aprovação
     if (profile?.role === 'comercial') {
       await requestAction({
         type: 'delete_event',
