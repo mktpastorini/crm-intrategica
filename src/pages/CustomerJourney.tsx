@@ -12,6 +12,9 @@ import { useCrm } from '@/contexts/CrmContext';
 import { Plus, Edit, Trash2, Clock, Calendar, Image, Video, MessageSquare } from 'lucide-react';
 import { fetchJourneyHistory, JourneyMessageHistory } from "@/utils/journeyHistoryService";
 import { useMemo } from "react";
+import JourneyKanban from "../components/journey/JourneyKanban";
+import JourneyHistoryTable from "../components/journey/JourneyHistoryTable";
+import type { JourneyMessage } from "../components/journey/types";
 
 interface JourneyMessage {
   id: string;
@@ -366,108 +369,21 @@ export default function CustomerJourney() {
 
       {/* Conteúdo das abas */}
       {selectedStage === "historico" ? (
-        <div className="p-6">
-          <h3 className="text-lg font-bold mb-4">Histórico de Mensagens Enviadas</h3>
-          <Button onClick={loadHistory} size="sm" className="mb-2">
-            Recarregar
-          </Button>
-          {historyLoading ? (
-            <div className="text-center text-slate-400 py-8">Carregando...</div>
-          ) : history.length === 0 ? (
-            <div className="text-center py-8 text-slate-400">
-              Nenhuma mensagem enviada encontrada.
-            </div>
-          ) : (
-            <div className="overflow-auto">
-              <table className="min-w-full text-xs">
-                <thead>
-                  <tr className="bg-slate-100">
-                    <th className="p-2 font-semibold">Quando</th>
-                    <th className="p-2 font-semibold">Lead</th>
-                    <th className="p-2 font-semibold">Estágio</th>
-                    <th className="p-2 font-semibold">Mensagem</th>
-                    <th className="p-2 font-semibold">Tipo</th>
-                    <th className="p-2 font-semibold">Webhook</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {history.map((h) => (
-                    <tr key={h.id} className="border-b">
-                      <td className="p-2">{new Date(h.sent_at).toLocaleString()}</td>
-                      <td className="p-2">{h.lead_name || h.lead_id}</td>
-                      <td className="p-2">{h.stage}</td>
-                      <td className="p-2">{h.message_title}</td>
-                      <td className="p-2">{h.message_type}</td>
-                      <td className="p-2 text-ellipsis overflow-hidden max-w-[120px]">{h.webhook_url ? "Enviado" : "-"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+        <JourneyHistoryTable
+          history={history}
+          historyLoading={historyLoading}
+          onReload={loadHistory}
+        />
       ) : (
-        // Kanban da Jornada do Cliente: container com scroll horizontal e layout centralizado responsivo
-        <div className="relative bg-slate-50 flex-1 w-full">
-          <div className="overflow-x-auto">
-            <div className="flex gap-6 px-4 md:px-10 py-6 max-w-full md:max-w-[92vw] 2xl:max-w-[1400px] mx-auto min-h-[70vh]">
-              {pipelineStages.map(stage => (
-                <Card
-                  key={stage.id}
-                  className="w-80 flex-shrink-0 transition-shadow shadow-md hover:shadow-lg border border-slate-200 bg-white"
-                >
-                  <CardHeader>
-                    <CardTitle>{stage.name}</CardTitle>
-                  </CardHeader>
-                  <CardContent
-                    className="space-y-2 p-2"
-                    onDragOver={(e) => handleDragOver(e)}
-                    onDrop={(e) => handleDrop(e, stage.id)}
-                  >
-                    {getMessagesByStage(stage.id).map(message => (
-                      <div
-                        key={message.id}
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, message.id)}
-                        className="bg-slate-50 rounded p-2 shadow-sm border flex items-center justify-between mb-2 transition-transform hover:scale-[1.02]"
-                      >
-                        <div>
-                          <div className="font-semibold text-sm">{message.title}</div>
-                          <div className="text-xs text-slate-500 flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {getDelayText(message.delay, message.delayUnit)}
-                          </div>
-                        </div>
-                        <div className="flex gap-2 items-center">
-                          <Badge variant="outline">{getTypeIcon(message.type)}</Badge>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(message)}
-                            className="text-blue-600 hover:text-blue-900"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(message.id)}
-                            className="text-destructive hover:text-destructive-foreground"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                    {getMessagesByStage(stage.id).length === 0 && (
-                      <div className="text-center py-8 text-slate-400 text-sm">Nenhuma mensagem neste estágio</div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        </div>
+        <JourneyKanban
+          pipelineStages={pipelineStages}
+          messages={messages}
+          handleDragStart={handleDragStart}
+          handleDragOver={handleDragOver}
+          handleDrop={handleDrop}
+          handleEdit={handleEdit}
+          handleDelete={handleDelete}
+        />
       )}
     </div>
   );
