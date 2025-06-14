@@ -109,8 +109,11 @@ export default function Pipeline() {
     });
   };
 
+  // Garante que os leads estejam sempre do mais novo para o mais antigo em cada estágio
   const getLeadsByStage = (stageId: string) => {
-    return leads.filter(lead => lead.pipeline_stage === stageId);
+    return leads
+      .filter(lead => lead.pipeline_stage === stageId)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   };
 
   const eventTypes = [
