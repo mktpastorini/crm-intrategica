@@ -64,6 +64,9 @@ export default function CustomerJourney() {
     localStorage.setItem('journeyMessages', JSON.stringify(newMessages));
   };
 
+  // TAB: para controle das abas
+  const [selectedStage, setSelectedStage] = useState<string>("");
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -343,7 +346,7 @@ export default function CustomerJourney() {
       <div className="flex space-x-2 px-6 pt-2 border-b bg-slate-50">
         <button
           className={`py-2 px-4 rounded-t font-semibold ${
-            selectedStage !== "historico" ? "bg-white" : "bg-slate-100"
+            selectedStage !== "historico" ? "bg-white border-b-2 border-blue-600 text-blue-700" : "bg-slate-100"
           }`}
           onClick={() => setSelectedStage("")}
         >
@@ -351,7 +354,7 @@ export default function CustomerJourney() {
         </button>
         <button
           className={`py-2 px-4 rounded-t font-semibold ${
-            selectedStage === "historico" ? "bg-white" : "bg-slate-100"
+            selectedStage === "historico" ? "bg-white border-b-2 border-blue-600 text-blue-700" : "bg-slate-100"
           }`}
           onClick={() => {
             setSelectedStage("historico");
@@ -362,7 +365,7 @@ export default function CustomerJourney() {
         </button>
       </div>
 
-      {/* Conteúdo de acordo com a tab ativa */}
+      {/* Conteúdo das abas */}
       {selectedStage === "historico" ? (
         <div className="p-6">
           <h3 className="text-lg font-bold mb-4">Histórico de Mensagens Enviadas</h3>
@@ -405,10 +408,46 @@ export default function CustomerJourney() {
           )}
         </div>
       ) : (
-        // ... keep existing Kanban (estágios) render ...
-        // ... keep existing code (kanban board) ...
+        // Kanban da Jornada do Cliente
         <div className="flex gap-4 p-6 min-w-max">
-          {/* ...boards... */}
+          {pipelineStages.map(stage => (
+            <Card key={stage.id} className="w-80 flex-shrink-0">
+              <CardHeader>
+                <CardTitle>{stage.name}</CardTitle>
+              </CardHeader>
+              <CardContent
+                className="space-y-2 p-2"
+                onDragOver={(e) => handleDragOver(e)}
+                onDrop={(e) => handleDrop(e, stage.id)}
+              >
+                {getMessagesByStage(stage.id).map(message => (
+                  <div
+                    key={message.id}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, message.id)}
+                    className="bg-slate-50 rounded p-2 shadow-sm border flex items-center justify-between"
+                  >
+                    <div>
+                      <div className="font-semibold text-sm">{message.title}</div>
+                      <div className="text-xs text-slate-500 flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {getDelayText(message.delay, message.delayUnit)}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Badge variant="outline">{getTypeIcon(message.type)}</Badge>
+                      <Button variant="ghost" size="icon" onClick={() => handleEdit(message)}>
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleDelete(message.id)}>
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
     </div>
