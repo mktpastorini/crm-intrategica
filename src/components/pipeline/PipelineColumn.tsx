@@ -3,23 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Archive, Building, Phone, Mail, User } from 'lucide-react';
-
-type Lead = {
-  id: string;
-  name: string;
-  company: string;
-  phone: string;
-  email?: string;
-  niche: string;
-  responsible_id: string;
-  created_at: string;
-};
-
-type PipelineStage = {
-  id: string;
-  name: string;
-  color: string;
-};
+import type { Lead, PipelineStage } from './types';
 
 interface Props {
   stage: PipelineStage;

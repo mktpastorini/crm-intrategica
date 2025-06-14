@@ -2,14 +2,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Building, Phone } from 'lucide-react';
-
-type Lead = {
-  id: string;
-  name: string;
-  company: string;
-  phone: string;
-  pipeline_stage: string;
-};
+import type { Lead } from './types';
 
 interface Props {
   leads: Lead[];

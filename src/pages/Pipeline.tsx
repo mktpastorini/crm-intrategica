@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Phone, Mail, Calendar, User, Building, Archive } from 'lucide-react';
 import PipelineColumn from '@/components/pipeline/PipelineColumn';
 import UnknownStageColumn from '@/components/pipeline/UnknownStageColumn';
+import type { Lead, PipelineStage } from '@/components/pipeline/types';
 
 export default function Pipeline() {
   // Inicializar o rastreador de atividades
