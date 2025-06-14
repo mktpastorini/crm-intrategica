@@ -6,6 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Save } from 'lucide-react';
 import ReportSettings from './ReportSettings';
+import { useToast } from '@/hooks/use-toast';
+import * as React from 'react';
 
 interface WebhookSettingsProps {
   settings: any;
@@ -14,6 +16,66 @@ interface WebhookSettingsProps {
 }
 
 export default function WebhookSettings({ settings, onInputChange, onSave }: WebhookSettingsProps) {
+  const { toast } = useToast();
+  const [testing, setTesting] = React.useState(false);
+
+  const handleTestJourneyWebhook = async () => {
+    if (!settings.journeyWebhookUrl) {
+      toast({
+        title: "Erro",
+        description: "Informe a URL do Webhook da Jornada do Cliente antes de testar.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setTesting(true);
+    const testPayload = {
+      test: true,
+      lead: {
+        id: "1234",
+        name: "Lead Teste",
+        phone: "+5511999999999",
+        email: "teste@cliente.com"
+      },
+      message: {
+        id: "msg-101",
+        content: "Mensagem de test automatizado do webhook da Jornada.",
+        stage: "contato_inicial",
+        scheduledAt: new Date().toISOString(),
+      }
+    };
+
+    try {
+      const response = await fetch(settings.journeyWebhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(testPayload),
+      });
+
+      if (response.ok) {
+        toast({
+          title: "Webhook enviado!",
+          description: "O teste foi disparado para o Webhook da Jornada do Cliente.",
+        });
+      } else {
+        toast({
+          title: "Erro ao disparar webhook",
+          description: `Status: ${response.status}`,
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Falha ao disparar webhook",
+        description: error?.message || "Erro desconhecido",
+        variant: "destructive",
+      });
+    } finally {
+      setTesting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -30,7 +92,6 @@ export default function WebhookSettings({ settings, onInputChange, onSave }: Web
               placeholder="https://sua-url-webhook.com/agenda"
             />
           </div>
-          
           <div>
             <Label htmlFor="webhook-hours-before">Horas antes do evento para disparar</Label>
             <Select 
@@ -51,7 +112,6 @@ export default function WebhookSettings({ settings, onInputChange, onSave }: Web
               </SelectContent>
             </Select>
           </div>
-
           <div>
             <Label>Configuração de Disparo</Label>
             <p className="text-sm text-slate-600 mb-2">
@@ -95,11 +155,24 @@ export default function WebhookSettings({ settings, onInputChange, onSave }: Web
           <p className="text-sm text-slate-600">
             Este webhook será usado para enviar as mensagens automáticas da jornada do cliente quando leads mudarem de estágio.
           </p>
-
-          <Button onClick={onSave} className="w-full" style={{ backgroundColor: settings.primaryColor }}>
-            <Save className="w-4 h-4 mr-2" />
-            Salvar Configurações de Webhooks
-          </Button>
+          <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+            <Button 
+              onClick={onSave} 
+              className="w-full sm:w-auto"
+              style={{ backgroundColor: settings.primaryColor }}
+            >
+              <Save className="w-4 h-4 mr-2" />
+              Salvar Configurações de Webhooks
+            </Button>
+            <Button 
+              onClick={handleTestJourneyWebhook} 
+              variant="outline" 
+              className="w-full sm:w-auto"
+              disabled={testing}
+            >
+              {testing ? "Testando..." : "Testar Webhook"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
