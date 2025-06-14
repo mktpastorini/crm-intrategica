@@ -323,6 +323,7 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         user_name: user?.email || 'Usuário',
         description: `Solicitação para excluir lead: ${leads.find(l => l.id === id)?.name}`,
         details: { leadId: id, leadName: leads.find(l => l.id === id)?.name },
+        status: 'pending',
         user_id: user?.id || ''
       });
       return;
@@ -358,6 +359,7 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         user_name: user?.email || 'Usuário',
         description: `Solicitação para editar lead: ${leads.find(l => l.id === id)?.name}`,
         details: { leadId: id, leadName: leads.find(l => l.id === id)?.name, changes: updates },
+        status: 'pending',
         user_id: user?.id || ''
       });
       return;
