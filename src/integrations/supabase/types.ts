@@ -113,6 +113,57 @@ export type Database = {
           },
         ]
       }
+      journey_message_schedules: {
+        Row: {
+          created_at: string
+          id: string
+          lead_email: string | null
+          lead_id: string
+          lead_name: string | null
+          lead_phone: string | null
+          media_url: string | null
+          message_content: string | null
+          message_title: string | null
+          message_type: string | null
+          scheduled_for: string
+          sent_at: string | null
+          stage: string
+          webhook_url: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          lead_email?: string | null
+          lead_id: string
+          lead_name?: string | null
+          lead_phone?: string | null
+          media_url?: string | null
+          message_content?: string | null
+          message_title?: string | null
+          message_type?: string | null
+          scheduled_for: string
+          sent_at?: string | null
+          stage: string
+          webhook_url?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          lead_email?: string | null
+          lead_id?: string
+          lead_name?: string | null
+          lead_phone?: string | null
+          media_url?: string | null
+          message_content?: string | null
+          message_title?: string | null
+          message_type?: string | null
+          scheduled_for?: string
+          sent_at?: string | null
+          stage?: string
+          webhook_url?: string | null
+        }
+        Relationships: []
+      }
       leads: {
         Row: {
           address: string | null

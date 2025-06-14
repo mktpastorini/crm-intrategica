@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useSystemSettingsDB } from '@/hooks/useSystemSettingsDB';
+import { createJourneySchedule } from "@/utils/journeyScheduleService";
 
 // Use the Lead interface from database - company is required in database
 interface Lead {
@@ -201,107 +202,85 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Journey message trigger functions
-  const scheduleJourneyMessage = async (leadId: string, message: JourneyMessage, leadData: any) => {
+  const persistJourneyMessageSchedule = async (
+    leadId: string,
+    message: JourneyMessage,
+    leadData: any
+  ) => {
     if (!settings.journeyWebhookUrl) {
-      console.log('Webhook da jornada não configurado. Não vou disparar mensagem.');
+      console.log("Webhook da jornada não configurado.");
       return;
     }
 
     let delayMs = 0;
     switch (message.delayUnit) {
-      case 'minutes':
+      case "minutes":
         delayMs = message.delay * 60 * 1000;
         break;
-      case 'hours':
+      case "hours":
         delayMs = message.delay * 60 * 60 * 1000;
         break;
-      case 'days':
+      case "days":
         delayMs = message.delay * 24 * 60 * 60 * 1000;
         break;
     }
-    console.log(`[Jornada] Mensagem para estágio "${message.stage}" agendada para ser disparada em ${delayMs / 1000}s (delay: ${message.delay} ${message.delayUnit})`);
 
-    if (delayMs > 0 && delayMs < 2 * 60 * 1000) {
-      // aviso caso o delay seja muito curto e usuário sair da página
+    // Data/hora de disparo
+    const scheduledFor = new Date(Date.now() + delayMs).toISOString();
+
+    try {
+      await createJourneySchedule({
+        lead_id: leadId,
+        lead_name: leadData.name,
+        lead_email: leadData.email,
+        lead_phone: leadData.phone,
+        stage: message.stage,
+        message_title: message.title,
+        message_content: message.content,
+        message_type: message.type,
+        media_url: message.mediaUrl,
+        scheduled_for: scheduledFor,
+        webhook_url: settings.journeyWebhookUrl,
+      });
+      console.log(
+        `[Jornada] Agendamento criado para lead ${leadData.name} às ${scheduledFor}`
+      );
+    } catch (error: any) {
       toast({
-        title: "Atenção!",
-        description: "Mensagens com delay curto (<2min) podem não ser disparadas se você fechar ou recarregar a página antes do tempo. O disparo depende do navegador estar aberto.",
+        title: "Erro ao agendar mensagem",
+        description: error.message,
         variant: "destructive",
       });
     }
-
-    setTimeout(async () => {
-      try {
-        const webhookPayload = {
-          leadId,
-          leadName: leadData.name,
-          leadPhone: leadData.phone,
-          leadEmail: leadData.email,
-          message: {
-            title: message.title,
-            content: message.content,
-            type: message.type,
-            mediaUrl: message.mediaUrl
-          },
-          stage: message.stage,
-          timestamp: new Date().toISOString()
-        };
-
-        console.log('Enviando mensagem da jornada via webhook:', webhookPayload);
-
-        const response = await fetch(settings.journeyWebhookUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(webhookPayload),
-        });
-
-        if (response.ok) {
-          console.log('[Jornada] Webhook enviado com sucesso');
-          toast({
-            title: "Webhook da Jornada Enviado",
-            description: `Mensagem automática enviada para o lead ${leadData.name}`,
-          });
-        } else {
-          console.error('[Jornada] Falha ao enviar webhook:', response.status);
-          toast({
-            title: "Erro ao enviar Webhook da Jornada",
-            description: `Falha HTTP: ${response.status}`,
-            variant: "destructive",
-          });
-        }
-      } catch (error: any) {
-        console.error('[Jornada] Erro ao enviar mensagem da jornada:', error);
-        toast({
-          title: "Erro ao enviar Webhook da Jornada",
-          description: error?.message || "Erro desconhecido",
-          variant: "destructive",
-        });
-      }
-    }, delayMs);
   };
 
-  const triggerJourneyMessages = (leadId: string, newStage: string, leadData: any) => {
-    const savedMessages = localStorage.getItem('journeyMessages');
+  const triggerJourneyMessages = (
+    leadId: string,
+    newStage: string,
+    leadData: any
+  ) => {
+    const savedMessages = localStorage.getItem("journeyMessages");
     if (!savedMessages) {
-      console.log('[Jornada] Nenhuma mensagem de jornada configurada.');
+      console.log("[Jornada] Nenhuma mensagem de jornada configurada.");
       return;
     }
 
     const messages: JourneyMessage[] = JSON.parse(savedMessages);
-    // Alterado: comparar estágios de forma robusta!
     const stageMessages = messages
-      .filter(m => stagesEqual(m.stage, newStage))
+      .filter((m) => stagesEqual(m.stage, newStage))
       .sort((a, b) => a.order - b.order);
 
-    console.log(`[Jornada] Disparando ${stageMessages.length} mensagem(ns) para o lead ${leadId} no estágio "${newStage}"`);
+    console.log(
+      `[Jornada] Encontradas ${stageMessages.length} mensagens para o lead ${leadId} no estágio "${newStage}"`
+    );
     if (stageMessages.length === 0) {
-      console.log(`[Jornada] Nenhuma mensagem cadastrada para o estágio ${newStage}. Verifique o valor do campo 'stage' das mensagens da jornada.`);
+      console.log(
+        `[Jornada] Nenhuma mensagem cadastrada para o estágio ${newStage}.`
+      );
     }
 
-    stageMessages.forEach(message => {
-      scheduleJourneyMessage(leadId, message, leadData);
+    stageMessages.forEach((message) => {
+      persistJourneyMessageSchedule(leadId, message, leadData);
     });
   };
 
