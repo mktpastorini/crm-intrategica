@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { useJourneyMessageTrigger } from '@/hooks/useJourneyMessageTrigger';
+import { useSystemSettingsDB } from '@/hooks/useSystemSettingsDB';
 
 interface Lead {
   id: string;
@@ -66,6 +66,19 @@ interface ActionDetails {
   changes?: Record<string, any>;
 }
 
+interface JourneyMessage {
+  id: string;
+  title: string;
+  content: string;
+  delay: number;
+  delayUnit: 'minutes' | 'hours' | 'days';
+  stage: string;
+  type: 'text' | 'image' | 'video';
+  mediaUrl?: string;
+  order: number;
+  created_at: string;
+}
+
 interface CrmContextType {
   leads: Lead[];
   events: Event[];
@@ -92,9 +105,9 @@ interface CrmContextType {
 const CrmContext = createContext<CrmContextType | undefined>(undefined);
 
 export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, userRole } = useAuth();
+  const { user, profile } = useAuth();
   const { toast } = useToast();
-  const { triggerJourneyMessages } = useJourneyMessageTrigger();
+  const { settings } = useSystemSettingsDB();
   
   const [leads, setLeads] = useState<Lead[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
@@ -110,6 +123,75 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     { id: '3', name: 'Outros', description: 'Outras fontes de leads' },
   ]);
   const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
+
+  // Journey message trigger functions
+  const scheduleJourneyMessage = async (leadId: string, message: JourneyMessage, leadData: any) => {
+    if (!settings.journeyWebhookUrl) return;
+
+    // Calcular delay em milissegundos
+    let delayMs = 0;
+    switch (message.delayUnit) {
+      case 'minutes':
+        delayMs = message.delay * 60 * 1000;
+        break;
+      case 'hours':
+        delayMs = message.delay * 60 * 60 * 1000;
+        break;
+      case 'days':
+        delayMs = message.delay * 24 * 60 * 60 * 1000;
+        break;
+    }
+
+    // Agendar o envio da mensagem
+    setTimeout(async () => {
+      try {
+        const webhookPayload = {
+          leadId,
+          leadName: leadData.name,
+          leadPhone: leadData.phone,
+          leadEmail: leadData.email,
+          message: {
+            title: message.title,
+            content: message.content,
+            type: message.type,
+            mediaUrl: message.mediaUrl
+          },
+          stage: message.stage,
+          timestamp: new Date().toISOString()
+        };
+
+        console.log('Enviando mensagem da jornada via webhook:', webhookPayload);
+
+        await fetch(settings.journeyWebhookUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(webhookPayload),
+        });
+
+        console.log('Mensagem da jornada enviada com sucesso');
+      } catch (error) {
+        console.error('Erro ao enviar mensagem da jornada:', error);
+      }
+    }, delayMs);
+  };
+
+  const triggerJourneyMessages = (leadId: string, newStage: string, leadData: any) => {
+    const savedMessages = localStorage.getItem('journeyMessages');
+    if (!savedMessages) return;
+
+    const messages: JourneyMessage[] = JSON.parse(savedMessages);
+    const stageMessages = messages
+      .filter(m => m.stage === newStage)
+      .sort((a, b) => a.order - b.order);
+
+    console.log(`Disparando ${stageMessages.length} mensagens para o lead ${leadId} no estágio ${newStage}`);
+
+    stageMessages.forEach(message => {
+      scheduleJourneyMessage(leadId, message, leadData);
+    });
+  };
 
   useEffect(() => {
     loadLeads();
@@ -144,7 +226,22 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .order('start_time', { ascending: true });
 
       if (error) throw error;
-      if (data) setEvents(data);
+      if (data) {
+        // Transform database events to match our Event interface
+        const transformedEvents = data.map(event => ({
+          id: event.id,
+          title: event.title,
+          description: event.lead_name || '',
+          start_time: `${event.date}T${event.time}`,
+          end_time: `${event.date}T${event.time}`,
+          location: event.company || '',
+          lead_id: event.lead_id || undefined,
+          user_id: event.responsible_id,
+          created_at: event.created_at,
+          updated_at: event.created_at
+        }));
+        setEvents(transformedEvents);
+      }
     } catch (error: any) {
       console.error('Erro ao carregar eventos:', error);
       toast({
@@ -156,12 +253,12 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteLead = async (id: string) => {
-    if (userRole === 'comercial') {
+    if (profile?.role === 'comercial') {
       await requestAction({
         type: 'delete_lead',
         user_name: user?.email || 'Usuário',
         description: `Solicitação para excluir lead: ${leads.find(l => l.id === id)?.name}`,
-        details: { leadId: id }
+        details: { leadId: id, leadName: leads.find(l => l.id === id)?.name }
       });
       return;
     }
@@ -190,12 +287,12 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateLead = async (id: string, updates: Partial<Lead>) => {
-    if (userRole === 'comercial') {
+    if (profile?.role === 'comercial') {
       await requestAction({
         type: 'edit_lead',
         user_name: user?.email || 'Usuário',
         description: `Solicitação para editar lead: ${leads.find(l => l.id === id)?.name}`,
-        details: { leadId: id, changes: updates }
+        details: { leadId: id, leadName: leads.find(l => l.id === id)?.name, changes: updates }
       });
       return;
     }
@@ -271,14 +368,43 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addEvent = async (eventData: Omit<Event, 'id' | 'created_at' | 'updated_at'>) => {
     try {
+      // Transform Event interface to database format
+      const dbEventData = {
+        title: eventData.title,
+        lead_name: eventData.description || '',
+        date: eventData.start_time.split('T')[0],
+        time: eventData.start_time.split('T')[1],
+        company: eventData.location || '',
+        lead_id: eventData.lead_id || null,
+        responsible_id: eventData.user_id || user?.id || '',
+        type: 'meeting'
+      };
+
       const { data, error } = await supabase
         .from('events')
-        .insert([eventData])
+        .insert([dbEventData])
         .select()
         .single();
 
       if (error) throw error;
-      if (data) setEvents(prev => [...prev, data]);
+      
+      if (data) {
+        // Transform back to Event interface
+        const transformedEvent = {
+          id: data.id,
+          title: data.title,
+          description: data.lead_name || '',
+          start_time: `${data.date}T${data.time}`,
+          end_time: `${data.date}T${data.time}`,
+          location: data.company || '',
+          lead_id: data.lead_id || undefined,
+          user_id: data.responsible_id,
+          created_at: data.created_at,
+          updated_at: data.created_at
+        };
+        setEvents(prev => [...prev, transformedEvent]);
+      }
+      
       toast({
         title: "Evento criado",
         description: "Evento foi criado com sucesso",
@@ -295,15 +421,44 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateEvent = async (id: string, updates: Partial<Event>) => {
     try {
+      // Transform Event interface updates to database format
+      const dbUpdates: any = {};
+      if (updates.title) dbUpdates.title = updates.title;
+      if (updates.description) dbUpdates.lead_name = updates.description;
+      if (updates.location) dbUpdates.company = updates.location;
+      if (updates.lead_id !== undefined) dbUpdates.lead_id = updates.lead_id;
+      if (updates.user_id) dbUpdates.responsible_id = updates.user_id;
+      if (updates.start_time) {
+        dbUpdates.date = updates.start_time.split('T')[0];
+        dbUpdates.time = updates.start_time.split('T')[1];
+      }
+
       const { data, error } = await supabase
         .from('events')
-        .update(updates)
+        .update(dbUpdates)
         .eq('id', id)
         .select()
         .single();
 
       if (error) throw error;
-      if (data) setEvents(prev => prev.map(event => event.id === id ? data : event));
+      
+      if (data) {
+        // Transform back to Event interface
+        const transformedEvent = {
+          id: data.id,
+          title: data.title,
+          description: data.lead_name || '',
+          start_time: `${data.date}T${data.time}`,
+          end_time: `${data.date}T${data.time}`,
+          location: data.company || '',
+          lead_id: data.lead_id || undefined,
+          user_id: data.responsible_id,
+          created_at: data.created_at,
+          updated_at: data.created_at
+        };
+        setEvents(prev => prev.map(event => event.id === id ? transformedEvent : event));
+      }
+      
       toast({
         title: "Evento atualizado",
         description: "Evento foi atualizado com sucesso",
@@ -402,42 +557,60 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const action = pendingActions.find(a => a.id === actionId);
       if (!action) throw new Error('Ação não encontrada');
 
-      if (action.type === 'delete_lead' && action.details.leadId) {
+      const actionDetails = action.details as ActionDetails;
+
+      if (action.type === 'delete_lead' && actionDetails.leadId) {
         const { error } = await supabase
           .from('leads')
           .delete()
-          .eq('id', action.details.leadId);
+          .eq('id', actionDetails.leadId);
 
         if (error) throw error;
-        setLeads(prev => prev.filter(lead => lead.id !== action.details.leadId));
-      } else if (action.type === 'edit_lead' && action.details.leadId && action.details.changes) {
+        setLeads(prev => prev.filter(lead => lead.id !== actionDetails.leadId));
+      } else if (action.type === 'edit_lead' && actionDetails.leadId && actionDetails.changes) {
         const { data, error } = await supabase
           .from('leads')
-          .update(action.details.changes)
-          .eq('id', action.details.leadId)
+          .update(actionDetails.changes)
+          .eq('id', actionDetails.leadId)
           .select()
           .single();
           
         if (error) throw error;
-        setLeads(prev => prev.map(lead => lead.id === action.details.leadId ? { ...lead, ...action.details.changes } : lead));
-      } else if (action.type === 'delete_event' && action.details.eventId) {
+        if (data) {
+          setLeads(prev => prev.map(lead => lead.id === actionDetails.leadId ? data : lead));
+        }
+      } else if (action.type === 'delete_event' && actionDetails.eventId) {
         const { error } = await supabase
           .from('events')
           .delete()
-          .eq('id', action.details.eventId);
+          .eq('id', actionDetails.eventId);
 
         if (error) throw error;
-        setEvents(prev => prev.filter(event => event.id !== action.details.eventId));
-      } else if (action.type === 'edit_event' && action.details.eventId && action.details.changes) {
+        setEvents(prev => prev.filter(event => event.id !== actionDetails.eventId));
+      } else if (action.type === 'edit_event' && actionDetails.eventId && actionDetails.changes) {
         const { data, error } = await supabase
           .from('events')
-          .update(action.details.changes)
-          .eq('id', action.details.eventId)
+          .update(actionDetails.changes)
+          .eq('id', actionDetails.eventId)
           .select()
           .single();
 
         if (error) throw error;
-        setEvents(prev => prev.map(event => event.id === action.details.eventId ? { ...event, ...action.details.changes } : event));
+        if (data) {
+          const transformedEvent = {
+            id: data.id,
+            title: data.title,
+            description: data.lead_name || '',
+            start_time: `${data.date}T${data.time}`,
+            end_time: `${data.date}T${data.time}`,
+            location: data.company || '',
+            lead_id: data.lead_id || undefined,
+            user_id: data.responsible_id,
+            created_at: data.created_at,
+            updated_at: data.created_at
+          };
+          setEvents(prev => prev.map(event => event.id === actionDetails.eventId ? transformedEvent : event));
+        }
       }
 
       // Update pending action status
