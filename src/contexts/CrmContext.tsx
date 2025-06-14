@@ -1,16 +1,16 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useSystemSettingsDB } from '@/hooks/useSystemSettingsDB';
 
+// Use the Lead interface from database - company is required in database
 interface Lead {
   id: string;
   name: string;
   phone: string;
   email?: string;
-  company?: string; // Made optional to match database schema
+  company: string; // Required field in database
   title?: string;
   source?: string;
   owner_id?: string;
@@ -49,6 +49,8 @@ interface Event {
   responsible_id: string;
   completed?: boolean;
 }
+
+// ... keep existing code (PipelineStage, Category, PendingAction, User, JourneyMessage interfaces)
 
 interface PipelineStage {
   id: string;
@@ -98,6 +100,8 @@ interface JourneyMessage {
   order: number;
   created_at: string;
 }
+
+// ... keep existing code (CrmContextType interface and rest of the component)
 
 interface CrmContextType {
   leads: Lead[];
@@ -401,12 +405,12 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addLead = async (leadData: Omit<Lead, 'id' | 'created_at' | 'updated_at'>) => {
     try {
       setActionLoading('create-lead');
-      // Ensure required fields are present and fix company field
+      // Ensure required fields are present and ensure company is always provided
       const leadToInsert = {
         ...leadData,
         responsible_id: leadData.responsible_id || user?.id || '',
         niche: leadData.niche || 'Geral',
-        company: leadData.company || '', // Ensure company is always a string, not undefined
+        company: leadData.company || 'Não informado', // Ensure company is always a string since it's required
         name: leadData.name || 'Lead sem nome',
         phone: leadData.phone || ''
       };
