@@ -55,11 +55,17 @@ interface PipelineStage {
 
 interface PendingAction {
   id: string;
-  type: string;
+  type: 'edit_lead' | 'delete_lead' | 'edit_event' | 'delete_event';
   description: string;
   user: string;
   timestamp: string;
-  details?: any;
+  details?: {
+    leadName?: string;
+    eventTitle?: string;
+    changes?: Record<string, any>;
+    originalData?: any;
+    targetId: string;
+  };
 }
 
 interface CrmContextType {
@@ -334,10 +340,76 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     }
   }, [toast, leads]);
 
-  // Update Lead
+  // Helper function to check if user needs approval
+  const needsApproval = useCallback(async (action: string): Promise<boolean> => {
+    const { data: currentUser } = await supabase.auth.getUser();
+    if (!currentUser?.user) return false;
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', currentUser.user.id)
+      .single();
+
+    // Comercial users need approval for sensitive actions
+    if (profile?.role === 'comercial' && ['edit_lead', 'delete_lead', 'edit_event', 'delete_event'].includes(action)) {
+      return true;
+    }
+    
+    return false;
+  }, []);
+
+  // Helper function to create pending action
+  const createPendingAction = useCallback(async (type: PendingAction['type'], description: string, details: any) => {
+    const { data: currentUser } = await supabase.auth.getUser();
+    if (!currentUser?.user) return;
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('name')
+      .eq('id', currentUser.user.id)
+      .single();
+
+    const newAction: PendingAction = {
+      id: crypto.randomUUID(),
+      type,
+      description,
+      user: profile?.name || 'Usuário',
+      timestamp: new Date().toLocaleString('pt-BR'),
+      details
+    };
+
+    setPendingActions(prev => [...prev, newAction]);
+    
+    toast({
+      title: "Solicitação enviada",
+      description: "Sua solicitação foi enviada para aprovação do supervisor",
+    });
+  }, [toast]);
+
+  // Update Lead with approval check
   const updateLead = useCallback(async (id: string, leadData: Partial<Lead>) => {
     try {
       console.log('Atualizando lead:', id, leadData);
+      
+      // Check if needs approval
+      if (await needsApproval('edit_lead')) {
+        const lead = leads.find(l => l.id === id);
+        if (!lead) throw new Error('Lead não encontrado');
+        
+        await createPendingAction(
+          'edit_lead',
+          `Solicitação para editar lead: ${lead.name} (${lead.company})`,
+          {
+            leadName: lead.name,
+            changes: leadData,
+            originalData: lead,
+            targetId: id
+          }
+        );
+        return;
+      }
+      
       setActionLoading(id);
       
       const { data, error } = await supabase
@@ -370,12 +442,30 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setActionLoading(null);
     }
-  }, [toast]);
+  }, [toast, leads, needsApproval, createPendingAction]);
 
-  // Delete Lead
+  // Delete Lead with approval check
   const deleteLead = useCallback(async (id: string) => {
     try {
       console.log('Deletando lead:', id);
+      
+      // Check if needs approval
+      if (await needsApproval('delete_lead')) {
+        const lead = leads.find(l => l.id === id);
+        if (!lead) throw new Error('Lead não encontrado');
+        
+        await createPendingAction(
+          'delete_lead',
+          `Solicitação para excluir lead: ${lead.name} (${lead.company})`,
+          {
+            leadName: lead.name,
+            targetId: id,
+            originalData: lead
+          }
+        );
+        return;
+      }
+      
       setActionLoading(id);
       
       const { error } = await supabase
@@ -406,7 +496,7 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setActionLoading(null);
     }
-  }, [toast]);
+  }, [toast, leads, needsApproval, createPendingAction]);
 
   // Move Lead
   const moveLead = async (leadId: string, newStage: string) => {
@@ -575,11 +665,30 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     }
   }, [toast]);
 
-  // Update Event
+  // Update Event with approval check
   const updateEvent = async (eventId: string, updates: any) => {
     try {
-      setActionLoading(eventId);
       console.log('Atualizando evento:', eventId, updates);
+      
+      // Check if needs approval
+      if (await needsApproval('edit_event')) {
+        const event = events.find(e => e.id === eventId);
+        if (!event) throw new Error('Evento não encontrado');
+        
+        await createPendingAction(
+          'edit_event',
+          `Solicitação para editar evento: ${event.title}`,
+          {
+            eventTitle: event.title,
+            changes: updates,
+            originalData: event,
+            targetId: eventId
+          }
+        );
+        return;
+      }
+
+      setActionLoading(eventId);
 
       const { data, error } = await supabase
         .from('events')
@@ -613,10 +722,28 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Delete Event
+  // Delete Event with approval check
   const deleteEvent = useCallback(async (id: string) => {
     try {
       console.log('Deletando evento:', id);
+      
+      // Check if needs approval
+      if (await needsApproval('delete_event')) {
+        const event = events.find(e => e.id === id);
+        if (!event) throw new Error('Evento não encontrado');
+        
+        await createPendingAction(
+          'delete_event',
+          `Solicitação para excluir evento: ${event.title}`,
+          {
+            eventTitle: event.title,
+            targetId: id,
+            originalData: event
+          }
+        );
+        return;
+      }
+      
       setActionLoading(id);
       
       const { error } = await supabase
@@ -647,7 +774,7 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setActionLoading(null);
     }
-  }, [toast]);
+  }, [toast, events, needsApproval, createPendingAction]);
 
   // Add Event (alias for createEvent)
   const addEvent = createEvent;
@@ -816,14 +943,87 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     await savePipelineStages(newStages);
   }, [pipelineStages, savePipelineStages]);
 
-  // Supervision Actions
-  const approveAction = useCallback((actionId: string) => {
-    setPendingActions(prev => prev.filter(action => action.id !== actionId));
-    toast({
-      title: "Ação aprovada",
-      description: "A ação foi aprovada com sucesso",
-    });
-  }, [toast]);
+  // Supervision Actions with actual implementation
+  const approveAction = useCallback(async (actionId: string) => {
+    const action = pendingActions.find(a => a.id === actionId);
+    if (!action) return;
+
+    try {
+      // Execute the approved action
+      switch (action.type) {
+        case 'edit_lead':
+          if (action.details?.targetId && action.details?.changes) {
+            const { data, error } = await supabase
+              .from('leads')
+              .update(action.details.changes)
+              .eq('id', action.details.targetId)
+              .select()
+              .single();
+            
+            if (!error && data) {
+              setLeads(prev => prev.map(lead => lead.id === action.details!.targetId ? data : lead));
+            }
+          }
+          break;
+          
+        case 'delete_lead':
+          if (action.details?.targetId) {
+            const { error } = await supabase
+              .from('leads')
+              .delete()
+              .eq('id', action.details.targetId);
+            
+            if (!error) {
+              setLeads(prev => prev.filter(lead => lead.id !== action.details!.targetId));
+            }
+          }
+          break;
+          
+        case 'edit_event':
+          if (action.details?.targetId && action.details?.changes) {
+            const { data, error } = await supabase
+              .from('events')
+              .update(action.details.changes)
+              .eq('id', action.details.targetId)
+              .select()
+              .single();
+            
+            if (!error && data) {
+              setEvents(prev => prev.map(event => event.id === action.details!.targetId ? data : event));
+            }
+          }
+          break;
+          
+        case 'delete_event':
+          if (action.details?.targetId) {
+            const { error } = await supabase
+              .from('events')
+              .delete()
+              .eq('id', action.details.targetId);
+            
+            if (!error) {
+              setEvents(prev => prev.filter(event => event.id !== action.details!.targetId));
+            }
+          }
+          break;
+      }
+
+      // Remove from pending actions
+      setPendingActions(prev => prev.filter(a => a.id !== actionId));
+      
+      toast({
+        title: "Ação aprovada",
+        description: "A ação foi aprovada e executada com sucesso",
+      });
+    } catch (error) {
+      console.error('Erro ao executar ação aprovada:', error);
+      toast({
+        title: "Erro ao executar ação",
+        description: "Houve um erro ao executar a ação aprovada",
+        variant: "destructive",
+      });
+    }
+  }, [toast, pendingActions]);
 
   const rejectAction = useCallback((actionId: string) => {
     setPendingActions(prev => prev.filter(action => action.id !== actionId));

@@ -4,9 +4,17 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Shield, Clock, CheckCircle, XCircle, User, Edit, Trash2 } from 'lucide-react';
 import { useCrm } from '@/contexts/CrmContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { Navigate } from 'react-router-dom';
 
 export default function Supervision() {
   const { pendingActions, approveAction, rejectAction } = useCrm();
+  const { profile } = useAuth();
+
+  // Apenas supervisores e admins podem acessar
+  if (profile?.role === 'comercial') {
+    return <Navigate to="/" replace />;
+  }
 
   const getActionIcon = (type: string) => {
     switch (type) {
@@ -80,7 +88,7 @@ export default function Supervision() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-green-700">8</div>
+            <div className="text-3xl font-bold text-green-700">0</div>
             <p className="text-sm text-green-600">ações aprovadas</p>
           </CardContent>
         </Card>
@@ -93,7 +101,7 @@ export default function Supervision() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-red-700">2</div>
+            <div className="text-3xl font-bold text-red-700">0</div>
             <p className="text-sm text-red-600">ações rejeitadas</p>
           </CardContent>
         </Card>
@@ -141,23 +149,31 @@ export default function Supervision() {
                       <p className="text-slate-700 mb-3">{action.description}</p>
 
                       {/* Action Details */}
-                      <div className="bg-slate-50 rounded-lg p-4 space-y-2">
-                        <h4 className="font-medium text-slate-900">Detalhes da Solicitação:</h4>
-                        {action.details && action.details.leadName && (
-                          <p className="text-sm text-slate-600">
-                            <strong>Lead:</strong> {action.details.leadName}
-                          </p>
-                        )}
-                        {action.details && action.details.changes && (
-                          <div className="space-y-1">
-                            {Object.entries(action.details.changes).map(([key, value]) => (
-                              <p key={key} className="text-sm text-slate-600">
-                                <strong>{key}:</strong> {String(value)}
-                              </p>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                      {action.details && (
+                        <div className="bg-slate-50 rounded-lg p-4 space-y-2">
+                          <h4 className="font-medium text-slate-900">Detalhes da Solicitação:</h4>
+                          {action.details.leadName && (
+                            <p className="text-sm text-slate-600">
+                              <strong>Lead:</strong> {action.details.leadName}
+                            </p>
+                          )}
+                          {action.details.eventTitle && (
+                            <p className="text-sm text-slate-600">
+                              <strong>Evento:</strong> {action.details.eventTitle}
+                            </p>
+                          )}
+                          {action.details.changes && (
+                            <div className="space-y-1">
+                              <p className="text-sm font-medium text-slate-700">Alterações solicitadas:</p>
+                              {Object.entries(action.details.changes).map(([key, value]) => (
+                                <p key={key} className="text-sm text-slate-600 ml-2">
+                                  <strong>{key}:</strong> {String(value)}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex gap-2 ml-4">

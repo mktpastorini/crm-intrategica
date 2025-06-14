@@ -40,6 +40,12 @@ export default function ProtectedRoute({ children, requiredRole }: ProtectedRout
     return <Navigate to="/" replace />;
   }
 
+  // Usuários comerciais não podem acessar a página de Supervisão
+  if (window.location.pathname === '/supervision' && profile?.role === 'comercial') {
+    console.log('Usuário comercial tentou acessar supervisão, redirecionando');
+    return <Navigate to="/" replace />;
+  }
+
   console.log('Usuário autenticado, renderizando conteúdo');
   return <>{children}</>;
 }
