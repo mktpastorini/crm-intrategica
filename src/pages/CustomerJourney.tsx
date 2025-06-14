@@ -17,7 +17,7 @@ interface JourneyMessage {
   title: string;
   content: string;
   delay: number;
-  delayUnit: 'hours' | 'days';
+  delayUnit: 'minutes' | 'hours' | 'days';
   stage: string;
   type: 'text' | 'image' | 'video';
   mediaUrl?: string;
@@ -37,7 +37,7 @@ export default function CustomerJourney() {
     title: '',
     content: '',
     delay: 1,
-    delayUnit: 'days' as 'hours' | 'days',
+    delayUnit: 'days' as 'minutes' | 'hours' | 'days',
     stage: '',
     type: 'text' as 'text' | 'image' | 'video',
     mediaUrl: ''
@@ -173,6 +173,15 @@ export default function CustomerJourney() {
     }
   };
 
+  const getDelayText = (delay: number, unit: 'minutes' | 'hours' | 'days') => {
+    const unitMap = {
+      'minutes': 'minuto(s)',
+      'hours': 'hora(s)',
+      'days': 'dia(s)'
+    };
+    return `${delay} ${unitMap[unit]} após entrada`;
+  };
+
   return (
     <div className="h-full flex flex-col bg-white">
       {/* Header fixo */}
@@ -276,6 +285,7 @@ export default function CustomerJourney() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="minutes">Minutos</SelectItem>
                         <SelectItem value="hours">Horas</SelectItem>
                         <SelectItem value="days">Dias</SelectItem>
                       </SelectContent>
@@ -355,7 +365,7 @@ export default function CustomerJourney() {
                         <div className="flex items-center gap-2 text-xs text-slate-500">
                           <Clock className="w-3 h-3" />
                           <span>
-                            {message.delay} {message.delayUnit === 'hours' ? 'hora(s)' : 'dia(s)'} após entrada
+                            {getDelayText(message.delay, message.delayUnit)}
                           </span>
                         </div>
                         <div className="flex justify-end gap-1 pt-2">

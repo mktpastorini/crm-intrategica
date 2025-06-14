@@ -1,78 +1,63 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { useJourneyMessageTrigger } from '@/hooks/useJourneyMessageTrigger';
 
 interface Lead {
   id: string;
   name: string;
-  company: string;
-  email?: string;
   phone: string;
-  whatsapp?: string;
-  website?: string;
-  address?: string;
-  niche: string;
-  status: string;
-  responsible_id: string;
+  email: string;
+  company?: string;
+  title?: string;
+  source?: string;
+  owner_id?: string;
+  pipeline_stage?: string;
+  status?: string;
+  priority?: string;
   created_at: string;
   updated_at: string;
-  rating?: number;
-  place_id?: string;
-  instagram?: string;
-  pipeline_stage?: string;
-}
-
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  status: string;
-  avatar_url?: string;
-  created_at: string;
-  last_login?: string;
+  category_id?: string;
 }
 
 interface Event {
   id: string;
   title: string;
   description?: string;
-  date: string;
-  time: string;
+  start_time: string;
+  end_time: string;
+  location?: string;
   lead_id?: string;
-  lead_name?: string;
-  company?: string;
-  type: string;
-  responsible_id: string;
-  completed?: boolean;
+  user_id?: string;
   created_at: string;
-}
-
-interface PendingAction {
-  id: string;
-  type: string;
-  user: string;
-  description: string;
-  timestamp: string;
-  details?: any;
-}
-
-interface MessageTemplate {
-  id: string;
-  name: string;
-  content: string;
+  updated_at: string;
 }
 
 interface PipelineStage {
   id: string;
   name: string;
-  color: string;
+  description?: string;
   order: number;
+  color: string;
 }
 
-// Interfaces para type casting dos detalhes das ações pendentes
+interface Category {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+interface PendingAction {
+  id: string;
+  type: string;
+  user_name: string;
+  description: string;
+  details: ActionDetails;
+  status?: 'pending' | 'approved' | 'rejected';
+  created_at: string;
+}
+
 interface ActionDetails {
   leadId?: string;
   leadName?: string;
@@ -83,345 +68,100 @@ interface ActionDetails {
 
 interface CrmContextType {
   leads: Lead[];
-  users: User[];
   events: Event[];
-  pendingActions: PendingAction[];
-  messageTemplates: MessageTemplate[];
   pipelineStages: PipelineStage[];
-  loading: boolean;
-  actionLoading: string | null;
-  loadData: () => Promise<void>;
-  loadLeads: () => Promise<void>;
-  loadUsers: () => Promise<void>;
-  loadPendingActions: () => Promise<void>;
-  createLead: (lead: Omit<Lead, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
+  categories: Category[];
+  pendingActions: PendingAction[];
   addLead: (lead: Omit<Lead, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
-  updateLead: (id: string, lead: Partial<Lead>) => Promise<void>;
+  updateLead: (id: string, updates: Partial<Lead>) => Promise<void>;
   deleteLead: (id: string) => Promise<void>;
-  addUser: (user: Omit<User, 'id' | 'created_at'>) => Promise<void>;
-  updateUser: (id: string, user: Partial<User>) => Promise<void>;
-  deleteUser: (id: string) => Promise<void>;
-  createEvent: (event: Omit<Event, 'id' | 'created_at'>) => Promise<void>;
-  addEvent: (event: Omit<Event, 'id' | 'created_at'>) => Promise<void>;
-  updateEvent: (id: string, event: Partial<Event>) => Promise<void>;
+  addEvent: (event: Omit<Event, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
+  updateEvent: (id: string, updates: Partial<Event>) => Promise<void>;
   deleteEvent: (id: string) => Promise<void>;
+  addCategory: (category: Omit<Category, 'id'>) => void;
+  updateCategory: (id: string, updates: Partial<Category>) => void;
+  deleteCategory: (id: string) => void;
+  requestAction: (action: Omit<PendingAction, 'id' | 'created_at'>) => Promise<void>;
   approveAction: (actionId: string) => Promise<void>;
   rejectAction: (actionId: string) => Promise<void>;
-  saveMessageTemplate: (template: Omit<MessageTemplate, 'id'>) => Promise<void>;
-  loadMessageTemplates: () => Promise<void>;
-  deleteMessageTemplate: (id: string) => Promise<void>;
-  sendBulkMessage: (recipientIds: string[], message: string, category?: string) => Promise<void>;
-  addPipelineStage: (stage: Omit<PipelineStage, 'id'>) => Promise<void>;
-  updatePipelineStage: (id: string, stage: Partial<PipelineStage>) => Promise<void>;
-  deletePipelineStage: (id: string) => Promise<void>;
-  savePipelineStages: (stages: PipelineStage[]) => Promise<void>;
-  moveLead: (leadId: string, newStage: string) => Promise<void>;
+  loadPendingActions: () => Promise<void>;
+  loadLeads: () => Promise<void>;
+  loadEvents: () => Promise<void>;
 }
 
 const CrmContext = createContext<CrmContextType | undefined>(undefined);
 
-export function CrmProvider({ children }: { children: React.ReactNode }) {
-  const { user, profile } = useAuth();
+export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, userRole } = useAuth();
   const { toast } = useToast();
+  const { triggerJourneyMessages } = useJourneyMessageTrigger();
+  
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
-  const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
-  const [messageTemplates, setMessageTemplates] = useState<MessageTemplate[]>([]);
   const [pipelineStages, setPipelineStages] = useState<PipelineStage[]>([
-    { id: 'prospeccao', name: 'Prospecção', color: '#3b82f6', order: 1 },
-    { id: 'qualificacao', name: 'Qualificação', color: '#8b5cf6', order: 2 },
-    { id: 'proposta', name: 'Proposta', color: '#f59e0b', order: 3 },
-    { id: 'negociacao', name: 'Negociação', color: '#ef4444', order: 4 },
-    { id: 'reuniao', name: 'Reunião', color: '#10b981', order: 5 },
-    { id: 'fechamento', name: 'Contrato Assinado', color: '#06b6d4', order: 6 }
+    { id: '1', name: 'Qualificação', description: 'Primeiro contato com o lead', order: 1, color: '#6366F1' },
+    { id: '2', name: 'Proposta', description: 'Apresentação da proposta comercial', order: 2, color: '#22C55E' },
+    { id: '3', name: 'Negociação', description: 'Ajustes finais e negociação', order: 3, color: '#F59E0B' },
+    { id: '4', name: 'Fechamento', description: 'Assinatura do contrato e fechamento', order: 4, color: '#E11D48' },
   ]);
-  const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [categories, setCategories] = useState<Category[]>([
+    { id: '1', name: 'Marketing', description: 'Leads vindos de ações de marketing' },
+    { id: '2', name: 'Indicação', description: 'Leads indicados por clientes' },
+    { id: '3', name: 'Outros', description: 'Outras fontes de leads' },
+  ]);
+  const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
 
   useEffect(() => {
-    loadData();
-    loadPipelineStages();
-  }, [user]);
-
-  const loadPipelineStages = () => {
-    const saved = localStorage.getItem('pipelineStages');
-    if (saved) {
-      setPipelineStages(JSON.parse(saved));
-    }
-  };
-
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      await Promise.all([loadLeads(), loadUsers(), loadEvents(), loadPendingActions()]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadPendingActions = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('pending_approvals')
-        .select('*')
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Erro ao carregar ações pendentes:', error);
-        return;
-      }
-
-      const formattedActions: PendingAction[] = (data || []).map(action => ({
-        id: action.id,
-        type: action.type,
-        user: action.user_name,
-        description: action.description,
-        timestamp: new Date(action.created_at).toLocaleString('pt-BR'),
-        details: action.details
-      }));
-
-      setPendingActions(formattedActions);
-    } catch (error) {
-      console.error('Erro ao carregar ações pendentes:', error);
-    }
-  };
+    loadLeads();
+    loadEvents();
+    loadPendingActions();
+  }, []);
 
   const loadLeads = async () => {
     try {
-      const { data: leadsData, error: leadsError } = await supabase
+      const { data, error } = await supabase
         .from('leads')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (leadsError) {
-        console.error('Erro ao carregar leads:', leadsError);
-        toast({
-          title: "Erro",
-          description: "Erro ao carregar leads",
-          variant: "destructive",
-        });
-      } else {
-        setLeads(leadsData || []);
-      }
-    } catch (error) {
+      if (error) throw error;
+      if (data) setLeads(data);
+    } catch (error: any) {
       console.error('Erro ao carregar leads:', error);
-    }
-  };
-
-  const loadUsers = async () => {
-    try {
-      const { data: usersData, error: usersError } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (usersError) {
-        console.error('Erro ao carregar usuários:', usersError);
-        toast({
-          title: "Erro",
-          description: "Erro ao carregar usuários",
-          variant: "destructive",
-        });
-      } else {
-        setUsers(usersData || []);
-      }
-    } catch (error) {
-      console.error('Erro ao carregar usuários:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar leads",
+        variant: "destructive",
+      });
     }
   };
 
   const loadEvents = async () => {
     try {
-      const { data: eventsData, error: eventsError } = await supabase
+      const { data, error } = await supabase
         .from('events')
         .select('*')
-        .order('date', { ascending: true });
+        .order('start_time', { ascending: true });
 
-      if (eventsError) {
-        console.error('Erro ao carregar eventos:', eventsError);
-        toast({
-          title: "Erro",
-          description: "Erro ao carregar eventos",
-          variant: "destructive",
-        });
-      } else {
-        setEvents(eventsData || []);
-      }
-    } catch (error) {
+      if (error) throw error;
+      if (data) setEvents(data);
+    } catch (error: any) {
       console.error('Erro ao carregar eventos:', error);
-    }
-  };
-
-  const requestAction = async (action: Omit<PendingAction, 'id' | 'timestamp'>) => {
-    console.log('Enviando solicitação para aprovação:', action);
-    
-    if (!user?.id || !profile?.name) {
-      console.error('Usuário não encontrado');
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from('pending_approvals')
-        .insert([{
-          type: action.type,
-          user_id: user.id,
-          user_name: profile.name,
-          description: action.description,
-          details: action.details || {}
-        }])
-        .select()
-        .single();
-
-      if (error) {
-        throw error;
-      }
-
-      console.log('Solicitação salva no banco:', data);
-
-      // Recarregar as ações pendentes
-      await loadPendingActions();
-
-      toast({
-        title: "Solicitação enviada",
-        description: "Sua solicitação foi enviada para aprovação do supervisor.",
-      });
-
-      return data.id;
-    } catch (error: any) {
-      console.error('Erro ao salvar solicitação:', error);
       toast({
         title: "Erro",
-        description: "Erro ao enviar solicitação para aprovação",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const getFirstPipelineStage = () => {
-    const sortedStages = [...pipelineStages].sort((a, b) => a.order - b.order);
-    return sortedStages[0]?.id || 'prospeccao';
-  };
-
-  const createLead = async (leadData: Omit<Lead, 'id' | 'created_at' | 'updated_at'>) => {
-    setActionLoading('create-lead');
-    try {
-      // Garantir que o lead seja criado no primeiro estágio do pipeline baseado na ordem
-      const firstStage = getFirstPipelineStage();
-      const leadToCreate = {
-        ...leadData,
-        pipeline_stage: firstStage,
-        whatsapp: leadData.whatsapp || leadData.phone
-      };
-
-      const { data, error } = await supabase
-        .from('leads')
-        .insert([leadToCreate])
-        .select()
-        .single();
-
-      if (error) {
-        throw error;
-      }
-
-      if (data) {
-        setLeads(prev => [data, ...prev]);
-        const firstStageName = pipelineStages.find(s => s.id === firstStage)?.name || 'primeiro estágio';
-        toast({
-          title: "Lead criado",
-          description: `Lead ${leadData.name} foi criado com sucesso no estágio ${firstStageName}.`,
-        });
-      }
-    } catch (error: any) {
-      console.error('Erro ao criar lead:', error);
-      toast({
-        title: "Erro",
-        description: error.message || "Erro ao criar lead",
-        variant: "destructive",
-      });
-      throw error;
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const addLead = createLead;
-
-  const updateLead = async (id: string, leadData: Partial<Lead>) => {
-    const existingLead = leads.find(l => l.id === id);
-    if (!existingLead) return;
-
-    console.log('Profile role:', profile?.role);
-    console.log('Updating lead with data:', leadData);
-
-    // Para usuários comerciais, sempre enviar para aprovação
-    if (profile?.role === 'comercial') {
-      console.log('Usuário comercial detectado, enviando para aprovação');
-      await requestAction({
-        type: 'edit_lead',
-        user: profile.name || profile.email,
-        description: `Solicitação para editar lead: ${existingLead.name}`,
-        details: { 
-          leadId: id,
-          leadName: existingLead.name,
-          changes: leadData 
-        }
-      });
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from('leads')
-        .update(leadData)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) {
-        throw error;
-      }
-
-      if (data) {
-        setLeads(prev => prev.map(lead => 
-          lead.id === id ? data : lead
-        ));
-        
-        toast({
-          title: "Lead atualizado",
-          description: `Lead ${existingLead.name} foi atualizado com sucesso.`,
-        });
-      }
-    } catch (error: any) {
-      console.error('Erro ao atualizar lead:', error);
-      toast({
-        title: "Erro",
-        description: error.message || "Erro ao atualizar lead",
+        description: "Erro ao carregar eventos",
         variant: "destructive",
       });
     }
   };
 
   const deleteLead = async (id: string) => {
-    const leadToDelete = leads.find(l => l.id === id);
-    if (!leadToDelete) return;
-
-    console.log('Profile role:', profile?.role);
-    console.log('Deleting lead:', leadToDelete.name);
-
-    // Para usuários comerciais, sempre enviar para aprovação
-    if (profile?.role === 'comercial') {
-      console.log('Usuário comercial detectado, enviando para aprovação');
+    if (userRole === 'comercial') {
       await requestAction({
         type: 'delete_lead',
-        user: profile.name || profile.email,
-        description: `Solicitação para excluir lead: ${leadToDelete.name}`,
-        details: { 
-          leadId: id,
-          leadName: leadToDelete.name 
-        }
+        user_name: user?.email || 'Usuário',
+        description: `Solicitação para excluir lead: ${leads.find(l => l.id === id)?.name}`,
+        details: { leadId: id }
       });
       return;
     }
@@ -432,119 +172,104 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
         .delete()
         .eq('id', id);
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       setLeads(prev => prev.filter(lead => lead.id !== id));
-      
       toast({
         title: "Lead excluído",
-        description: `Lead ${leadToDelete.name} foi excluído com sucesso.`,
+        description: "Lead foi excluído com sucesso",
       });
     } catch (error: any) {
       console.error('Erro ao excluir lead:', error);
       toast({
         title: "Erro",
-        description: error.message || "Erro ao excluir lead",
+        description: "Erro ao excluir lead",
         variant: "destructive",
       });
     }
   };
 
-  const addUser = async (userData: Omit<User, 'id' | 'created_at'>) => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .insert([{
-          ...userData,
-          id: crypto.randomUUID()
-        }])
-        .select()
-        .single();
-
-      if (error) {
-        throw error;
-      }
-
-      if (data) {
-        setUsers(prev => [data, ...prev]);
-        toast({
-          title: "Usuário adicionado",
-          description: `Usuário ${userData.name} foi adicionado com sucesso.`,
-        });
-      }
-    } catch (error: any) {
-      console.error('Erro ao adicionar usuário:', error);
-      toast({
-        title: "Erro",
-        description: error.message || "Erro ao adicionar usuário",
-        variant: "destructive",
+  const updateLead = async (id: string, updates: Partial<Lead>) => {
+    if (userRole === 'comercial') {
+      await requestAction({
+        type: 'edit_lead',
+        user_name: user?.email || 'Usuário',
+        description: `Solicitação para editar lead: ${leads.find(l => l.id === id)?.name}`,
+        details: { leadId: id, changes: updates }
       });
+      return;
     }
-  };
 
-  const updateUser = async (id: string, userData: Partial<User>) => {
     try {
       const { data, error } = await supabase
-        .from('profiles')
-        .update(userData)
+        .from('leads')
+        .update(updates)
         .eq('id', id)
         .select()
         .single();
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       if (data) {
-        setUsers(prev => prev.map(user => 
-          user.id === id ? data : user
-        ));
+        // Verificar se o estágio mudou para disparar mensagens da jornada
+        const oldLead = leads.find(l => l.id === id);
+        if (oldLead && updates.pipeline_stage && oldLead.pipeline_stage !== updates.pipeline_stage) {
+          console.log(`Lead ${id} mudou do estágio ${oldLead.pipeline_stage} para ${updates.pipeline_stage}`);
+          triggerJourneyMessages(id, updates.pipeline_stage, data);
+        }
+
+        setLeads(prev => prev.map(lead => lead.id === id ? data : lead));
         
         toast({
-          title: "Usuário atualizado",
-          description: `Usuário foi atualizado com sucesso.`,
+          title: "Lead atualizado",
+          description: "Lead foi atualizado com sucesso",
         });
       }
     } catch (error: any) {
-      console.error('Erro ao atualizar usuário:', error);
+      console.error('Erro ao atualizar lead:', error);
       toast({
         title: "Erro",
-        description: error.message || "Erro ao atualizar usuário",
+        description: "Erro ao atualizar lead",
         variant: "destructive",
       });
     }
   };
 
-  const deleteUser = async (id: string) => {
+  const addLead = async (leadData: Omit<Lead, 'id' | 'created_at' | 'updated_at'>) => {
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', id);
+      const { data, error } = await supabase
+        .from('leads')
+        .insert([leadData])
+        .select()
+        .single();
 
-      if (error) {
-        throw error;
+      if (error) throw error;
+
+      if (data) {
+        setLeads(prev => [...prev, data]);
+        
+        // Disparar mensagens da jornada para o novo lead
+        if (data.pipeline_stage) {
+          console.log(`Novo lead ${data.id} adicionado no estágio ${data.pipeline_stage}`);
+          triggerJourneyMessages(data.id, data.pipeline_stage, data);
+        }
+        
+        toast({
+          title: "Lead criado",
+          description: "Lead foi criado com sucesso",
+        });
       }
-
-      setUsers(prev => prev.filter(user => user.id !== id));
-      
-      toast({
-        title: "Usuário excluído",
-        description: "Usuário excluído com sucesso.",
-      });
     } catch (error: any) {
-      console.error('Erro ao excluir usuário:', error);
+      console.error('Erro ao criar lead:', error);
       toast({
         title: "Erro",
-        description: error.message || "Erro ao excluir usuário",
+        description: "Erro ao criar lead",
         variant: "destructive",
       });
     }
   };
 
-  const createEvent = async (eventData: Omit<Event, 'id' | 'created_at'>) => {
+  const addEvent = async (eventData: Omit<Event, 'id' | 'created_at' | 'updated_at'>) => {
     try {
       const { data, error } = await supabase
         .from('events')
@@ -552,127 +277,121 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
         .select()
         .single();
 
-      if (error) {
-        throw error;
-      }
-
-      if (data) {
-        setEvents(prev => [data, ...prev]);
-        toast({
-          title: "Evento criado",
-          description: `Evento ${eventData.title} foi criado com sucesso.`,
-        });
-      }
+      if (error) throw error;
+      if (data) setEvents(prev => [...prev, data]);
+      toast({
+        title: "Evento criado",
+        description: "Evento foi criado com sucesso",
+      });
     } catch (error: any) {
       console.error('Erro ao criar evento:', error);
       toast({
         title: "Erro",
-        description: error.message || "Erro ao criar evento",
+        description: "Erro ao criar evento",
         variant: "destructive",
       });
     }
   };
 
-  const addEvent = createEvent;
-
-  const updateEvent = async (id: string, eventData: Partial<Event>) => {
-    const existingEvent = events.find(e => e.id === id);
-    if (!existingEvent) return;
-
-    console.log('Profile role:', profile?.role);
-    console.log('Updating event with data:', eventData);
-
-    // Para usuários comerciais, sempre enviar para aprovação
-    if (profile?.role === 'comercial') {
-      console.log('Usuário comercial detectado, enviando para aprovação');
-      await requestAction({
-        type: 'edit_event',
-        user: profile.name || profile.email,
-        description: `Solicitação para editar evento: ${existingEvent.title}`,
-        details: { 
-          eventId: id,
-          eventTitle: existingEvent.title,
-          changes: eventData 
-        }
-      });
-      return;
-    }
-
+  const updateEvent = async (id: string, updates: Partial<Event>) => {
     try {
       const { data, error } = await supabase
         .from('events')
-        .update(eventData)
+        .update(updates)
         .eq('id', id)
         .select()
         .single();
 
-      if (error) {
-        throw error;
-      }
-
-      if (data) {
-        setEvents(prev => prev.map(event => 
-          event.id === id ? data : event
-        ));
-        
-        toast({
-          title: "Evento atualizado",
-          description: `Evento ${existingEvent.title} foi atualizado com sucesso.`,
-        });
-      }
+      if (error) throw error;
+      if (data) setEvents(prev => prev.map(event => event.id === id ? data : event));
+      toast({
+        title: "Evento atualizado",
+        description: "Evento foi atualizado com sucesso",
+      });
     } catch (error: any) {
       console.error('Erro ao atualizar evento:', error);
       toast({
         title: "Erro",
-        description: error.message || "Erro ao atualizar evento",
+        description: "Erro ao atualizar evento",
         variant: "destructive",
       });
     }
   };
 
   const deleteEvent = async (id: string) => {
-    const eventToDelete = events.find(e => e.id === id);
-    if (!eventToDelete) return;
-
-    console.log('Profile role:', profile?.role);
-    console.log('Deleting event:', eventToDelete.title);
-
-    // Para usuários comerciais, sempre enviar para aprovação
-    if (profile?.role === 'comercial') {
-      console.log('Usuário comercial detectado, enviando para aprovação');
-      await requestAction({
-        type: 'delete_event',
-        user: profile.name || profile.email,
-        description: `Solicitação para excluir evento: ${eventToDelete.title}`,
-        details: { 
-          eventId: id,
-          eventTitle: eventToDelete.title 
-        }
-      });
-      return;
-    }
-
     try {
       const { error } = await supabase
         .from('events')
         .delete()
         .eq('id', id);
 
-      if (error) {
-        throw error;
-      }
-
+      if (error) throw error;
       setEvents(prev => prev.filter(event => event.id !== id));
-      
       toast({
         title: "Evento excluído",
-        description: `Evento ${eventToDelete.title} foi excluído com sucesso.`,
+        description: "Evento foi excluído com sucesso",
       });
     } catch (error: any) {
       console.error('Erro ao excluir evento:', error);
       toast({
         title: "Erro",
-        description: error.message || "Erro ao excluir evento",
+        description: "Erro ao excluir evento",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const addCategory = (category: Omit<Category, 'id'>) => {
+    setCategories(prev => [...prev, { ...category, id: `cat-${Date.now()}` }]);
+    toast({
+      title: "Categoria criada",
+      description: "Categoria foi criada com sucesso",
+    });
+  };
+
+  const updateCategory = (id: string, updates: Partial<Category>) => {
+    setCategories(prev => prev.map(cat => cat.id === id ? { ...cat, ...updates } : cat));
+    toast({
+      title: "Categoria atualizada",
+      description: "Categoria foi atualizada com sucesso",
+    });
+  };
+
+  const deleteCategory = (id: string) => {
+    setCategories(prev => prev.filter(cat => cat.id !== id));
+    toast({
+      title: "Categoria excluída",
+      description: "Categoria foi excluída com sucesso",
+    });
+  };
+
+  const requestAction = async (action: Omit<PendingAction, 'id' | 'created_at'>) => {
+    try {
+      const { data, error } = await supabase
+        .from('pending_actions')
+        .insert([
+          {
+            ...action,
+            status: 'pending',
+          }
+        ])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setPendingActions(prev => [...prev, data]);
+        toast({
+          title: "Solicitação enviada",
+          description: "Aguardando aprovação do supervisor",
+        });
+      }
+    } catch (error: any) {
+      console.error('Erro ao solicitar ação:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao solicitar ação",
         variant: "destructive",
       });
     }
@@ -680,124 +399,68 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
 
   const approveAction = async (actionId: string) => {
     try {
-      // Buscar a ação no banco de dados
-      const { data: actionData, error: fetchError } = await supabase
-        .from('pending_approvals')
-        .select('*')
-        .eq('id', actionId)
-        .eq('status', 'pending')
-        .single();
+      const action = pendingActions.find(a => a.id === actionId);
+      if (!action) throw new Error('Ação não encontrada');
 
-      if (fetchError || !actionData) {
-        console.error('Erro ao buscar ação:', fetchError);
-        return;
+      if (action.type === 'delete_lead' && action.details.leadId) {
+        const { error } = await supabase
+          .from('leads')
+          .delete()
+          .eq('id', action.details.leadId);
+
+        if (error) throw error;
+        setLeads(prev => prev.filter(lead => lead.id !== action.details.leadId));
+      } else if (action.type === 'edit_lead' && action.details.leadId && action.details.changes) {
+        const { data, error } = await supabase
+          .from('leads')
+          .update(action.details.changes)
+          .eq('id', action.details.leadId)
+          .select()
+          .single();
+          
+        if (error) throw error;
+        setLeads(prev => prev.map(lead => lead.id === action.details.leadId ? { ...lead, ...action.details.changes } : lead));
+      } else if (action.type === 'delete_event' && action.details.eventId) {
+        const { error } = await supabase
+          .from('events')
+          .delete()
+          .eq('id', action.details.eventId);
+
+        if (error) throw error;
+        setEvents(prev => prev.filter(event => event.id !== action.details.eventId));
+      } else if (action.type === 'edit_event' && action.details.eventId && action.details.changes) {
+        const { data, error } = await supabase
+          .from('events')
+          .update(action.details.changes)
+          .eq('id', action.details.eventId)
+          .select()
+          .single();
+
+        if (error) throw error;
+        setEvents(prev => prev.map(event => event.id === action.details.eventId ? { ...event, ...action.details.changes } : event));
       }
 
-      console.log('Aprovando ação:', actionData);
-
-      // Type cast dos detalhes da ação
-      const details = actionData.details as ActionDetails;
-
-      // Execute the action based on type
-      switch (actionData.type) {
-        case 'edit_lead':
-          if (details?.changes && details?.leadId) {
-            const leadToUpdate = leads.find(l => l.id === details.leadId);
-            if (leadToUpdate) {
-              const { data, error } = await supabase
-                .from('leads')
-                .update(details.changes)
-                .eq('id', details.leadId)
-                .select()
-                .single();
-
-              if (error) throw error;
-
-              if (data) {
-                setLeads(prev => prev.map(lead => 
-                  lead.id === details.leadId ? data : lead
-                ));
-              }
-            }
-          }
-          break;
-        case 'delete_lead':
-          if (details?.leadId) {
-            const leadToDelete = leads.find(l => l.id === details.leadId);
-            if (leadToDelete) {
-              const { error } = await supabase
-                .from('leads')
-                .delete()
-                .eq('id', details.leadId);
-
-              if (error) throw error;
-
-              setLeads(prev => prev.filter(lead => lead.id !== details.leadId));
-            }
-          }
-          break;
-        case 'edit_event':
-          if (details?.changes && details?.eventId) {
-            const eventToUpdate = events.find(e => e.id === details.eventId);
-            if (eventToUpdate) {
-              const { data, error } = await supabase
-                .from('events')
-                .update(details.changes)
-                .eq('id', details.eventId)
-                .select()
-                .single();
-
-              if (error) throw error;
-
-              if (data) {
-                setEvents(prev => prev.map(event => 
-                  event.id === details.eventId ? data : event
-                ));
-              }
-            }
-          }
-          break;
-        case 'delete_event':
-          if (details?.eventId) {
-            const eventToDelete = events.find(e => e.id === details.eventId);
-            if (eventToDelete) {
-              const { error } = await supabase
-                .from('events')
-                .delete()
-                .eq('id', details.eventId);
-
-              if (error) throw error;
-
-              setEvents(prev => prev.filter(event => event.id !== details.eventId));
-            }
-          }
-          break;
-      }
-
-      // Marcar a ação como aprovada no banco
+      // Update pending action status
       const { error: updateError } = await supabase
-        .from('pending_approvals')
-        .update({
-          status: 'approved',
-          approved_by: user?.id,
-          approved_at: new Date().toISOString()
-        })
+        .from('pending_actions')
+        .update({ status: 'approved' })
         .eq('id', actionId);
 
       if (updateError) throw updateError;
 
-      // Recarregar as ações pendentes
-      await loadPendingActions();
-      
+      setPendingActions(prev => prev.map(a => a.id === actionId ? { ...a, status: 'approved' } : a));
+
       toast({
         title: "Ação aprovada",
-        description: "A solicitação foi aprovada com sucesso.",
+        description: "Ação foi aprovada com sucesso",
       });
+      loadLeads();
+      loadEvents();
     } catch (error: any) {
       console.error('Erro ao aprovar ação:', error);
       toast({
         title: "Erro",
-        description: error.message || "Erro ao aprovar ação",
+        description: "Erro ao aprovar ação",
         variant: "destructive",
       });
     }
@@ -805,267 +468,81 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
 
   const rejectAction = async (actionId: string) => {
     try {
-      // Marcar a ação como rejeitada no banco
-      const { error } = await supabase
-        .from('pending_approvals')
-        .update({
-          status: 'rejected',
-          approved_by: user?.id,
-          approved_at: new Date().toISOString()
-        })
-        .eq('id', actionId);
-
-      if (error) throw error;
-
-      // Recarregar as ações pendentes
-      await loadPendingActions();
-      
+       // Update pending action status to 'rejected' in the database
+       const { error } = await supabase
+       .from('pending_actions')
+       .update({ status: 'rejected' })
+       .eq('id', actionId);
+ 
+     if (error) {
+       throw error;
+     }
+      setPendingActions(prev => prev.map(a => a.id === actionId ? { ...a, status: 'rejected' } : a));
       toast({
         title: "Ação rejeitada",
-        description: "A solicitação foi rejeitada.",
-        variant: "destructive",
+        description: "Ação foi rejeitada com sucesso",
       });
     } catch (error: any) {
       console.error('Erro ao rejeitar ação:', error);
       toast({
         title: "Erro",
-        description: error.message || "Erro ao rejeitar ação",
+        description: "Erro ao rejeitar ação",
         variant: "destructive",
       });
     }
   };
 
-  const saveMessageTemplate = async (template: Omit<MessageTemplate, 'id'>) => {
-    const newTemplate: MessageTemplate = {
-      id: crypto.randomUUID(),
-      ...template,
-    };
-    setMessageTemplates(prev => [...prev, newTemplate]);
-    
-    toast({
-      title: "Template salvo",
-      description: `Template "${template.name}" foi salvo com sucesso.`,
-    });
-  };
-
-  const loadMessageTemplates = async () => {
-    // Templates are already loaded in memory
-  };
-
-  const deleteMessageTemplate = async (id: string) => {
-    const template = messageTemplates.find(t => t.id === id);
-    setMessageTemplates(prev => prev.filter(t => t.id !== id));
-    
-    if (template) {
-      toast({
-        title: "Template excluído",
-        description: `Template "${template.name}" foi excluído.`,
-      });
-    }
-  };
-
-  const sendBulkMessage = async (recipientIds: string[], message: string, category?: string) => {
-    try {
-      // Get system settings for webhook URL
-      const { data: settings } = await supabase
-        .from('system_settings')
-        .select('*')
-        .limit(1)
-        .single();
-
-      const webhookUrl = settings?.message_webhook_url;
-
-      if (webhookUrl) {
-        // Send to webhook
-        const response = await fetch(webhookUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            recipientIds,
-            message,
-            category,
-            timestamp: new Date().toISOString(),
-            sender: user?.email,
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error('Erro ao enviar para webhook');
-        }
-      }
-
-      toast({
-        title: "Mensagens enviadas",
-        description: `${recipientIds.length} mensagem(ns) enviada(s) com sucesso.`,
-      });
-    } catch (error) {
-      console.error('Erro ao enviar mensagens:', error);
-      toast({
-        title: "Erro no envio",
-        description: "Ocorreu um erro ao enviar as mensagens.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const addPipelineStage = async (stage: Omit<PipelineStage, 'id'>) => {
-    const newStage: PipelineStage = {
-      id: crypto.randomUUID(),
-      ...stage,
-    };
-    const newStages = [...pipelineStages, newStage];
-    setPipelineStages(newStages);
-    localStorage.setItem('pipelineStages', JSON.stringify(newStages));
-    
-    toast({
-      title: "Estágio adicionado",
-      description: `Estágio "${stage.name}" foi adicionado com sucesso.`,
-    });
-  };
-
-  const updatePipelineStage = async (id: string, stage: Partial<PipelineStage>) => {
-    // Não permitir edição dos estágios fixos
-    if (id === 'reuniao' || id === 'fechamento') {
-      toast({
-        title: "Ação não permitida",
-        description: "Os estágios 'Reunião' e 'Contrato Assinado' não podem ser editados para manter a integridade das métricas.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const newStages = pipelineStages.map(s => s.id === id ? { ...s, ...stage } : s);
-    setPipelineStages(newStages);
-    localStorage.setItem('pipelineStages', JSON.stringify(newStages));
-    
-    toast({
-      title: "Estágio atualizado",
-      description: "Estágio foi atualizado com sucesso.",
-    });
-  };
-
-  const deletePipelineStage = async (id: string) => {
-    // Não permitir exclusão dos estágios fixos
-    if (id === 'reuniao' || id === 'fechamento') {
-      toast({
-        title: "Ação não permitida",
-        description: "Os estágios 'Reunião' e 'Contrato Assinado' não podem ser excluídos para manter a integridade das métricas.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const newStages = pipelineStages.filter(s => s.id !== id);
-    setPipelineStages(newStages);
-    localStorage.setItem('pipelineStages', JSON.stringify(newStages));
-    
-    toast({
-      title: "Estágio excluído",
-      description: "Estágio foi excluído com sucesso.",
-    });
-  };
-
-  const savePipelineStages = async (stages: PipelineStage[]) => {
-    // Garantir que os estágios fixos sempre existam
-    const fixedStages = stages.filter(s => s.id === 'reuniao' || s.id === 'fechamento');
-    if (fixedStages.length < 2) {
-      const updatedStages = [...stages];
-      
-      if (!fixedStages.find(s => s.id === 'reuniao')) {
-        updatedStages.push({ id: 'reuniao', name: 'Reunião', color: '#10b981', order: 5 });
-      }
-      
-      if (!fixedStages.find(s => s.id === 'fechamento')) {
-        updatedStages.push({ id: 'fechamento', name: 'Contrato Assinado', color: '#06b6d4', order: 6 });
-      }
-      
-      setPipelineStages(updatedStages);
-      localStorage.setItem('pipelineStages', JSON.stringify(updatedStages));
-    } else {
-      setPipelineStages(stages);
-      localStorage.setItem('pipelineStages', JSON.stringify(stages));
-    }
-    
-    toast({
-      title: "Estágios salvos",
-      description: "Configuração dos estágios foi salva com sucesso.",
-    });
-  };
-
-  const moveLead = async (leadId: string, newStage: string) => {
+  const loadPendingActions = async () => {
     try {
       const { data, error } = await supabase
-        .from('leads')
-        .update({ pipeline_stage: newStage })
-        .eq('id', leadId)
-        .select()
-        .single();
+        .from('pending_actions')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-      if (error) {
-        throw error;
-      }
-
-      if (data) {
-        setLeads(prev => prev.map(lead => 
-          lead.id === leadId ? data : lead
-        ));
-      }
+      if (error) throw error;
+      if (data) setPendingActions(data);
     } catch (error: any) {
-      console.error('Erro ao mover lead:', error);
+      console.error('Erro ao carregar solicitações:', error);
       toast({
         title: "Erro",
-        description: error.message || "Erro ao mover lead",
+        description: "Erro ao carregar solicitações",
         variant: "destructive",
       });
     }
   };
 
-  const value = {
-    leads,
-    users,
-    events,
-    pendingActions,
-    messageTemplates,
-    pipelineStages,
-    loading,
-    actionLoading,
-    loadData,
-    loadLeads,
-    loadUsers,
-    loadPendingActions,
-    createLead,
-    addLead,
-    updateLead,
-    deleteLead,
-    addUser,
-    updateUser,
-    deleteUser,
-    createEvent,
-    addEvent,
-    updateEvent,
-    deleteEvent,
-    approveAction,
-    rejectAction,
-    saveMessageTemplate,
-    loadMessageTemplates,
-    deleteMessageTemplate,
-    sendBulkMessage,
-    addPipelineStage,
-    updatePipelineStage,
-    deletePipelineStage,
-    savePipelineStages,
-    moveLead,
-  };
+  return (
+    <CrmContext.Provider value={{
+      leads,
+      events,
+      pipelineStages,
+      categories,
+      pendingActions,
+      addLead,
+      updateLead,
+      deleteLead,
+      addEvent,
+      updateEvent,
+      deleteEvent,
+      addCategory,
+      updateCategory,
+      deleteCategory,
+      requestAction,
+      approveAction,
+      rejectAction,
+      loadPendingActions,
+      loadLeads,
+      loadEvents,
+    }}>
+      {children}
+    </CrmContext.Provider>
+  );
+};
 
-  return <CrmContext.Provider value={value}>{children}</CrmContext.Provider>;
-}
-
-export function useCrm() {
+export const useCrm = () => {
   const context = useContext(CrmContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error('useCrm must be used within a CrmProvider');
   }
   return context;
-}
+};
