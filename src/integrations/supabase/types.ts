@@ -124,7 +124,7 @@ export type Database = {
           name: string
           niche: string
           phone: string
-          pipeline_stage: string | null
+          pipeline_stage: string
           place_id: string | null
           rating: number | null
           responsible_id: string
@@ -143,7 +143,7 @@ export type Database = {
           name: string
           niche: string
           phone: string
-          pipeline_stage?: string | null
+          pipeline_stage?: string
           place_id?: string | null
           rating?: number | null
           responsible_id: string
@@ -162,7 +162,7 @@ export type Database = {
           name?: string
           niche?: string
           phone?: string
-          pipeline_stage?: string | null
+          pipeline_stage?: string
           place_id?: string | null
           rating?: number | null
           responsible_id?: string

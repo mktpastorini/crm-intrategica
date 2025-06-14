@@ -1,4 +1,3 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -77,6 +76,21 @@ export default function UpcomingEvents({ events, onEditEvent, onDeleteEvent }: U
     return labels[type as keyof typeof labels] || type;
   };
 
+  const handleEditEvent = (event: Event) => {
+    onEditEvent(event);
+  };
+
+  const handleDeleteEvent = (eventId: string) => {
+    if (profile?.role === 'comercial') {
+      // Para usuários comerciais, não mostrar confirmação, apenas enviar solicitação
+      onDeleteEvent(eventId);
+    } else {
+      // Para admins e supervisores, mostrar confirmação antes de excluir
+      if (!confirm('Tem certeza que deseja excluir este evento?')) return;
+      onDeleteEvent(eventId);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -113,16 +127,18 @@ export default function UpcomingEvents({ events, onEditEvent, onDeleteEvent }: U
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => onEditEvent(event)}
+                  onClick={() => handleEditEvent(event)}
                   className="h-7 w-7 p-0"
+                  title={profile?.role === 'comercial' ? 'Solicitar edição' : 'Editar evento'}
                 >
                   <Edit className="w-3 h-3" />
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => onDeleteEvent(event.id)}
+                  onClick={() => handleDeleteEvent(event.id)}
                   className="h-7 w-7 p-0 text-red-600 hover:text-red-700"
+                  title={profile?.role === 'comercial' ? 'Solicitar exclusão' : 'Excluir evento'}
                 >
                   <Trash2 className="w-3 h-3" />
                 </Button>

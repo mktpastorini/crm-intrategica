@@ -123,7 +123,7 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     { id: 'proposta', name: 'Proposta', color: '#f59e0b', order: 3 },
     { id: 'negociacao', name: 'Negociação', color: '#ef4444', order: 4 },
     { id: 'reuniao', name: 'Reunião', color: '#10b981', order: 5 },
-    { id: 'fechamento', name: 'Fechamento', color: '#06b6d4', order: 6 }
+    { id: 'fechamento', name: 'Contrato Assinado', color: '#06b6d4', order: 6 }
   ]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -235,13 +235,16 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
   const createLead = async (leadData: Omit<Lead, 'id' | 'created_at' | 'updated_at'>) => {
     setActionLoading('create-lead');
     try {
-      // Usuários comerciais sempre podem criar leads diretamente
+      // Garantir que o lead seja criado no primeiro estágio do pipeline
+      const leadToCreate = {
+        ...leadData,
+        pipeline_stage: 'prospeccao',
+        whatsapp: leadData.whatsapp || leadData.phone
+      };
+
       const { data, error } = await supabase
         .from('leads')
-        .insert([{
-          ...leadData,
-          whatsapp: leadData.whatsapp || leadData.phone
-        }])
+        .insert([leadToCreate])
         .select()
         .single();
 
@@ -253,7 +256,7 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
         setLeads(prev => [data, ...prev]);
         toast({
           title: "Lead criado",
-          description: `Lead ${leadData.name} foi criado com sucesso.`,
+          description: `Lead ${leadData.name} foi criado com sucesso no estágio de Prospecção.`,
         });
       }
     } catch (error: any) {
@@ -806,6 +809,16 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updatePipelineStage = async (id: string, stage: Partial<PipelineStage>) => {
+    // Não permitir edição dos estágios fixos
+    if (id === 'reuniao' || id === 'fechamento') {
+      toast({
+        title: "Ação não permitida",
+        description: "Os estágios 'Reunião' e 'Contrato Assinado' não podem ser editados para manter a integridade das métricas.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const newStages = pipelineStages.map(s => s.id === id ? { ...s, ...stage } : s);
     setPipelineStages(newStages);
     localStorage.setItem('pipelineStages', JSON.stringify(newStages));
@@ -817,6 +830,16 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deletePipelineStage = async (id: string) => {
+    // Não permitir exclusão dos estágios fixos
+    if (id === 'reuniao' || id === 'fechamento') {
+      toast({
+        title: "Ação não permitida",
+        description: "Os estágios 'Reunião' e 'Contrato Assinado' não podem ser excluídos para manter a integridade das métricas.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const newStages = pipelineStages.filter(s => s.id !== id);
     setPipelineStages(newStages);
     localStorage.setItem('pipelineStages', JSON.stringify(newStages));
@@ -828,8 +851,25 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
   };
 
   const savePipelineStages = async (stages: PipelineStage[]) => {
-    setPipelineStages(stages);
-    localStorage.setItem('pipelineStages', JSON.stringify(stages));
+    // Garantir que os estágios fixos sempre existam
+    const fixedStages = stages.filter(s => s.id === 'reuniao' || s.id === 'fechamento');
+    if (fixedStages.length < 2) {
+      const updatedStages = [...stages];
+      
+      if (!fixedStages.find(s => s.id === 'reuniao')) {
+        updatedStages.push({ id: 'reuniao', name: 'Reunião', color: '#10b981', order: 5 });
+      }
+      
+      if (!fixedStages.find(s => s.id === 'fechamento')) {
+        updatedStages.push({ id: 'fechamento', name: 'Contrato Assinado', color: '#06b6d4', order: 6 });
+      }
+      
+      setPipelineStages(updatedStages);
+      localStorage.setItem('pipelineStages', JSON.stringify(updatedStages));
+    } else {
+      setPipelineStages(stages);
+      localStorage.setItem('pipelineStages', JSON.stringify(stages));
+    }
     
     toast({
       title: "Estágios salvos",

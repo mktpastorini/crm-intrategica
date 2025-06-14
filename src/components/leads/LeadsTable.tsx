@@ -1,4 +1,3 @@
-
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -68,21 +67,16 @@ export default function LeadsTable({ leads, onEditLead, onDeleteLead, actionLoad
   };
 
   const handleEditLead = (lead: Lead) => {
-    if (profile?.role === 'comercial') {
-      // Para usuários comerciais, sempre chama onEditLead que vai criar uma solicitação
-      onEditLead(lead);
-    } else {
-      // Para admins e supervisores, edita diretamente
-      onEditLead(lead);
-    }
+    onEditLead(lead);
   };
 
   const handleDeleteLead = (leadId: string) => {
     if (profile?.role === 'comercial') {
-      // Para usuários comerciais, sempre chama onDeleteLead que vai criar uma solicitação
+      // Para usuários comerciais, não mostrar confirmação, apenas enviar solicitação
       onDeleteLead(leadId);
     } else {
-      // Para admins e supervisores, exclui diretamente
+      // Para admins e supervisores, mostrar confirmação antes de excluir
+      if (!confirm('Tem certeza que deseja excluir este lead?')) return;
       onDeleteLead(leadId);
     }
   };
