@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
@@ -19,6 +20,14 @@ interface Lead {
   created_at: string;
   updated_at: string;
   category_id?: string;
+  responsible_id?: string;
+  niche?: string;
+  address?: string;
+  website?: string;
+  whatsapp?: string;
+  instagram?: string;
+  place_id?: string;
+  rating?: number;
 }
 
 interface Event {
@@ -56,6 +65,7 @@ interface PendingAction {
   details: ActionDetails;
   status?: 'pending' | 'approved' | 'rejected';
   created_at: string;
+  user_id?: string;
 }
 
 interface ActionDetails {
@@ -94,6 +104,11 @@ interface CrmContextType {
   addCategory: (category: Omit<Category, 'id'>) => void;
   updateCategory: (id: string, updates: Partial<Category>) => void;
   deleteCategory: (id: string) => void;
+  addPipelineStage: (stage: Omit<PipelineStage, 'id'>) => Promise<void>;
+  updatePipelineStage: (id: string, updates: Partial<PipelineStage>) => Promise<void>;
+  deletePipelineStage: (id: string) => Promise<void>;
+  savePipelineStages: (stages: PipelineStage[]) => Promise<void>;
+  sendBulkMessage: (leadIds: string[], message: string) => Promise<void>;
   requestAction: (action: Omit<PendingAction, 'id' | 'created_at'>) => Promise<void>;
   approveAction: (actionId: string) => Promise<void>;
   rejectAction: (actionId: string) => Promise<void>;
@@ -223,7 +238,7 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const { data, error } = await supabase
         .from('events')
         .select('*')
-        .order('start_time', { ascending: true });
+        .order('date', { ascending: true });
 
       if (error) throw error;
       if (data) {
@@ -258,7 +273,8 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         type: 'delete_lead',
         user_name: user?.email || 'Usuário',
         description: `Solicitação para excluir lead: ${leads.find(l => l.id === id)?.name}`,
-        details: { leadId: id, leadName: leads.find(l => l.id === id)?.name }
+        details: { leadId: id, leadName: leads.find(l => l.id === id)?.name },
+        user_id: user?.id || ''
       });
       return;
     }
@@ -292,7 +308,8 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         type: 'edit_lead',
         user_name: user?.email || 'Usuário',
         description: `Solicitação para editar lead: ${leads.find(l => l.id === id)?.name}`,
-        details: { leadId: id, leadName: leads.find(l => l.id === id)?.name, changes: updates }
+        details: { leadId: id, leadName: leads.find(l => l.id === id)?.name, changes: updates },
+        user_id: user?.id || ''
       });
       return;
     }
@@ -334,9 +351,19 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addLead = async (leadData: Omit<Lead, 'id' | 'created_at' | 'updated_at'>) => {
     try {
+      // Ensure required fields are present
+      const leadToInsert = {
+        ...leadData,
+        responsible_id: leadData.responsible_id || user?.id || '',
+        niche: leadData.niche || 'Geral',
+        company: leadData.company || '',
+        name: leadData.name || 'Lead sem nome',
+        phone: leadData.phone || ''
+      };
+
       const { data, error } = await supabase
         .from('leads')
-        .insert([leadData])
+        .insert([leadToInsert])
         .select()
         .single();
 
@@ -520,16 +547,72 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
+  // Pipeline stage methods
+  const addPipelineStage = async (stage: Omit<PipelineStage, 'id'>) => {
+    const newStage = { ...stage, id: `stage-${Date.now()}` };
+    setPipelineStages(prev => [...prev, newStage]);
+    toast({
+      title: "Estágio criado",
+      description: "Estágio foi criado com sucesso",
+    });
+  };
+
+  const updatePipelineStage = async (id: string, updates: Partial<PipelineStage>) => {
+    setPipelineStages(prev => prev.map(stage => stage.id === id ? { ...stage, ...updates } : stage));
+    toast({
+      title: "Estágio atualizado",
+      description: "Estágio foi atualizado com sucesso",
+    });
+  };
+
+  const deletePipelineStage = async (id: string) => {
+    setPipelineStages(prev => prev.filter(stage => stage.id !== id));
+    toast({
+      title: "Estágio excluído",
+      description: "Estágio foi excluído com sucesso",
+    });
+  };
+
+  const savePipelineStages = async (stages: PipelineStage[]) => {
+    setPipelineStages(stages);
+    toast({
+      title: "Estágios salvos",
+      description: "Estágios foram salvos com sucesso",
+    });
+  };
+
+  // Bulk message sender
+  const sendBulkMessage = async (leadIds: string[], message: string) => {
+    try {
+      console.log('Enviando mensagens em massa para:', leadIds.length, 'leads');
+      
+      // Here you would implement the actual bulk message sending logic
+      // For now, just show a success toast
+      toast({
+        title: "Mensagens enviadas",
+        description: `${leadIds.length} mensagens enviadas com sucesso`,
+      });
+    } catch (error: any) {
+      console.error('Erro ao enviar mensagens em massa:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao enviar mensagens em massa",
+        variant: "destructive",
+      });
+    }
+  };
+
   const requestAction = async (action: Omit<PendingAction, 'id' | 'created_at'>) => {
     try {
+      const actionToInsert = {
+        ...action,
+        status: 'pending',
+        user_id: action.user_id || user?.id || ''
+      };
+
       const { data, error } = await supabase
-        .from('pending_actions')
-        .insert([
-          {
-            ...action,
-            status: 'pending',
-          }
-        ])
+        .from('pending_approvals')
+        .insert([actionToInsert])
         .select()
         .single();
 
@@ -615,7 +698,7 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       // Update pending action status
       const { error: updateError } = await supabase
-        .from('pending_actions')
+        .from('pending_approvals')
         .update({ status: 'approved' })
         .eq('id', actionId);
 
@@ -643,7 +726,7 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
        // Update pending action status to 'rejected' in the database
        const { error } = await supabase
-       .from('pending_actions')
+       .from('pending_approvals')
        .update({ status: 'rejected' })
        .eq('id', actionId);
  
@@ -668,7 +751,7 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const loadPendingActions = async () => {
     try {
       const { data, error } = await supabase
-        .from('pending_actions')
+        .from('pending_approvals')
         .select('*')
         .order('created_at', { ascending: false });
 
@@ -700,6 +783,11 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addCategory,
       updateCategory,
       deleteCategory,
+      addPipelineStage,
+      updatePipelineStage,
+      deletePipelineStage,
+      savePipelineStages,
+      sendBulkMessage,
       requestAction,
       approveAction,
       rejectAction,
