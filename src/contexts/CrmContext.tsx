@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
@@ -65,12 +64,20 @@ interface MessageTemplate {
   content: string;
 }
 
+interface PipelineStage {
+  id: string;
+  name: string;
+  color: string;
+  order: number;
+}
+
 interface CrmContextType {
   leads: Lead[];
   users: User[];
   events: Event[];
   pendingActions: PendingAction[];
   messageTemplates: MessageTemplate[];
+  pipelineStages: PipelineStage[];
   loading: boolean;
   actionLoading: string | null;
   loadData: () => Promise<void>;
@@ -93,6 +100,11 @@ interface CrmContextType {
   loadMessageTemplates: () => Promise<void>;
   deleteMessageTemplate: (id: string) => Promise<void>;
   sendBulkMessage: (recipientIds: string[], message: string, category?: string) => Promise<void>;
+  addPipelineStage: (stage: Omit<PipelineStage, 'id'>) => Promise<void>;
+  updatePipelineStage: (id: string, stage: Partial<PipelineStage>) => Promise<void>;
+  deletePipelineStage: (id: string) => Promise<void>;
+  savePipelineStages: (stages: PipelineStage[]) => Promise<void>;
+  moveLead: (leadId: string, newStage: string) => Promise<void>;
 }
 
 const CrmContext = createContext<CrmContextType | undefined>(undefined);
@@ -105,12 +117,28 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
   const [events, setEvents] = useState<Event[]>([]);
   const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
   const [messageTemplates, setMessageTemplates] = useState<MessageTemplate[]>([]);
+  const [pipelineStages, setPipelineStages] = useState<PipelineStage[]>([
+    { id: 'prospeccao', name: 'Prospecção', color: '#3b82f6', order: 1 },
+    { id: 'qualificacao', name: 'Qualificação', color: '#8b5cf6', order: 2 },
+    { id: 'proposta', name: 'Proposta', color: '#f59e0b', order: 3 },
+    { id: 'negociacao', name: 'Negociação', color: '#ef4444', order: 4 },
+    { id: 'reuniao', name: 'Reunião', color: '#10b981', order: 5 },
+    { id: 'fechamento', name: 'Fechamento', color: '#06b6d4', order: 6 }
+  ]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
+    loadPipelineStages();
   }, [user]);
+
+  const loadPipelineStages = () => {
+    const saved = localStorage.getItem('pipelineStages');
+    if (saved) {
+      setPipelineStages(JSON.parse(saved));
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -345,7 +373,10 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .insert([userData])
+        .insert([{
+          ...userData,
+          id: crypto.randomUUID()
+        }])
         .select()
         .single();
 
@@ -684,12 +715,88 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const addPipelineStage = async (stage: Omit<PipelineStage, 'id'>) => {
+    const newStage: PipelineStage = {
+      id: crypto.randomUUID(),
+      ...stage,
+    };
+    const newStages = [...pipelineStages, newStage];
+    setPipelineStages(newStages);
+    localStorage.setItem('pipelineStages', JSON.stringify(newStages));
+    
+    toast({
+      title: "Estágio adicionado",
+      description: `Estágio "${stage.name}" foi adicionado com sucesso.`,
+    });
+  };
+
+  const updatePipelineStage = async (id: string, stage: Partial<PipelineStage>) => {
+    const newStages = pipelineStages.map(s => s.id === id ? { ...s, ...stage } : s);
+    setPipelineStages(newStages);
+    localStorage.setItem('pipelineStages', JSON.stringify(newStages));
+    
+    toast({
+      title: "Estágio atualizado",
+      description: "Estágio foi atualizado com sucesso.",
+    });
+  };
+
+  const deletePipelineStage = async (id: string) => {
+    const newStages = pipelineStages.filter(s => s.id !== id);
+    setPipelineStages(newStages);
+    localStorage.setItem('pipelineStages', JSON.stringify(newStages));
+    
+    toast({
+      title: "Estágio excluído",
+      description: "Estágio foi excluído com sucesso.",
+    });
+  };
+
+  const savePipelineStages = async (stages: PipelineStage[]) => {
+    setPipelineStages(stages);
+    localStorage.setItem('pipelineStages', JSON.stringify(stages));
+    
+    toast({
+      title: "Estágios salvos",
+      description: "Configuração dos estágios foi salva com sucesso.",
+    });
+  };
+
+  const moveLead = async (leadId: string, newStage: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('leads')
+        .update({ pipeline_stage: newStage })
+        .eq('id', leadId)
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      if (data) {
+        setLeads(prev => prev.map(lead => 
+          lead.id === leadId ? data : lead
+        ));
+      }
+    } catch (error: any) {
+      console.error('Erro ao mover lead:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao mover lead",
+        variant: "destructive",
+      });
+    }
+  };
+
   const value = {
     leads,
     users,
     events,
     pendingActions,
     messageTemplates,
+    pipelineStages,
     loading,
     actionLoading,
     loadData,
@@ -712,6 +819,11 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     loadMessageTemplates,
     deleteMessageTemplate,
     sendBulkMessage,
+    addPipelineStage,
+    updatePipelineStage,
+    deletePipelineStage,
+    savePipelineStages,
+    moveLead,
   };
 
   return <CrmContext.Provider value={value}>{children}</CrmContext.Provider>;
