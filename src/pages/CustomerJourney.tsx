@@ -32,8 +32,10 @@ export default function CustomerJourney() {
   const [messages, setMessages] = useState<JourneyMessage[]>([]);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingMessage, setEditingMessage] = useState<JourneyMessage | null>(null);
-  const [selectedStage, setSelectedStage] = useState<string>('');
   
+  // SUBSECTION/Tab control - keep only one declaration here
+  const [selectedStage, setSelectedStage] = useState<string>("");
+
   const [formData, setFormData] = useState({
     title: '',
     content: '',
@@ -63,9 +65,6 @@ export default function CustomerJourney() {
     setMessages(newMessages);
     localStorage.setItem('journeyMessages', JSON.stringify(newMessages));
   };
-
-  // TAB: para controle das abas
-  const [selectedStage, setSelectedStage] = useState<string>("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
