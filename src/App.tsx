@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -46,56 +47,56 @@ function App() {
         <Sonner />
         <BrowserRouter>
           <AuthProvider>
-            <CrmProvider>
-              <FaviconManager />
-              <Routes>
-                <Route path="/login" element={<Login />} />
-                <Route path="/" element={
-                  <ProtectedRoute>
+            <FaviconManager />
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/" element={
+                <ProtectedRoute>
+                  <CrmProvider>
                     <LayoutWrapper />
-                  </ProtectedRoute>
-                }>
-                  <Route index element={<Dashboard />} />
-                  <Route path="leads" element={<Leads />} />
-                  <Route path="pipeline" element={<Pipeline />} />
-                  <Route path="messages" element={<Messages />} />
-                  <Route path="calendar" element={<Calendar />} />
-                  <Route path="profile" element={<Profile />} />
-                  <Route 
-                    path="supervision" 
-                    element={
-                      <ProtectedRoute requiredRole={["admin", "supervisor"]}>
-                        <Supervision />
-                      </ProtectedRoute>
-                    } 
-                  />
-                  <Route 
-                    path="users" 
-                    element={
-                      <ProtectedRoute requiredRole={["admin"]}>
-                        <Users />
-                      </ProtectedRoute>
-                    } 
-                  />
-                  <Route 
-                    path="customer-journey" 
-                    element={
-                      <ProtectedRoute requiredRole={["admin", "supervisor"]}>
-                        <CustomerJourney />
-                      </ProtectedRoute>
-                    } 
-                  />
-                  <Route 
-                    path="settings" 
-                    element={
-                      <ProtectedRoute requiredRole={["admin"]}>
-                        <Settings />
-                      </ProtectedRoute>
-                    } 
-                  />
-                </Route>
-              </Routes>
-            </CrmProvider>
+                  </CrmProvider>
+                </ProtectedRoute>
+              }>
+                <Route index element={<Dashboard />} />
+                <Route path="leads" element={<Leads />} />
+                <Route path="pipeline" element={<Pipeline />} />
+                <Route path="messages" element={<Messages />} />
+                <Route path="calendar" element={<Calendar />} />
+                <Route path="profile" element={<Profile />} />
+                <Route 
+                  path="supervision" 
+                  element={
+                    <ProtectedRoute requiredRole={["admin", "supervisor"]}>
+                      <Supervision />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="users" 
+                  element={
+                    <ProtectedRoute requiredRole={["admin"]}>
+                      <Users />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="customer-journey" 
+                  element={
+                    <ProtectedRoute requiredRole={["admin", "supervisor"]}>
+                      <CustomerJourney />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="settings" 
+                  element={
+                    <ProtectedRoute requiredRole={["admin"]}>
+                      <Settings />
+                    </ProtectedRoute>
+                  } 
+                />
+              </Route>
+            </Routes>
           </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>
