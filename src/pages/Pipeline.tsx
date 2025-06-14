@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -48,14 +47,14 @@ export default function Pipeline() {
   }, [leads, pipelineStages]);
 
   // -- IDs fixos para estágios principais
-  // O primeiro estágio precisa sempre ser o "Aguardando Início" ('aguardando_inicio')
+  // O primeiro estágio precisa sempre ser o "Aguardando Início" ('aguardando_contato')
   // O estágio de reunião precisa sempre ser "Reunião" ('reuniao')
   // Caso não exista no pipelineStages, exibir aviso (ou criar fallback)
 
   // Encontrar ids dos estágios:
   const pipelineStageIds = pipelineStages.map(s => s.id);
 
-  const primeiroStageId = pipelineStages.find(s => s.id === "aguardando_inicio")?.id || pipelineStages[0]?.id;
+  const primeiroStageId = pipelineStages.find(s => s.id === "aguardando_contato")?.id || pipelineStages[0]?.id;
   const reuniaoStageId = pipelineStages.find(s => s.id === "reuniao")?.id || null;
 
   const leadsComStageDesconhecido = leads.filter(lead => !pipelineStageIds.includes(lead.pipeline_stage));

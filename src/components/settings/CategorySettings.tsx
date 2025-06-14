@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -100,7 +99,8 @@ export default function CategorySettings() {
     const newStage = {
       name: newStageName,
       order: pipelineStages.length + 1,
-      color: newStageColor
+      color: newStageColor,
+      description: ''
     };
 
     await addPipelineStage(newStage);
@@ -124,29 +124,21 @@ export default function CategorySettings() {
 
   const moveStageUp = async (index: number) => {
     if (index === 0) return;
-    
     const newStages = [...pipelineStages];
     [newStages[index], newStages[index - 1]] = [newStages[index - 1], newStages[index]];
-    
-    // Update order values
     newStages.forEach((stage, idx) => {
       stage.order = idx + 1;
     });
-    
     await savePipelineStages(newStages);
   };
 
   const moveStageDown = async (index: number) => {
     if (index === pipelineStages.length - 1) return;
-    
     const newStages = [...pipelineStages];
     [newStages[index], newStages[index + 1]] = [newStages[index + 1], newStages[index]];
-    
-    // Update order values
     newStages.forEach((stage, idx) => {
       stage.order = idx + 1;
     });
-    
     await savePipelineStages(newStages);
   };
 

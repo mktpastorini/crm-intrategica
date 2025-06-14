@@ -50,8 +50,6 @@ interface Event {
   completed?: boolean;
 }
 
-// ... keep existing code (PipelineStage, Category, PendingAction, User, JourneyMessage interfaces)
-
 interface PipelineStage {
   id: string;
   name: string;
@@ -100,8 +98,6 @@ interface JourneyMessage {
   order: number;
   created_at: string;
 }
-
-// ... keep existing code (CrmContextType interface and rest of the component)
 
 interface CrmContextType {
   leads: Lead[];
@@ -160,18 +156,42 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [pipelineStages, setPipelineStages] = useState<PipelineStage[]>([
-    { id: '1', name: 'Qualificação', description: 'Primeiro contato com o lead', order: 1, color: '#6366F1' },
-    { id: '2', name: 'Proposta', description: 'Apresentação da proposta comercial', order: 2, color: '#22C55E' },
-    { id: '3', name: 'Negociação', description: 'Ajustes finais e negociação', order: 3, color: '#F59E0B' },
-    { id: '4', name: 'Fechamento', description: 'Assinatura do contrato e fechamento', order: 4, color: '#E11D48' },
-  ]);
+  const [pipelineStages, setPipelineStages] = useState<PipelineStage[]>([]);
   const [categories, setCategories] = useState<Category[]>([
     { id: '1', name: 'Marketing', description: 'Leads vindos de ações de marketing' },
     { id: '2', name: 'Indicação', description: 'Leads indicados por clientes' },
     { id: '3', name: 'Outros', description: 'Outras fontes de leads' },
   ]);
   const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
+
+  // Função para carregar estágios do pipeline do banco de dados
+  const loadPipelineStages = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('pipeline_stages')
+        .select('*')
+        .order('order', { ascending: true });
+
+      if (error) {
+        console.error('Erro ao carregar pipeline_stages:', error);
+        throw error;
+      }
+
+      if (data) {
+        setPipelineStages(data as PipelineStage[]);
+      }
+    } catch (error: any) {
+      console.error('Erro ao carregar pipeline_stages:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar estágios do pipeline!",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Journey message trigger functions
   const scheduleJourneyMessage = async (leadId: string, message: JourneyMessage, leadData: any) => {
@@ -250,7 +270,8 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           loadLeads(),
           loadEvents(),
           loadUsers(),
-          loadPendingActions()
+          loadPendingActions(),
+          loadPipelineStages()
         ]);
         console.log('Todos os dados foram carregados com sucesso');
       } catch (error) {
@@ -729,36 +750,125 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addPipelineStage = async (stage: Omit<PipelineStage, 'id'>) => {
-    const newStage = { ...stage, id: `stage-${Date.now()}` };
-    setPipelineStages(prev => [...prev, newStage]);
-    toast({
-      title: "Estágio criado",
-      description: "Estágio foi criado com sucesso",
-    });
+    try {
+      setActionLoading('create-pipeline-stage');
+      const newId = `${stage.name.toLowerCase().replace(/\s/g, '_')}`;
+      const newStage = { ...stage, id: newId };
+
+      const { data, error } = await supabase
+        .from('pipeline_stages')
+        .insert([newStage])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setPipelineStages(prev => [...prev, data as PipelineStage]);
+        toast({
+          title: "Estágio criado",
+          description: "Estágio foi criado com sucesso e salvo no banco",
+        });
+      }
+    } catch (error: any) {
+      console.error('Erro ao criar estágio:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao criar estágio do pipeline!",
+        variant: "destructive",
+      });
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const updatePipelineStage = async (id: string, updates: Partial<PipelineStage>) => {
-    setPipelineStages(prev => prev.map(stage => stage.id === id ? { ...stage, ...updates } : stage));
-    toast({
-      title: "Estágio atualizado",
-      description: "Estágio foi atualizado com sucesso",
-    });
+    try {
+      setActionLoading(`update-pipeline-stage-${id}`);
+      const { data, error } = await supabase
+        .from('pipeline_stages')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setPipelineStages(prev => prev.map(stage => stage.id === id ? data as PipelineStage : stage));
+        toast({
+          title: "Estágio atualizado",
+          description: "Estágio do pipeline salvo no banco",
+        });
+      }
+    } catch (error: any) {
+      console.error('Erro ao atualizar estágio:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao atualizar estágio do pipeline!",
+        variant: "destructive",
+      });
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const deletePipelineStage = async (id: string) => {
-    setPipelineStages(prev => prev.filter(stage => stage.id !== id));
-    toast({
-      title: "Estágio excluído",
-      description: "Estágio foi excluído com sucesso",
-    });
+    try {
+      setActionLoading(`delete-pipeline-stage-${id}`);
+      const { error } = await supabase
+        .from('pipeline_stages')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+      setPipelineStages(prev => prev.filter(stage => stage.id !== id));
+      toast({
+        title: "Estágio removido",
+        description: "Estágio do pipeline removido do banco e interface",
+      });
+    } catch (error: any) {
+      console.error('Erro ao remover estágio:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao remover estágio do pipeline!",
+        variant: "destructive",
+      });
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const savePipelineStages = async (stages: PipelineStage[]) => {
-    setPipelineStages(stages);
-    toast({
-      title: "Estágios salvos",
-      description: "Estágios foram salvos com sucesso",
-    });
+    try {
+      setActionLoading('save-pipeline-stages');
+      // Atualiza ordem em lote. Para trocar ordem, só muda o campo "order".
+      const updates = await Promise.all(
+        stages.map(async (stage) => {
+          const { data, error } = await supabase
+            .from('pipeline_stages')
+            .update({ order: stage.order, updated_at: new Date().toISOString() })
+            .eq('id', stage.id)
+            .select()
+            .single();
+          if (error) throw error;
+          return data;
+        })
+      );
+      setPipelineStages(updates.filter(Boolean) as PipelineStage[]);
+      toast({
+        title: "Estágios salvos",
+        description: "A ordem dos estágios foi salva no banco!",
+      });
+    } catch (error: any) {
+      console.error('Erro ao salvar ordem de estágios:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao salvar ordem dos estágios do pipeline",
+        variant: "destructive",
+      });
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const sendBulkMessage = async (leadIds: string[], message: string) => {
