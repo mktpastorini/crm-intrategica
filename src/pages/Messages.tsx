@@ -11,11 +11,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { MessageSquare, Send, Filter, Search, Users as UsersIcon, Plus } from 'lucide-react';
+import { MessageSquare, Send, Filter, Search } from 'lucide-react';
 import LoadingSpinner from '@/components/LoadingSpinner';
-import MessagesTable from '@/components/messages/MessagesTable';
 import EmojiPicker from '@/components/messages/EmojiPicker';
 import MessageTemplates from '@/components/messages/MessageTemplates';
+import MessageVariables from '@/components/messages/MessageVariables';
 
 interface Message {
   id: string;
@@ -36,23 +36,10 @@ export default function Messages() {
   const [showDialog, setShowDialog] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [recipientFilter, setRecipientFilter] = useState('all');
-  const [recipientType, setRecipientType] = useState<'lead' | 'user'>('lead');
   const [formData, setFormData] = useState({
     recipient_id: '',
     message: ''
   });
-
-  // Variáveis disponíveis para substituição
-  const variables = [
-    { tag: '{{nome}}', description: 'Nome do contato' },
-    { tag: '{{empresa}}', description: 'Nome da empresa' },
-    { tag: '{{email}}', description: 'Email do contato' },
-    { tag: '{{telefone}}', description: 'Telefone do contato' },
-    { tag: '{{whatsapp}}', description: 'WhatsApp do contato' },
-    { tag: '{{website}}', description: 'Website da empresa' },
-    { tag: '{{endereco}}', description: 'Endereço da empresa' },
-    { tag: '{{nicho}}', description: 'Nicho/Segmento' },
-  ];
 
   const handleInsertVariable = (variable: string) => {
     const textarea = document.getElementById('message') as HTMLTextAreaElement;
@@ -97,17 +84,15 @@ export default function Messages() {
   const processMessage = (message: string, recipient: any) => {
     let processedMessage = message;
     
-    if (recipientType === 'lead') {
-      processedMessage = processedMessage
-        .replace(/\{\{nome\}\}/g, recipient?.name || '')
-        .replace(/\{\{empresa\}\}/g, recipient?.company || '')
-        .replace(/\{\{email\}\}/g, recipient?.email || '')
-        .replace(/\{\{telefone\}\}/g, recipient?.phone || '')
-        .replace(/\{\{whatsapp\}\}/g, recipient?.whatsapp || '')
-        .replace(/\{\{website\}\}/g, recipient?.website || '')
-        .replace(/\{\{endereco\}\}/g, recipient?.address || '')
-        .replace(/\{\{nicho\}\}/g, recipient?.niche || '');
-    }
+    processedMessage = processedMessage
+      .replace(/\{\{nome\}\}/g, recipient?.name || '')
+      .replace(/\{\{empresa\}\}/g, recipient?.company || '')
+      .replace(/\{\{email\}\}/g, recipient?.email || '')
+      .replace(/\{\{telefone\}\}/g, recipient?.phone || '')
+      .replace(/\{\{whatsapp\}\}/g, recipient?.whatsapp || '')
+      .replace(/\{\{website\}\}/g, recipient?.website || '')
+      .replace(/\{\{endereco\}\}/g, recipient?.address || '')
+      .replace(/\{\{nicho\}\}/g, recipient?.niche || '');
     
     return processedMessage;
   };
@@ -136,17 +121,9 @@ export default function Messages() {
 
       setActionLoading('send-message');
 
-      // Buscar dados do destinatário
-      let recipient;
-      let recipientName;
-      
-      if (recipientType === 'lead') {
-        recipient = leads.find(lead => lead.id === formData.recipient_id);
-        recipientName = recipient?.name || 'Lead não encontrado';
-      } else {
-        recipient = users.find(user => user.id === formData.recipient_id);
-        recipientName = recipient?.name || 'Usuário não encontrado';
-      }
+      // Buscar dados do lead
+      const recipient = leads.find(lead => lead.id === formData.recipient_id);
+      const recipientName = recipient?.name || 'Lead não encontrado';
 
       // Processar mensagem com variáveis
       const processedMessage = processMessage(formData.message, recipient);
@@ -159,7 +136,7 @@ export default function Messages() {
         id: crypto.randomUUID(),
         recipient_id: formData.recipient_id,
         recipient_name: recipientName,
-        recipient_type: recipientType,
+        recipient_type: 'lead',
         message: processedMessage,
         sent_at: new Date().toISOString(),
       };
@@ -207,14 +184,12 @@ export default function Messages() {
     );
   }
 
-  const availableRecipients = recipientType === 'lead' ? leads : users;
-
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Mensagens</h2>
-          <p className="text-slate-600">Envie mensagens personalizadas para seus leads e usuários</p>
+          <p className="text-slate-600">Envie mensagens personalizadas para seus leads</p>
         </div>
         <Dialog open={showDialog} onOpenChange={setShowDialog}>
           <DialogTrigger asChild>
@@ -227,42 +202,24 @@ export default function Messages() {
             <DialogHeader>
               <DialogTitle>Nova Mensagem</DialogTitle>
               <DialogDescription>
-                Envie mensagens personalizadas usando variáveis que serão substituídas pelos dados reais
+                Envie mensagens personalizadas usando variáveis que serão substituídas pelos dados reais do lead
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="recipient-type">Tipo de Destinatário</Label>
-                  <Select value={recipientType} onValueChange={(value: 'lead' | 'user') => {
-                    setRecipientType(value);
-                    setFormData(prev => ({ ...prev, recipient_id: '' }));
-                  }}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="lead">Leads</SelectItem>
-                      <SelectItem value="user">Usuários do Sistema</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="recipient">Destinatário</Label>
-                  <Select value={formData.recipient_id} onValueChange={(value) => setFormData(prev => ({ ...prev, recipient_id: value }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecionar destinatário" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableRecipients.map(recipient => (
-                        <SelectItem key={recipient.id} value={recipient.id}>
-                          {recipient.name} {recipientType === 'lead' && recipient.company ? `- ${recipient.company}` : ''}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div>
+                <Label htmlFor="recipient">Destinatário (Lead)</Label>
+                <Select value={formData.recipient_id} onValueChange={(value) => setFormData(prev => ({ ...prev, recipient_id: value }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecionar lead" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {leads.map(lead => (
+                      <SelectItem key={lead.id} value={lead.id}>
+                        {lead.name} {lead.company ? `- ${lead.company}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div>
@@ -278,25 +235,8 @@ export default function Messages() {
               </div>
 
               {/* Ferramentas de edição */}
-              <div className="flex flex-wrap gap-2 items-center p-3 bg-slate-50 rounded-lg">
-                <div className="flex flex-wrap gap-1">
-                  <Label className="text-sm font-medium mr-2">Variáveis:</Label>
-                  {variables.map((variable) => (
-                    <Button
-                      key={variable.tag}
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleInsertVariable(variable.tag)}
-                      className="text-xs h-7"
-                      title={variable.description}
-                    >
-                      {variable.tag}
-                    </Button>
-                  ))}
-                </div>
-                
-                <div className="flex items-center gap-2 ml-auto">
+              <div className="flex flex-wrap gap-2 items-center justify-between p-3 bg-slate-50 rounded-lg">
+                <div className="flex items-center gap-2">
                   <EmojiPicker onEmojiSelect={handleInsertEmoji} />
                   <MessageTemplates 
                     currentMessage={formData.message}
@@ -305,13 +245,11 @@ export default function Messages() {
                 </div>
               </div>
 
-              {recipientType === 'lead' && (
-                <div className="bg-blue-50 p-3 rounded-lg">
-                  <p className="text-sm text-blue-700">
-                    <strong>Dica:</strong> As variáveis como {{nome}}, {{empresa}}, etc. serão substituídas automaticamente pelos dados do lead selecionado.
-                  </p>
-                </div>
-              )}
+              <div className="bg-blue-50 p-3 rounded-lg">
+                <p className="text-sm text-blue-700">
+                  <strong>Dica:</strong> As variáveis como {{nome}}, {{empresa}}, etc. serão substituídas automaticamente pelos dados do lead selecionado.
+                </p>
+              </div>
 
               <div className="flex gap-2 pt-4">
                 <Button type="submit" className="flex-1" disabled={actionLoading === 'send-message'}>
@@ -329,6 +267,11 @@ export default function Messages() {
                 </Button>
               </div>
             </form>
+
+            {/* Variáveis disponíveis - lado direito */}
+            <div className="mt-4">
+              <MessageVariables onInsertVariable={handleInsertVariable} />
+            </div>
           </DialogContent>
         </Dialog>
       </div>
@@ -383,9 +326,9 @@ export default function Messages() {
         <Card>
           <CardContent className="p-4">
             <div className="text-2xl font-bold text-orange-600">
-              {messages.filter(m => m.recipient_type === 'user').length}
+              {messages.length > 0 ? messages.length : 0}
             </div>
-            <p className="text-sm text-slate-600">Enviadas para Usuários</p>
+            <p className="text-sm text-slate-600">Mensagens Hoje</p>
           </CardContent>
         </Card>
       </div>
@@ -403,9 +346,7 @@ export default function Messages() {
                   <div className="flex justify-between items-start mb-2">
                     <div>
                       <h4 className="font-medium text-slate-900">{message.recipient_name}</h4>
-                      <Badge variant={message.recipient_type === 'lead' ? 'default' : 'secondary'}>
-                        {message.recipient_type === 'lead' ? 'Lead' : 'Usuário'}
-                      </Badge>
+                      <Badge variant="default">Lead</Badge>
                     </div>
                     <span className="text-sm text-slate-500">
                       {new Date(message.sent_at).toLocaleString('pt-BR')}
