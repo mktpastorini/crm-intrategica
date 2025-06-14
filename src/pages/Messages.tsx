@@ -247,7 +247,7 @@ export default function Messages() {
 
               <div className="bg-blue-50 p-3 rounded-lg">
                 <p className="text-sm text-blue-700">
-                  <strong>Dica:</strong> As variáveis como {{nome}}, {{empresa}}, etc. serão substituídas automaticamente pelos dados do lead selecionado.
+                  <strong>Dica:</strong> As variáveis como {`{{nome}}`}, {`{{empresa}}`}, etc. serão substituídas automaticamente pelos dados do lead selecionado.
                 </p>
               </div>
 
