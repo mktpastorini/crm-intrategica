@@ -82,12 +82,24 @@ export default function Pipeline() {
   // Adiciona schedules para as mensagens da jornada ao mover o lead
   const scheduleJourneyMessages = async (lead, newStage) => {
     const journeyMessages = getJourneyMessages();
-    const messagesForStage = journeyMessages
-      .filter((m) => m.stage === newStage);
+    const messagesForStage = journeyMessages.filter((m) => m.stage === newStage);
 
-    if (!messagesForStage.length) return;
+    console.log("[Jornada] Mensagens configuradas para o estágio:", newStage, messagesForStage);
+
+    if (!messagesForStage.length) {
+      toast({
+        title: "Nenhuma mensagem de jornada encontrada",
+        description: `Nenhuma mensagem automática configurada para o estágio ${newStage}`,
+        variant: "default",
+      });
+      return;
+    }
 
     const scheduled_for_base = new Date();
+    let countSuccess = 0;
+    let countError = 0;
+    let countNoWebhook = 0;
+
     for (const msg of messagesForStage) {
       const delayMs =
         msg.delayUnit === "days"
@@ -97,6 +109,16 @@ export default function Pipeline() {
           : msg.delay * 60 * 1000;
 
       const scheduled_for = new Date(scheduled_for_base.getTime() + delayMs).toISOString();
+
+      // Tentar usar o webhook configurado no sistema, na mensagem ou manter null
+      const webhook_url = msg.webhookUrl || msg.webhook_url || null;
+
+      if (!webhook_url) {
+        countNoWebhook++;
+        console.warn(
+          `[Jornada] Nenhum webhook_url definido para mensagem "${msg.title}" (lead: ${lead.name}). Mensagem NÃO será disparada automaticamente!`
+        );
+      }
 
       try {
         await createJourneySchedule({
@@ -110,13 +132,27 @@ export default function Pipeline() {
           message_type: msg.type,
           media_url: msg.mediaUrl,
           scheduled_for,
-          webhook_url: null, // ou preencha se já possuir um webhook fixo/configurado
+          webhook_url, // agora tenta pegar de msg ou deixa como null
         });
-        console.log(`[Jornada] Agendamento criado para ${lead.name}, estágio ${newStage}, mensagem "${msg.title}"`);
+        countSuccess++;
+        console.log(
+          `[Jornada] Agendamento criado para "${lead.name}", estágio ${newStage}, mensagem "${msg.title}", webhook: ${webhook_url || "NULO"}`
+        );
       } catch (err) {
-        console.error("[Jornada] Erro ao agendar mensagem:", err);
+        countError++;
+        console.error("[Jornada] Erro ao agendar mensagem:", err, msg, lead);
       }
     }
+
+    let extra = "";
+    if (countNoWebhook)
+      extra += ` (${countNoWebhook} mensagem(ns) sem webhook, não serão disparadas)`; 
+
+    toast({
+      title: "Agendamento da Jornada",
+      description: `Foram agendadas ${countSuccess} mensagem(ns)${extra}${countError ? `. ${countError} falharam` : ""}`,
+      variant: countError > 0 ? "destructive" : "default",
+    });
   };
 
   const handleDrop = (e: React.DragEvent, newStage: string) => {
