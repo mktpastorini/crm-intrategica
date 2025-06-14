@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -11,11 +10,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { MessageSquare, Send, Filter, Search } from 'lucide-react';
+import { MessageSquare, Send, Filter, Search, Users } from 'lucide-react';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import EmojiPicker from '@/components/messages/EmojiPicker';
 import MessageTemplates from '@/components/messages/MessageTemplates';
 import MessageVariables from '@/components/messages/MessageVariables';
+import BulkMessageSender from '@/components/messages/BulkMessageSender';
 
 interface Message {
   id: string;
@@ -27,13 +27,14 @@ interface Message {
 }
 
 export default function Messages() {
-  const { leads, users } = useCrm();
+  const { leads, users, sendBulkMessage } = useCrm();
   const { user } = useAuth();
   const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showDialog, setShowDialog] = useState(false);
+  const [showBulkDialog, setShowBulkDialog] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [recipientFilter, setRecipientFilter] = useState('all');
   const [formData, setFormData] = useState({
@@ -128,8 +129,8 @@ export default function Messages() {
       // Processar mensagem com variáveis
       const processedMessage = processMessage(formData.message, recipient);
 
-      // Simular envio da mensagem
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Enviar para webhook usando o método sendBulkMessage
+      await sendBulkMessage([formData.recipient_id], processedMessage);
 
       // Adicionar mensagem à lista local
       const newMessage: Message = {
@@ -191,89 +192,103 @@ export default function Messages() {
           <h2 className="text-2xl font-bold text-slate-900">Mensagens</h2>
           <p className="text-slate-600">Envie mensagens personalizadas para seus leads</p>
         </div>
-        <Dialog open={showDialog} onOpenChange={setShowDialog}>
-          <DialogTrigger asChild>
-            <Button>
-              <MessageSquare className="w-4 h-4 mr-2" />
-              Nova Mensagem
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Nova Mensagem</DialogTitle>
-              <DialogDescription>
-                Envie mensagens personalizadas usando variáveis que serão substituídas pelos dados reais do lead
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <Label htmlFor="recipient">Destinatário (Lead)</Label>
-                <Select value={formData.recipient_id} onValueChange={(value) => setFormData(prev => ({ ...prev, recipient_id: value }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecionar lead" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {leads.map(lead => (
-                      <SelectItem key={lead.id} value={lead.id}>
-                        {lead.name} {lead.company ? `- ${lead.company}` : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+        <div className="flex gap-2">
+          <Dialog open={showBulkDialog} onOpenChange={setShowBulkDialog}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Users className="w-4 h-4 mr-2" />
+                Envio em Massa
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+              <BulkMessageSender onClose={() => setShowBulkDialog(false)} />
+            </DialogContent>
+          </Dialog>
 
-              <div>
-                <Label htmlFor="message">Mensagem</Label>
-                <Textarea
-                  id="message"
-                  value={formData.message}
-                  onChange={(e) => setFormData(prev => ({ ...prev, message: e.target.value }))}
-                  placeholder="Digite sua mensagem aqui..."
-                  rows={6}
-                  required
-                />
-              </div>
+          <Dialog open={showDialog} onOpenChange={setShowDialog}>
+            <DialogTrigger asChild>
+              <Button>
+                <MessageSquare className="w-4 h-4 mr-2" />
+                Nova Mensagem
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Nova Mensagem</DialogTitle>
+                <DialogDescription>
+                  Envie mensagens personalizadas usando variáveis que serão substituídas pelos dados reais do lead
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <Label htmlFor="recipient">Destinatário (Lead)</Label>
+                  <Select value={formData.recipient_id} onValueChange={(value) => setFormData(prev => ({ ...prev, recipient_id: value }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecionar lead" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {leads.map(lead => (
+                        <SelectItem key={lead.id} value={lead.id}>
+                          {lead.name} {lead.company ? `- ${lead.company}` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              {/* Ferramentas de edição */}
-              <div className="flex flex-wrap gap-2 items-center justify-between p-3 bg-slate-50 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <EmojiPicker onEmojiSelect={handleInsertEmoji} />
-                  <MessageTemplates 
-                    currentMessage={formData.message}
-                    onTemplateLoad={handleTemplateLoad}
+                <div>
+                  <Label htmlFor="message">Mensagem</Label>
+                  <Textarea
+                    id="message"
+                    value={formData.message}
+                    onChange={(e) => setFormData(prev => ({ ...prev, message: e.target.value }))}
+                    placeholder="Digite sua mensagem aqui..."
+                    rows={6}
+                    required
                   />
                 </div>
-              </div>
 
-              <div className="bg-blue-50 p-3 rounded-lg">
-                <p className="text-sm text-blue-700">
-                  <strong>Dica:</strong> As variáveis como {`{{nome}}`}, {`{{empresa}}`}, etc. serão substituídas automaticamente pelos dados do lead selecionado.
-                </p>
-              </div>
+                {/* Ferramentas de edição */}
+                <div className="flex flex-wrap gap-2 items-center justify-between p-3 bg-slate-50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <EmojiPicker onEmojiSelect={handleInsertEmoji} />
+                    <MessageTemplates 
+                      currentMessage={formData.message}
+                      onTemplateLoad={handleTemplateLoad}
+                    />
+                  </div>
+                </div>
 
-              <div className="flex gap-2 pt-4">
-                <Button type="submit" className="flex-1" disabled={actionLoading === 'send-message'}>
-                  {actionLoading === 'send-message' ? (
-                    <LoadingSpinner size="sm" />
-                  ) : (
-                    <>
-                      Enviar Mensagem
-                      <Send className="w-4 h-4 ml-2" />
-                    </>
-                  )}
-                </Button>
-                <Button type="button" variant="outline" onClick={() => setShowDialog(false)} className="flex-1">
-                  Cancelar
-                </Button>
-              </div>
-            </form>
+                <div className="bg-blue-50 p-3 rounded-lg">
+                  <p className="text-sm text-blue-700">
+                    <strong>Dica:</strong> As variáveis como {`{{nome}}`}, {`{{empresa}}`}, etc. serão substituídas automaticamente pelos dados do lead selecionado.
+                  </p>
+                </div>
 
-            {/* Variáveis disponíveis - lado direito */}
-            <div className="mt-4">
-              <MessageVariables onInsertVariable={handleInsertVariable} />
-            </div>
-          </DialogContent>
-        </Dialog>
+                <div className="flex gap-2 pt-4">
+                  <Button type="submit" className="flex-1" disabled={actionLoading === 'send-message'}>
+                    {actionLoading === 'send-message' ? (
+                      <LoadingSpinner size="sm" />
+                    ) : (
+                      <>
+                        Enviar Mensagem
+                        <Send className="w-4 h-4 ml-2" />
+                      </>
+                    )}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => setShowDialog(false)} className="flex-1">
+                    Cancelar
+                  </Button>
+                </div>
+              </form>
+
+              {/* Variáveis disponíveis - lado direito */}
+              <div className="mt-4">
+                <MessageVariables onInsertVariable={handleInsertVariable} />
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Filtros */}
