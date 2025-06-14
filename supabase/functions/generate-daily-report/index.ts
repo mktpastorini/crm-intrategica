@@ -91,65 +91,93 @@ serve(async (req) => {
     const eventsCompleted = completedEvents?.length || 0;
     const messagesSent = dailyActivity?.messages_sent || 0;
     
-    // Formatar leads movidos no novo formato
+    // Organizar dados de leads movidos de forma mais clara
     const leadsMovedData = dailyActivity?.leads_moved || {};
-    const leadsMovedFormatted = Object.entries(leadsMovedData)
-      .filter(([_, count]) => (count as number) > 0)
-      .reduce((acc, [stage, count]) => {
-        acc[stage] = `${count} lead${(count as number) > 1 ? 's' : ''} movido${(count as number) > 1 ? 's' : ''} para ${stage}`;
-        return acc;
-      }, {} as Record<string, string>);
+    const totalLeadsMoved = Object.values(leadsMovedData)
+      .reduce((sum, count) => sum + (typeof count === 'number' ? count : 0), 0);
     
-    // Estatísticas dos leads por estágio
-    const leadsByStage: Record<string, number> = {};
+    // Estatísticas dos leads criados hoje por estágio
+    const newLeadsByStage: Record<string, number> = {};
     if (leadsToday) {
       leadsToday.forEach(lead => {
         const stage = lead.pipeline_stage || 'Sem estágio';
-        leadsByStage[stage] = (leadsByStage[stage] || 0) + 1;
+        newLeadsByStage[stage] = (newLeadsByStage[stage] || 0) + 1;
       });
     }
 
     // Detalhes dos eventos concluídos
     const completedEventsDetails = completedEvents?.map(event => ({
       title: event.title,
-      type: event.type,
-      completed: true
+      type: event.type
     })) || [];
 
-    // Preparar dados do relatório
+    // Preparar dados do relatório reorganizado
     const reportData = {
-      date: today,
-      period: {
-        start: startOfDay.toISOString(),
-        end: endOfDay.toISOString(),
-        generated_at: now.toISOString()
-      },
-      summary: {
-        leads_added: leadsAdded,
-        leads_moved: leadsMovedFormatted,
-        messages_sent: messagesSent,
-        events_created: eventsCreated,
-        events_completed: eventsCompleted
-      },
-      details: {
-        total_activities: leadsAdded + messagesSent + eventsCreated + eventsCompleted,
-        leads_by_stage: leadsByStage,
-        completed_events: completedEventsDetails,
-        system_name: settings.system_name || "Sistema CRM",
-        report_scheduled_time: settings.report_webhook_time || '18:00',
-        data_completeness: {
-          leads_data: leadsToday ? 'complete' : 'unavailable',
-          events_data: eventsToday ? 'complete' : 'unavailable',
-          completed_events_data: completedEvents ? 'complete' : 'unavailable',
-          messages_data: dailyActivity ? 'tracked' : 'not_tracked',
-          leads_movement_data: dailyActivity?.leads_moved ? 'tracked' : 'not_tracked'
+      // Informações básicas do relatório
+      relatorio: {
+        data: today,
+        sistema: settings.system_name || "Sistema CRM",
+        whatsapp_contact: settings.report_whatsapp_number || '',
+        horario_programado: settings.report_webhook_time || '18:00',
+        periodo_analisado: {
+          inicio: startOfDay.toISOString(),
+          fim: endOfDay.toISOString(),
+          gerado_em: now.toISOString()
         }
       },
-      whatsapp_number: settings.report_whatsapp_number || '',
-      test: false
+
+      // Resumo das atividades do dia
+      resumo_do_dia: {
+        total_atividades: leadsAdded + totalLeadsMoved + messagesSent + eventsCreated + eventsCompleted,
+        novos_leads_criados: leadsAdded,
+        leads_movimentados_entre_estagios: totalLeadsMoved,
+        mensagens_enviadas: messagesSent,
+        eventos_agendados: eventsCreated,
+        eventos_concluidos: eventsCompleted
+      },
+
+      // Detalhamento por categoria
+      detalhamento: {
+        // Novos leads criados hoje (não movidos, apenas criados)
+        novos_leads_por_estagio: newLeadsByStage,
+        
+        // Movimentação de leads entre estágios (rastreamento de pipeline)
+        movimentacao_pipeline: Object.entries(leadsMovedData)
+          .filter(([_, count]) => (count as number) > 0)
+          .reduce((acc, [stage, count]) => {
+            acc[stage] = {
+              quantidade: count,
+              descricao: `${count} lead${(count as number) > 1 ? 's' : ''} movido${(count as number) > 1 ? 's' : ''} para ${stage}`
+            };
+            return acc;
+          }, {} as Record<string, any>),
+
+        // Eventos da agenda concluídos
+        eventos_concluidos: completedEventsDetails.length > 0 ? completedEventsDetails : [],
+
+        // Status dos dados coletados
+        qualidade_dos_dados: {
+          dados_leads: leadsToday ? 'completos' : 'indisponíveis',
+          dados_eventos: eventsToday ? 'completos' : 'indisponíveis',
+          dados_mensagens: dailyActivity ? 'rastreados' : 'não_rastreados',
+          dados_movimentacao: dailyActivity?.leads_moved ? 'rastreados' : 'não_rastreados'
+        }
+      },
+
+      // Observações importantes
+      observacoes: {
+        diferenca_leads_novos_vs_movidos: "Os 'novos_leads_criados' são leads que foram adicionados hoje. A 'movimentacao_pipeline' mostra leads que mudaram de estágio (podem ser leads antigos ou novos).",
+        total_atividades_explicacao: "Soma de todos os tipos de atividades: criação de leads + movimentação + mensagens + eventos criados + eventos concluídos"
+      },
+
+      // Dados técnicos (para compatibilidade)
+      _metadata: {
+        test: false,
+        version: "2.0"
+      }
     };
 
-    console.log('Dados do relatório preparados:', JSON.stringify(reportData, null, 2));
+    console.log('Dados do relatório reorganizados:', JSON.stringify(reportData, null, 2));
 
     // Enviar para o webhook
     console.log('Enviando para webhook:', settings.report_webhook_url);
@@ -158,7 +186,7 @@ serve(async (req) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'User-Agent': 'CRM-System-Daily-Report/1.0'
+        'User-Agent': 'CRM-System-Daily-Report/2.0'
       },
       body: JSON.stringify(reportData)
     });
@@ -184,7 +212,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: 'Relatório diário enviado com sucesso para webhook',
+        message: 'Relatório diário reorganizado enviado com sucesso para webhook',
         webhook_url: settings.report_webhook_url,
         data: reportData,
         webhook_response: responseText
