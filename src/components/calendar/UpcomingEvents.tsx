@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Clock, Edit, Trash2 } from 'lucide-react';
 import { format, parseISO, isAfter } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Event {
   id: string;
@@ -24,6 +25,8 @@ interface UpcomingEventsProps {
 }
 
 export default function UpcomingEvents({ events, onEditEvent, onDeleteEvent }: UpcomingEventsProps) {
+  const { profile } = useAuth();
+  
   const upcomingEvents = events
     .filter(event => {
       try {
@@ -106,7 +109,7 @@ export default function UpcomingEvents({ events, onEditEvent, onDeleteEvent }: U
                   </p>
                 )}
               </div>
-              <div className="flex space-x-1">
+              <div className="flex space-x-1 hidden md:flex">
                 <Button
                   variant="ghost"
                   size="sm"

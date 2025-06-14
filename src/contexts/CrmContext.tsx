@@ -235,16 +235,7 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
   const createLead = async (leadData: Omit<Lead, 'id' | 'created_at' | 'updated_at'>) => {
     setActionLoading('create-lead');
     try {
-      if (profile?.role === 'comercial') {
-        await requestAction({
-          type: 'add_lead',
-          user: profile.name,
-          description: `Solicitação para adicionar novo lead: ${leadData.name}`,
-          details: { leadData }
-        });
-        return;
-      }
-
+      // Usuários comerciais sempre podem criar leads diretamente
       const { data, error } = await supabase
         .from('leads')
         .insert([{
@@ -290,6 +281,7 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
         user: profile.name,
         description: `Solicitação para editar lead: ${existingLead.name}`,
         details: { 
+          leadId: id,
           leadName: existingLead.name,
           changes: leadData 
         }
@@ -338,7 +330,10 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
         type: 'delete_lead',
         user: profile.name,
         description: `Solicitação para excluir lead: ${leadToDelete.name}`,
-        details: { leadName: leadToDelete.name }
+        details: { 
+          leadId: id,
+          leadName: leadToDelete.name 
+        }
       });
       return;
     }
@@ -502,6 +497,7 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
         user: profile.name,
         description: `Solicitação para editar evento: ${existingEvent.title}`,
         details: { 
+          eventId: id,
           eventTitle: existingEvent.title,
           changes: eventData 
         }
@@ -550,7 +546,10 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
         type: 'delete_event',
         user: profile.name,
         description: `Solicitação para excluir evento: ${eventToDelete.title}`,
-        details: { eventTitle: eventToDelete.title }
+        details: { 
+          eventId: id,
+          eventTitle: eventToDelete.title 
+        }
       });
       return;
     }
@@ -585,49 +584,125 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     const action = pendingActions.find(a => a.id === actionId);
     if (!action) return;
 
-    // Execute the action based on type
-    switch (action.type) {
-      case 'add_lead':
-        if (action.details?.leadData) {
-          await createLead(action.details.leadData);
-        }
-        break;
-      case 'edit_lead':
-        if (action.details?.changes) {
-          const leadToUpdate = leads.find(l => l.name === action.details?.leadName);
-          if (leadToUpdate) {
-            await updateLead(leadToUpdate.id, action.details.changes);
-          }
-        }
-        break;
-      case 'delete_lead':
-        const leadToDelete = leads.find(l => l.name === action.details?.leadName);
-        if (leadToDelete) {
-          await deleteLead(leadToDelete.id);
-        }
-        break;
-      case 'edit_event':
-        if (action.details?.changes) {
-          const eventToUpdate = events.find(e => e.title === action.details?.eventTitle);
-          if (eventToUpdate) {
-            await updateEvent(eventToUpdate.id, action.details.changes);
-          }
-        }
-        break;
-      case 'delete_event':
-        const eventToDelete = events.find(e => e.title === action.details?.eventTitle);
-        if (eventToDelete) {
-          await deleteEvent(eventToDelete.id);
-        }
-        break;
-    }
+    console.log('Aprovando ação:', action);
 
-    setPendingActions(prev => prev.filter(a => a.id !== actionId));
-    
-    toast({
-      title: "Ação aprovada",
-      description: "A solicitação foi aprovada com sucesso.",
-    });
+    try {
+      // Execute the action based on type
+      switch (action.type) {
+        case 'add_lead':
+          if (action.details?.leadData) {
+            await createLead(action.details.leadData);
+          }
+          break;
+        case 'edit_lead':
+          if (action.details?.changes && action.details?.leadId) {
+            // Buscar o lead pelo ID para garantir que existe
+            const leadToUpdate = leads.find(l => l.id === action.details.leadId);
+            if (leadToUpdate) {
+              const { data, error } = await supabase
+                .from('leads')
+                .update(action.details.changes)
+                .eq('id', action.details.leadId)
+                .select()
+                .single();
+
+              if (error) throw error;
+
+              if (data) {
+                setLeads(prev => prev.map(lead => 
+                  lead.id === action.details.leadId ? data : lead
+                ));
+                
+                toast({
+                  title: "Lead atualizado",
+                  description: `Lead ${leadToUpdate.name} foi atualizado com sucesso.`,
+                });
+              }
+            }
+          }
+          break;
+        case 'delete_lead':
+          if (action.details?.leadId) {
+            const leadToDelete = leads.find(l => l.id === action.details.leadId);
+            if (leadToDelete) {
+              const { error } = await supabase
+                .from('leads')
+                .delete()
+                .eq('id', action.details.leadId);
+
+              if (error) throw error;
+
+              setLeads(prev => prev.filter(lead => lead.id !== action.details.leadId));
+              
+              toast({
+                title: "Lead excluído",
+                description: `Lead ${leadToDelete.name} foi excluído com sucesso.`,
+              });
+            }
+          }
+          break;
+        case 'edit_event':
+          if (action.details?.changes && action.details?.eventId) {
+            const eventToUpdate = events.find(e => e.id === action.details.eventId);
+            if (eventToUpdate) {
+              const { data, error } = await supabase
+                .from('events')
+                .update(action.details.changes)
+                .eq('id', action.details.eventId)
+                .select()
+                .single();
+
+              if (error) throw error;
+
+              if (data) {
+                setEvents(prev => prev.map(event => 
+                  event.id === action.details.eventId ? data : event
+                ));
+                
+                toast({
+                  title: "Evento atualizado",
+                  description: `Evento ${eventToUpdate.title} foi atualizado com sucesso.`,
+                });
+              }
+            }
+          }
+          break;
+        case 'delete_event':
+          if (action.details?.eventId) {
+            const eventToDelete = events.find(e => e.id === action.details.eventId);
+            if (eventToDelete) {
+              const { error } = await supabase
+                .from('events')
+                .delete()
+                .eq('id', action.details.eventId);
+
+              if (error) throw error;
+
+              setEvents(prev => prev.filter(event => event.id !== action.details.eventId));
+              
+              toast({
+                title: "Evento excluído",
+                description: `Evento ${eventToDelete.title} foi excluído com sucesso.`,
+              });
+            }
+          }
+          break;
+      }
+
+      setPendingActions(prev => prev.filter(a => a.id !== actionId));
+      
+      toast({
+        title: "Ação aprovada",
+        description: "A solicitação foi aprovada com sucesso.",
+      });
+    } catch (error: any) {
+      console.error('Erro ao aprovar ação:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao aprovar ação",
+        variant: "destructive",
+      });
+    }
   };
 
   const rejectAction = async (actionId: string) => {

@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Edit, Trash2, Phone, Mail, Globe, MapPin, Star } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Lead {
   id: string;
@@ -32,6 +33,8 @@ interface LeadsTableProps {
 }
 
 export default function LeadsTable({ leads, onEditLead, onDeleteLead, actionLoading, getUserName }: LeadsTableProps) {
+  const { profile } = useAuth();
+  
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
       case 'novo': return 'bg-blue-100 text-blue-800';
@@ -62,6 +65,26 @@ export default function LeadsTable({ leads, onEditLead, onDeleteLead, actionLoad
       'perdido': 'perdido'
     };
     return labels[status as keyof typeof labels] || status;
+  };
+
+  const handleEditLead = (lead: Lead) => {
+    if (profile?.role === 'comercial') {
+      // Para usuários comerciais, sempre chama onEditLead que vai criar uma solicitação
+      onEditLead(lead);
+    } else {
+      // Para admins e supervisores, edita diretamente
+      onEditLead(lead);
+    }
+  };
+
+  const handleDeleteLead = (leadId: string) => {
+    if (profile?.role === 'comercial') {
+      // Para usuários comerciais, sempre chama onDeleteLead que vai criar uma solicitação
+      onDeleteLead(leadId);
+    } else {
+      // Para admins e supervisores, exclui diretamente
+      onDeleteLead(leadId);
+    }
   };
 
   return (
@@ -167,17 +190,19 @@ export default function LeadsTable({ leads, onEditLead, onDeleteLead, actionLoad
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => onEditLead(lead)}
+                        onClick={() => handleEditLead(lead)}
                         className="h-8 w-8 p-0"
+                        title={profile?.role === 'comercial' ? 'Solicitar edição' : 'Editar lead'}
                       >
                         <Edit className="w-4 h-4" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => onDeleteLead(lead.id)}
+                        onClick={() => handleDeleteLead(lead.id)}
                         className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
                         disabled={actionLoading === lead.id}
+                        title={profile?.role === 'comercial' ? 'Solicitar exclusão' : 'Excluir lead'}
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
