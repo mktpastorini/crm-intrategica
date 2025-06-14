@@ -150,7 +150,7 @@ export default function Supervision() {
           ) : (
             <div className="space-y-4">
               {pendingActions.map((action) => (
-                <div key={action.id} className="border border-slate-200 rounded-lg p-6 hover:bg-slate-50 transition-colors">
+                <div key={action.id} className={`border rounded-lg p-6 hover:bg-slate-50 transition-colors border-slate-200 ${action.status !== 'pending' ? (action.status === 'approved' ? 'bg-green-50' : 'bg-red-50') : ''}`}>
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-3">
@@ -166,6 +166,16 @@ export default function Supervision() {
                           <Clock className="w-3 h-3" />
                           {action.timestamp}
                         </div>
+                        {/* Mostra status atual da ação */}
+                        <Badge className={`ml-2 text-xs border ${
+                          action.status === "pending"
+                            ? "bg-yellow-100 text-yellow-900 border-yellow-200"
+                            : action.status === "approved"
+                            ? "bg-green-100 text-green-900 border-green-200"
+                            : "bg-red-100 text-red-900 border-red-200"
+                        }`}>
+                          {action.status === "pending" ? "Pendente" : action.status === "approved" ? "Aprovada" : "Rejeitada"}
+                        </Badge>
                       </div>
 
                       <p className="text-slate-700 mb-3">{action.description}</p>
@@ -199,27 +209,48 @@ export default function Supervision() {
                     </div>
 
                     <div className="flex gap-2 ml-4">
-                      <Button
-                        disabled={actionLoading === action.id}
-                        onClick={() => rejectAction(action.id)}
-                        variant="outline"
-                        size="sm"
-                        className={`text-red-600 hover:text-red-700 hover:border-red-200 ${actionLoading === action.id ? 'opacity-50 pointer-events-none' : ''}`}
-                      >
-                        <XCircle className="w-4 h-4 mr-1" />
-                        {actionLoading === action.id ? "Rejeitando..." : "Rejeitar"}
-                      </Button>
-                      <Button
-                        disabled={actionLoading === action.id}
-                        onClick={() => approveAction(action.id)}
-                        size="sm"
-                        className={`bg-green-600 hover:bg-green-700 ${actionLoading === action.id ? 'opacity-50 pointer-events-none' : ''}`}
-                      >
-                        <CheckCircle className="w-4 h-4 mr-1" />
-                        {actionLoading === action.id ? "Aprovando..." : "Aprovar"}
-                      </Button>
+                      {/* Só pode aprovar/rejeitar se estiver pendente */}
+                      {action.status === "pending" && (
+                        <>
+                          <Button
+                            disabled={actionLoading === action.id}
+                            onClick={() => {
+                              console.log('[SUPERVISION] Rejeitar ação', action.id);
+                              rejectAction(action.id);
+                            }}
+                            variant="outline"
+                            size="sm"
+                            className={`text-red-600 hover:text-red-700 hover:border-red-200 ${actionLoading === action.id ? 'opacity-50 pointer-events-none' : ''}`}
+                          >
+                            <XCircle className="w-4 h-4 mr-1" />
+                            {actionLoading === action.id ? "Rejeitando..." : "Rejeitar"}
+                          </Button>
+                          <Button
+                            disabled={actionLoading === action.id}
+                            onClick={() => {
+                              console.log('[SUPERVISION] Aprovar ação', action.id);
+                              approveAction(action.id);
+                            }}
+                            size="sm"
+                            className={`bg-green-600 hover:bg-green-700 ${actionLoading === action.id ? 'opacity-50 pointer-events-none' : ''}`}
+                          >
+                            <CheckCircle className="w-4 h-4 mr-1" />
+                            {actionLoading === action.id ? "Aprovando..." : "Aprovar"}
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
+                  {/* EXIBE EXPLÍCITO STATUS final para histórico */}
+                  {action.status !== "pending" && (
+                    <div className={`mt-2 text-center text-sm font-semibold ${
+                      action.status === "approved" ? "text-green-800" : "text-red-800"
+                    }`}>
+                      {action.status === "approved"
+                        ? "Esta ação foi aprovada."
+                        : "Esta ação foi rejeitada."}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
