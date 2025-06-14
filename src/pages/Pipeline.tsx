@@ -10,6 +10,8 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Phone, Mail, Calendar, User, Building, Archive } from 'lucide-react';
+import PipelineColumn from '@/components/pipeline/PipelineColumn';
+import UnknownStageColumn from '@/components/pipeline/UnknownStageColumn';
 
 export default function Pipeline() {
   // Inicializar o rastreador de atividades
@@ -185,127 +187,17 @@ export default function Pipeline() {
       <div className="flex-1 overflow-hidden bg-slate-50">
         <div className="h-full overflow-x-auto overflow-y-hidden">
           <div className="flex gap-4 p-6 h-full" style={{ minWidth: `${(pipelineStages.length + (leadsComStageDesconhecido.length > 0 ? 1 : 0)) * 320}px` }}>
-            {/* Colunas dos pipelines conhecidos */}
-            {pipelineStages.map(stage => {
-              const leadsInStage = getLeadsByStage(stage.id);
-              return (
-                <div
-                  key={stage.id}
-                  className="flex-shrink-0 w-80 bg-white rounded-lg shadow-sm border border-slate-200 flex flex-col h-full"
-                  onDragOver={handleDragOver}
-                  onDrop={(e) => handleDrop(e, stage.id)}
-                >
-                  {/* Header da coluna */}
-                  <div className="flex items-center justify-between p-4 border-b border-slate-100 flex-shrink-0">
-                    <div className="flex items-center space-x-2">
-                      <div
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: stage.color }}
-                      />
-                      <h3 className="font-semibold text-slate-900 text-sm">{stage.name}</h3>
-                      <Badge variant="secondary" className="text-xs">
-                        {leadsInStage.length}
-                      </Badge>
-                    </div>
-                  </div>
-
-                  {/* Cards dos leads */}
-                  <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                    {leadsInStage.map(lead => (
-                      <Card
-                        key={lead.id}
-                        className="cursor-move hover:shadow-md transition-shadow bg-white border border-slate-200"
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, lead.id)}
-                      >
-                        <CardHeader className="pb-2">
-                          <CardTitle className="text-sm font-medium text-slate-900">
-                            {lead.name}
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="pt-0 space-y-2">
-                          <div className="flex items-center text-xs text-slate-600">
-                            <Building className="w-3 h-3 mr-1" />
-                            {lead.company}
-                          </div>
-                          <div className="flex items-center text-xs text-slate-600">
-                            <Phone className="w-3 h-3 mr-1" />
-                            {lead.phone}
-                          </div>
-                          {lead.email && (
-                            <div className="flex items-center text-xs text-slate-600">
-                              <Mail className="w-3 h-3 mr-1" />
-                              {lead.email}
-                            </div>
-                          )}
-                          <div className="flex items-center justify-between pt-2">
-                            <Badge variant="outline" className="text-xs">
-                              {lead.niche}
-                            </Badge>
-                            <div className="flex items-center text-xs text-slate-500">
-                              <User className="w-3 h-3 mr-1" />
-                              {lead.responsible_id}
-                            </div>
-                          </div>
-                          <div className="flex justify-end pt-1">
-                            <Button variant="ghost" size="sm" className="text-slate-400 hover:text-slate-600 h-6 w-6 p-0">
-                              <Archive className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                    {leadsInStage.length === 0 && (
-                      <div className="text-center py-8 text-slate-400 text-sm">
-                        Nenhum lead neste estágio
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-            {/* Coluna para leads com estágio desconhecido */}
-            {leadsComStageDesconhecido.length > 0 && (
-              <div className="flex-shrink-0 w-80 bg-red-50 rounded-lg border border-red-300 flex flex-col h-full">
-                <div className="flex items-center justify-between p-4 border-b border-red-200 flex-shrink-0">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-3 h-3 rounded-full bg-red-400"/>
-                    <h3 className="font-semibold text-red-800 text-sm">
-                      Estágio Desconhecido
-                    </h3>
-                    <Badge variant="secondary" className="text-xs">{leadsComStageDesconhecido.length}</Badge>
-                  </div>
-                </div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                  {leadsComStageDesconhecido.map(lead => (
-                    <Card
-                      key={lead.id}
-                      className="border-red-400 bg-red-100"
-                      draggable={false}
-                    >
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-red-800">
-                          {lead.name}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="pt-0 space-y-1">
-                        <div className="text-xs text-red-900 italic">
-                          <span className="font-medium">pipeline_stage:</span> {lead.pipeline_stage}
-                        </div>
-                        <div className="flex items-center text-xs text-slate-700">
-                          <Building className="w-3 h-3 mr-1" />
-                          {lead.company}
-                        </div>
-                        <div className="flex items-center text-xs text-slate-700">
-                          <Phone className="w-3 h-3 mr-1" />
-                          {lead.phone}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-            )}
+            {pipelineStages.map(stage => (
+              <PipelineColumn
+                key={stage.id}
+                stage={stage}
+                leads={getLeadsByStage(stage.id)}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+                onDragStart={handleDragStart}
+              />
+            ))}
+            <UnknownStageColumn leads={leadsComStageDesconhecido} />
           </div>
         </div>
       </div>
