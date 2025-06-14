@@ -9,8 +9,8 @@ interface Lead {
   id: string;
   name: string;
   phone: string;
-  email: string;
-  company?: string;
+  email?: string;
+  company?: string; // Made optional to match database schema
   title?: string;
   source?: string;
   owner_id?: string;
@@ -20,8 +20,8 @@ interface Lead {
   created_at: string;
   updated_at: string;
   category_id?: string;
-  responsible_id?: string;
-  niche?: string;
+  responsible_id: string;
+  niche: string;
   address?: string;
   website?: string;
   whatsapp?: string;
@@ -401,12 +401,12 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addLead = async (leadData: Omit<Lead, 'id' | 'created_at' | 'updated_at'>) => {
     try {
       setActionLoading('create-lead');
-      // Ensure required fields are present
+      // Ensure required fields are present and fix company field
       const leadToInsert = {
         ...leadData,
         responsible_id: leadData.responsible_id || user?.id || '',
         niche: leadData.niche || 'Geral',
-        company: leadData.company || '',
+        company: leadData.company || '', // Ensure company is always a string, not undefined
         name: leadData.name || 'Lead sem nome',
         phone: leadData.phone || ''
       };

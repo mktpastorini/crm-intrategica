@@ -70,18 +70,24 @@ export default function Pipeline() {
     const lead = leads.find(l => l.id === selectedLead);
     if (!lead) return;
 
-    // Criar evento
+    // Criar evento com o formato correto
+    const startTime = `${eventData.date}T${eventData.time}`;
     addEvent({
       title: `${eventData.type === 'reunion' ? 'Reunião' : 
               eventData.type === 'call' ? 'Telefonema' :
               eventData.type === 'whatsapp' ? 'WhatsApp' : 'E-mail'} - ${lead.name}`,
-      lead_name: lead.name,
-      company: lead.company,
+      description: lead.name,
+      start_time: startTime,
+      end_time: startTime, // Same as start time for now
+      location: lead.company || '',
+      lead_id: selectedLead,
+      user_id: eventData.responsible_id,
+      type: eventData.type,
       date: eventData.date,
       time: eventData.time,
-      responsible_id: eventData.responsible_id,
-      type: eventData.type,
-      lead_id: selectedLead
+      company: lead.company,
+      lead_name: lead.name,
+      responsible_id: eventData.responsible_id
     });
 
     // Mover lead para estágio reunião
