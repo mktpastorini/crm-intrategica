@@ -15,7 +15,7 @@ interface Lead {
   source?: string;
   owner_id?: string;
   pipeline_stage?: string;
-  status?: string;
+  status: string; // Required field - make consistent with database
   priority?: string;
   created_at: string;
   updated_at: string;
@@ -72,7 +72,7 @@ interface PendingAction {
   user_name: string;
   description: string;
   details: any;
-  status?: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected';
   created_at: string;
   user_id?: string;
   user?: any;
@@ -412,7 +412,8 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         niche: leadData.niche || 'Geral',
         company: leadData.company || 'Não informado', // Ensure company is always a string since it's required
         name: leadData.name || 'Lead sem nome',
-        phone: leadData.phone || ''
+        phone: leadData.phone || '',
+        status: leadData.status || 'novo' // Ensure status is always provided
       };
 
       const { data, error } = await supabase
