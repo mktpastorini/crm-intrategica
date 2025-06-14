@@ -42,8 +42,12 @@ export default function Pipeline() {
   // Caso não exista no pipelineStages, exibir aviso (ou criar fallback)
 
   // Encontrar ids dos estágios:
+  const pipelineStageIds = pipelineStages.map(s => s.id);
+
   const primeiroStageId = pipelineStages.find(s => s.id === "aguardando_inicio")?.id || pipelineStages[0]?.id;
   const reuniaoStageId = pipelineStages.find(s => s.id === "reuniao")?.id || null;
+
+  const leadsComStageDesconhecido = leads.filter(lead => !pipelineStageIds.includes(lead.pipeline_stage));
 
   const handleDragStart = (e: React.DragEvent, leadId: string) => {
     e.dataTransfer.setData('leadId', leadId);
@@ -135,9 +139,7 @@ export default function Pipeline() {
   // Importante: usa exatamente o id do estágio em pipelineStages para o filtro!
   const getLeadsByStage = (stageId: string) => {
     const leadsEmStage = leads
-      .filter(lead => {
-        return lead.pipeline_stage === stageId
-      })
+      .filter(lead => lead.pipeline_stage === stageId)
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     console.log(`[DEPURAÇÃO PIPELINE] Leads no estágio '${stageId}':`, leadsEmStage.map(l => l.name));
     return leadsEmStage;
@@ -182,7 +184,8 @@ export default function Pipeline() {
       {/* Pipeline Kanban */}
       <div className="flex-1 overflow-hidden bg-slate-50">
         <div className="h-full overflow-x-auto overflow-y-hidden">
-          <div className="flex gap-4 p-6 h-full" style={{ minWidth: `${pipelineStages.length * 320}px` }}>
+          <div className="flex gap-4 p-6 h-full" style={{ minWidth: `${(pipelineStages.length + (leadsComStageDesconhecido.length > 0 ? 1 : 0)) * 320}px` }}>
+            {/* Colunas dos pipelines conhecidos */}
             {pipelineStages.map(stage => {
               const leadsInStage = getLeadsByStage(stage.id);
               return (
@@ -261,6 +264,48 @@ export default function Pipeline() {
                 </div>
               );
             })}
+            {/* Coluna para leads com estágio desconhecido */}
+            {leadsComStageDesconhecido.length > 0 && (
+              <div className="flex-shrink-0 w-80 bg-red-50 rounded-lg border border-red-300 flex flex-col h-full">
+                <div className="flex items-center justify-between p-4 border-b border-red-200 flex-shrink-0">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 rounded-full bg-red-400"/>
+                    <h3 className="font-semibold text-red-800 text-sm">
+                      Estágio Desconhecido
+                    </h3>
+                    <Badge variant="secondary" className="text-xs">{leadsComStageDesconhecido.length}</Badge>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  {leadsComStageDesconhecido.map(lead => (
+                    <Card
+                      key={lead.id}
+                      className="border-red-400 bg-red-100"
+                      draggable={false}
+                    >
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-red-800">
+                          {lead.name}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-0 space-y-1">
+                        <div className="text-xs text-red-900 italic">
+                          <span className="font-medium">pipeline_stage:</span> {lead.pipeline_stage}
+                        </div>
+                        <div className="flex items-center text-xs text-slate-700">
+                          <Building className="w-3 h-3 mr-1" />
+                          {lead.company}
+                        </div>
+                        <div className="flex items-center text-xs text-slate-700">
+                          <Phone className="w-3 h-3 mr-1" />
+                          {lead.phone}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
