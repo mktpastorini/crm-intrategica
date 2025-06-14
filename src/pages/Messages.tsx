@@ -11,39 +11,23 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { MessageSquare, Send, Filter, Search, Users as UsersIcon } from 'lucide-react';
+import { MessageSquare, Send, Filter, Search, Users as UsersIcon, Plus } from 'lucide-react';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import MessagesTable from '@/components/messages/MessagesTable';
-import UserSelector from '@/components/leads/UserSelector';
-import LeadsTable from '@/components/leads/LeadsTable';
-import MessageVariables from '@/components/messages/MessageVariables';
+import EmojiPicker from '@/components/messages/EmojiPicker';
+import MessageTemplates from '@/components/messages/MessageTemplates';
 
 interface Message {
   id: string;
   recipient_id: string;
+  recipient_name: string;
+  recipient_type: 'lead' | 'user';
   message: string;
   sent_at: string;
 }
 
-interface Lead {
-  id: string;
-  name: string;
-  email?: string;
-  phone: string;
-  company: string;
-  niche: string;
-  status: string;
-  responsible_id: string;
-  created_at: string;
-  website?: string;
-  address?: string;
-  rating?: number;
-  place_id?: string;
-  whatsapp?: string;
-}
-
 export default function Messages() {
-  const { users } = useCrm();
+  const { leads, users } = useCrm();
   const { user } = useAuth();
   const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -52,23 +36,86 @@ export default function Messages() {
   const [showDialog, setShowDialog] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [recipientFilter, setRecipientFilter] = useState('all');
+  const [recipientType, setRecipientType] = useState<'lead' | 'user'>('lead');
   const [formData, setFormData] = useState({
     recipient_id: '',
     message: ''
   });
 
+  // Variáveis disponíveis para substituição
+  const variables = [
+    { tag: '{{nome}}', description: 'Nome do contato' },
+    { tag: '{{empresa}}', description: 'Nome da empresa' },
+    { tag: '{{email}}', description: 'Email do contato' },
+    { tag: '{{telefone}}', description: 'Telefone do contato' },
+    { tag: '{{whatsapp}}', description: 'WhatsApp do contato' },
+    { tag: '{{website}}', description: 'Website da empresa' },
+    { tag: '{{endereco}}', description: 'Endereço da empresa' },
+    { tag: '{{nicho}}', description: 'Nicho/Segmento' },
+  ];
+
   const handleInsertVariable = (variable: string) => {
-    setFormData(prev => ({
-      ...prev,
-      message: prev.message + variable
-    }));
+    const textarea = document.getElementById('message') as HTMLTextAreaElement;
+    if (textarea) {
+      const startPos = textarea.selectionStart;
+      const endPos = textarea.selectionEnd;
+      const newMessage = formData.message.substring(0, startPos) + variable + formData.message.substring(endPos);
+      setFormData(prev => ({ ...prev, message: newMessage }));
+      
+      // Reposicionar cursor
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(startPos + variable.length, startPos + variable.length);
+      }, 0);
+    } else {
+      setFormData(prev => ({ ...prev, message: prev.message + variable }));
+    }
+  };
+
+  const handleInsertEmoji = (emoji: string) => {
+    const textarea = document.getElementById('message') as HTMLTextAreaElement;
+    if (textarea) {
+      const startPos = textarea.selectionStart;
+      const endPos = textarea.selectionEnd;
+      const newMessage = formData.message.substring(0, startPos) + emoji + formData.message.substring(endPos);
+      setFormData(prev => ({ ...prev, message: newMessage }));
+      
+      // Reposicionar cursor
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(startPos + emoji.length, startPos + emoji.length);
+      }, 0);
+    } else {
+      setFormData(prev => ({ ...prev, message: prev.message + emoji }));
+    }
+  };
+
+  const handleTemplateLoad = (content: string) => {
+    setFormData(prev => ({ ...prev, message: content }));
+  };
+
+  const processMessage = (message: string, recipient: any) => {
+    let processedMessage = message;
+    
+    if (recipientType === 'lead') {
+      processedMessage = processedMessage
+        .replace(/\{\{nome\}\}/g, recipient?.name || '')
+        .replace(/\{\{empresa\}\}/g, recipient?.company || '')
+        .replace(/\{\{email\}\}/g, recipient?.email || '')
+        .replace(/\{\{telefone\}\}/g, recipient?.phone || '')
+        .replace(/\{\{whatsapp\}\}/g, recipient?.whatsapp || '')
+        .replace(/\{\{website\}\}/g, recipient?.website || '')
+        .replace(/\{\{endereco\}\}/g, recipient?.address || '')
+        .replace(/\{\{nicho\}\}/g, recipient?.niche || '');
+    }
+    
+    return processedMessage;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     try {
-      // Validações básicas
       if (!formData.recipient_id.trim()) {
         toast({
           title: "Erro de validação",
@@ -87,9 +134,37 @@ export default function Messages() {
         return;
       }
 
-      // Simulação de envio de mensagem
       setActionLoading('send-message');
-      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Buscar dados do destinatário
+      let recipient;
+      let recipientName;
+      
+      if (recipientType === 'lead') {
+        recipient = leads.find(lead => lead.id === formData.recipient_id);
+        recipientName = recipient?.name || 'Lead não encontrado';
+      } else {
+        recipient = users.find(user => user.id === formData.recipient_id);
+        recipientName = recipient?.name || 'Usuário não encontrado';
+      }
+
+      // Processar mensagem com variáveis
+      const processedMessage = processMessage(formData.message, recipient);
+
+      // Simular envio da mensagem
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      // Adicionar mensagem à lista local
+      const newMessage: Message = {
+        id: crypto.randomUUID(),
+        recipient_id: formData.recipient_id,
+        recipient_name: recipientName,
+        recipient_type: recipientType,
+        message: processedMessage,
+        sent_at: new Date().toISOString(),
+      };
+
+      setMessages(prev => [newMessage, ...prev]);
 
       // Limpar formulário e fechar diálogo
       setFormData({
@@ -100,7 +175,7 @@ export default function Messages() {
 
       toast({
         title: "Mensagem enviada",
-        description: "Mensagem enviada com sucesso",
+        description: `Mensagem enviada para ${recipientName} com sucesso`,
       });
     } catch (error) {
       console.error('Erro ao enviar mensagem:', error);
@@ -116,7 +191,8 @@ export default function Messages() {
 
   const filteredMessages = messages.filter(message => {
     const matchesSearch = 
-      message.message.toLowerCase().includes(searchTerm.toLowerCase());
+      message.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      message.recipient_name.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesRecipient = recipientFilter === 'all' || message.recipient_id === recipientFilter;
     
@@ -131,12 +207,14 @@ export default function Messages() {
     );
   }
 
+  const availableRecipients = recipientType === 'lead' ? leads : users;
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Mensagens</h2>
-          <p className="text-slate-600">Gerencie o envio de mensagens para seus leads</p>
+          <p className="text-slate-600">Envie mensagens personalizadas para seus leads e usuários</p>
         </div>
         <Dialog open={showDialog} onOpenChange={setShowDialog}>
           <DialogTrigger asChild>
@@ -145,14 +223,48 @@ export default function Messages() {
               Nova Mensagem
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Nova Mensagem</DialogTitle>
               <DialogDescription>
-                Envie mensagens personalizadas para seus leads usando variáveis
+                Envie mensagens personalizadas usando variáveis que serão substituídas pelos dados reais
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="recipient-type">Tipo de Destinatário</Label>
+                  <Select value={recipientType} onValueChange={(value: 'lead' | 'user') => {
+                    setRecipientType(value);
+                    setFormData(prev => ({ ...prev, recipient_id: '' }));
+                  }}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="lead">Leads</SelectItem>
+                      <SelectItem value="user">Usuários do Sistema</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="recipient">Destinatário</Label>
+                  <Select value={formData.recipient_id} onValueChange={(value) => setFormData(prev => ({ ...prev, recipient_id: value }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecionar destinatário" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableRecipients.map(recipient => (
+                        <SelectItem key={recipient.id} value={recipient.id}>
+                          {recipient.name} {recipientType === 'lead' && recipient.company ? `- ${recipient.company}` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
               <div>
                 <Label htmlFor="message">Mensagem</Label>
                 <Textarea
@@ -160,46 +272,47 @@ export default function Messages() {
                   value={formData.message}
                   onChange={(e) => setFormData(prev => ({ ...prev, message: e.target.value }))}
                   placeholder="Digite sua mensagem aqui..."
-                  rows={4}
+                  rows={6}
                   required
                 />
-                <p className="text-xs text-slate-500 mt-1">
-                  Use variáveis como {'{{nome}}'}, {'{{empresa}}'}, {'{{email}}'} que serão substituídas pelos dados do lead
-                </p>
               </div>
 
-              {/* Seção de variáveis inline */}
-              <div className="bg-slate-50 p-3 rounded-lg">
-                <Label className="text-sm font-medium">Variáveis disponíveis:</Label>
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {['{{nome}}', '{{empresa}}', '{{email}}', '{{telefone}}', '{{whatsapp}}'].map((variable) => (
+              {/* Ferramentas de edição */}
+              <div className="flex flex-wrap gap-2 items-center p-3 bg-slate-50 rounded-lg">
+                <div className="flex flex-wrap gap-1">
+                  <Label className="text-sm font-medium mr-2">Variáveis:</Label>
+                  {variables.map((variable) => (
                     <Button
-                      key={variable}
+                      key={variable.tag}
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => handleInsertVariable(variable)}
+                      onClick={() => handleInsertVariable(variable.tag)}
                       className="text-xs h-7"
+                      title={variable.description}
                     >
-                      {variable}
+                      {variable.tag}
                     </Button>
                   ))}
                 </div>
+                
+                <div className="flex items-center gap-2 ml-auto">
+                  <EmojiPicker onEmojiSelect={handleInsertEmoji} />
+                  <MessageTemplates 
+                    currentMessage={formData.message}
+                    onTemplateLoad={handleTemplateLoad}
+                  />
+                </div>
               </div>
 
-              <div>
-                <Label htmlFor="recipient">Destinatário</Label>
-                <Select value={formData.recipient_id} onValueChange={(value) => setFormData(prev => ({ ...prev, recipient_id: value }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecionar destinatário" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {users.map(user => (
-                      <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {recipientType === 'lead' && (
+                <div className="bg-blue-50 p-3 rounded-lg">
+                  <p className="text-sm text-blue-700">
+                    <strong>Dica:</strong> As variáveis como {{nome}}, {{empresa}}, etc. serão substituídas automaticamente pelos dados do lead selecionado.
+                  </p>
+                </div>
+              )}
+
               <div className="flex gap-2 pt-4">
                 <Button type="submit" className="flex-1" disabled={actionLoading === 'send-message'}>
                   {actionLoading === 'send-message' ? (
@@ -220,9 +333,6 @@ export default function Messages() {
         </Dialog>
       </div>
 
-      {/* Componente de variáveis */}
-      <MessageVariables onInsertVariable={handleInsertVariable} />
-
       {/* Filtros */}
       <Card>
         <CardContent className="p-4">
@@ -233,26 +343,12 @@ export default function Messages() {
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
                 <Input
                   id="search"
-                  placeholder="Buscar por mensagem..."
+                  placeholder="Buscar por mensagem ou destinatário..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
                 />
               </div>
-            </div>
-            <div>
-              <Label htmlFor="recipient-filter">Destinatário</Label>
-              <Select value={recipientFilter} onValueChange={setRecipientFilter}>
-                <SelectTrigger className="w-48">
-                  <SelectValue placeholder="Todos os destinatários" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os destinatários</SelectItem>
-                  {users.map(user => (
-                    <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
             <Button 
               variant="outline" 
@@ -279,36 +375,58 @@ export default function Messages() {
         <Card>
           <CardContent className="p-4">
             <div className="text-2xl font-bold text-green-600">
-              {messages.filter(m => m.recipient_id === user?.id).length}
+              {messages.filter(m => m.recipient_type === 'lead').length}
             </div>
-            <p className="text-sm text-slate-600">Enviadas por mim</p>
+            <p className="text-sm text-slate-600">Enviadas para Leads</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
             <div className="text-2xl font-bold text-orange-600">
-              {messages.filter(m => m.recipient_id !== user?.id).length}
+              {messages.filter(m => m.recipient_type === 'user').length}
             </div>
-            <p className="text-sm text-slate-600">Recebidas por mim</p>
+            <p className="text-sm text-slate-600">Enviadas para Usuários</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Tabela de Mensagens */}
+      {/* Lista de Mensagens */}
       {filteredMessages.length > 0 ? (
-        <MessagesTable
-          messages={filteredMessages}
-        />
+        <Card>
+          <CardHeader>
+            <CardTitle>Mensagens Enviadas</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {filteredMessages.map((message) => (
+                <div key={message.id} className="border border-slate-200 rounded-lg p-4">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <h4 className="font-medium text-slate-900">{message.recipient_name}</h4>
+                      <Badge variant={message.recipient_type === 'lead' ? 'default' : 'secondary'}>
+                        {message.recipient_type === 'lead' ? 'Lead' : 'Usuário'}
+                      </Badge>
+                    </div>
+                    <span className="text-sm text-slate-500">
+                      {new Date(message.sent_at).toLocaleString('pt-BR')}
+                    </span>
+                  </div>
+                  <p className="text-slate-700 whitespace-pre-wrap">{message.message}</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       ) : (
         <Card>
           <CardContent className="p-12 text-center">
             <MessageSquare className="w-12 h-12 text-slate-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-slate-900 mb-2">
-              {searchTerm || recipientFilter !== 'all' ? 'Nenhuma mensagem encontrada' : 'Nenhuma mensagem enviada'}
+              {searchTerm ? 'Nenhuma mensagem encontrada' : 'Nenhuma mensagem enviada'}
             </h3>
             <p className="text-slate-600">
-              {searchTerm || recipientFilter !== 'all' 
-                ? 'Tente ajustar os filtros de busca.' 
+              {searchTerm 
+                ? 'Tente ajustar o termo de busca.' 
                 : 'Comece enviando uma nova mensagem.'
               }
             </p>

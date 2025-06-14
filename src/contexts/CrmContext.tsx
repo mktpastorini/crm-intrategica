@@ -381,9 +381,26 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
 
     setPendingActions(prev => [...prev, newAction]);
     
+    // Diferentes mensagens baseadas no tipo de ação
+    let actionTypeLabel = '';
+    switch (type) {
+      case 'edit_lead':
+        actionTypeLabel = 'edição do lead';
+        break;
+      case 'delete_lead':
+        actionTypeLabel = 'exclusão do lead';
+        break;
+      case 'edit_event':
+        actionTypeLabel = 'edição do evento';
+        break;
+      case 'delete_event':
+        actionTypeLabel = 'exclusão do evento';
+        break;
+    }
+    
     toast({
-      title: "Solicitação enviada",
-      description: "Sua solicitação foi enviada para aprovação do supervisor",
+      title: "Solicitação enviada para aprovação",
+      description: `Sua solicitação de ${actionTypeLabel} foi enviada para o supervisor aprovar.`,
     });
   }, [toast]);
 
