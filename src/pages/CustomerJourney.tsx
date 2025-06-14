@@ -407,46 +407,66 @@ export default function CustomerJourney() {
           )}
         </div>
       ) : (
-        // Kanban da Jornada do Cliente
-        <div className="flex gap-4 p-6 min-w-max">
-          {pipelineStages.map(stage => (
-            <Card key={stage.id} className="w-80 flex-shrink-0">
-              <CardHeader>
-                <CardTitle>{stage.name}</CardTitle>
-              </CardHeader>
-              <CardContent
-                className="space-y-2 p-2"
-                onDragOver={(e) => handleDragOver(e)}
-                onDrop={(e) => handleDrop(e, stage.id)}
-              >
-                {getMessagesByStage(stage.id).map(message => (
-                  <div
-                    key={message.id}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, message.id)}
-                    className="bg-slate-50 rounded p-2 shadow-sm border flex items-center justify-between"
+        // Kanban da Jornada do Cliente: container com scroll horizontal e layout centralizado responsivo
+        <div className="relative bg-slate-50 flex-1 w-full">
+          <div className="overflow-x-auto">
+            <div className="flex gap-6 px-4 md:px-10 py-6 max-w-full md:max-w-[92vw] 2xl:max-w-[1400px] mx-auto min-h-[70vh]">
+              {pipelineStages.map(stage => (
+                <Card
+                  key={stage.id}
+                  className="w-80 flex-shrink-0 transition-shadow shadow-md hover:shadow-lg border border-slate-200 bg-white"
+                >
+                  <CardHeader>
+                    <CardTitle>{stage.name}</CardTitle>
+                  </CardHeader>
+                  <CardContent
+                    className="space-y-2 p-2"
+                    onDragOver={(e) => handleDragOver(e)}
+                    onDrop={(e) => handleDrop(e, stage.id)}
                   >
-                    <div>
-                      <div className="font-semibold text-sm">{message.title}</div>
-                      <div className="text-xs text-slate-500 flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {getDelayText(message.delay, message.delayUnit)}
+                    {getMessagesByStage(stage.id).map(message => (
+                      <div
+                        key={message.id}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, message.id)}
+                        className="bg-slate-50 rounded p-2 shadow-sm border flex items-center justify-between mb-2 transition-transform hover:scale-[1.02]"
+                      >
+                        <div>
+                          <div className="font-semibold text-sm">{message.title}</div>
+                          <div className="text-xs text-slate-500 flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {getDelayText(message.delay, message.delayUnit)}
+                          </div>
+                        </div>
+                        <div className="flex gap-2 items-center">
+                          <Badge variant="outline">{getTypeIcon(message.type)}</Badge>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleEdit(message)}
+                            className="text-blue-600 hover:text-blue-900"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDelete(message.id)}
+                            className="text-destructive hover:text-destructive-foreground"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Badge variant="outline">{getTypeIcon(message.type)}</Badge>
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(message)}>
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(message.id)}>
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          ))}
+                    ))}
+                    {getMessagesByStage(stage.id).length === 0 && (
+                      <div className="text-center py-8 text-slate-400 text-sm">Nenhuma mensagem neste estágio</div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </div>
