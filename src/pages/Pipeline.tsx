@@ -1,4 +1,5 @@
-import { useState } from 'react';
+
+import { useState, useEffect } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,6 +27,20 @@ export default function Pipeline() {
     responsible_id: user?.id || ''
   });
 
+  // Adicionando logs para depuração dos leads recebidos
+  useEffect(() => {
+    console.log('Todos os leads carregados:', leads);
+    if (leads.length > 0) {
+      leads.forEach(lead =>
+        console.log(
+          `[DEPURAÇÃO PIPELINE] Lead ${lead.name} (ID: ${lead.id}) está no estágio "${lead.pipeline_stage}"`
+        )
+      );
+    } else {
+      console.log('[DEPURAÇÃO PIPELINE] Nenhum lead carregado.');
+    }
+  }, [leads]);
+
   const handleDragStart = (e: React.DragEvent, leadId: string) => {
     e.dataTransfer.setData('leadId', leadId);
   };
@@ -42,7 +57,7 @@ export default function Pipeline() {
     if (lead && lead.pipeline_stage !== newStage) {
       console.log(`Movendo lead ${lead.name} de ${lead.pipeline_stage} para ${newStage}`);
       
-      // Se movendo para estágio "reunião", abrir modal de agendamento
+      // Se movendo para estágio "reuniao", abrir modal de agendamento
       if (newStage === 'reuniao') {
         setSelectedLead(leadId);
         setShowEventDialog(true);
@@ -109,11 +124,18 @@ export default function Pipeline() {
     });
   };
 
-  // Garante que os leads estejam sempre do mais novo para o mais antigo em cada estágio
+  // Retorna leads para um determinado stageId
+  // Importante: usa exatamente o id do estágio em pipelineStages para o filtro!
   const getLeadsByStage = (stageId: string) => {
-    return leads
+    // Garantir que o pipeline_stage do lead está sendo comparado com o mesmo valor do pipelineStages.id
+    const res = leads
       .filter(lead => lead.pipeline_stage === stageId)
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    // Log extra para investigar caso retorne vazio
+    if (res.length === 0) {
+      console.log(`[DEPURAÇÃO PIPELINE] Nenhum lead no estágio "${stageId}".`);
+    }
+    return res;
   };
 
   const eventTypes = [
@@ -152,13 +174,12 @@ export default function Pipeline() {
         </div>
       </div>
 
-      {/* Pipeline Kanban - somente esta área faz scroll horizontal */}
+      {/* Pipeline Kanban */}
       <div className="flex-1 overflow-hidden bg-slate-50">
         <div className="h-full overflow-x-auto overflow-y-hidden">
           <div className="flex gap-4 p-6 h-full" style={{ minWidth: `${pipelineStages.length * 320}px` }}>
             {pipelineStages.map(stage => {
               const leadsInStage = getLeadsByStage(stage.id);
-              
               return (
                 <div
                   key={stage.id}
@@ -180,7 +201,7 @@ export default function Pipeline() {
                     </div>
                   </div>
 
-                  {/* Cards dos leads - com scroll vertical interno */}
+                  {/* Cards dos leads */}
                   <div className="flex-1 overflow-y-auto p-4 space-y-3">
                     {leadsInStage.map(lead => (
                       <Card
@@ -226,7 +247,6 @@ export default function Pipeline() {
                         </CardContent>
                       </Card>
                     ))}
-
                     {leadsInStage.length === 0 && (
                       <div className="text-center py-8 text-slate-400 text-sm">
                         Nenhum lead neste estágio
