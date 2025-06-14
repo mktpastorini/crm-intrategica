@@ -20,7 +20,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 
 export default function Leads() {
   const { leads, users, loading, actionLoading, createLead, updateLead, deleteLead, loadLeads, loadUsers } = useCrm();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { toast } = useToast();
   const { handlePhoneChange } = usePhoneMask();
   const isMobile = useIsMobile();
@@ -120,11 +120,16 @@ export default function Leads() {
       console.log('Dados que serão enviados:', submitData);
 
       if (editingLead) {
+        console.log('Editando lead existente:', editingLead.id);
         await updateLead(editingLead.id, submitData);
-        toast({
-          title: "Lead atualizado",
-          description: "Lead foi atualizado com sucesso",
-        });
+        
+        // Se for usuário comercial, a notificação já foi enviada pelo contexto
+        if (profile?.role !== 'comercial') {
+          toast({
+            title: "Lead atualizado",
+            description: "Lead foi atualizado com sucesso",
+          });
+        }
       } else {
         await createLead(submitData);
         toast({
@@ -157,6 +162,7 @@ export default function Leads() {
   };
 
   const handleEdit = (lead: any) => {
+    console.log('Editando lead:', lead.name, 'User role:', profile?.role);
     setEditingLead(lead);
     setFormData({
       name: lead.name,
@@ -175,15 +181,21 @@ export default function Leads() {
   };
 
   const handleDelete = async (leadId: string) => {
-    if (!confirm('Tem certeza que deseja excluir este lead?')) return;
+    const lead = leads.find(l => l.id === leadId);
+    console.log('Excluindo lead:', lead?.name, 'User role:', profile?.role);
     
     try {
       await deleteLead(leadId);
-      toast({
-        title: "Lead excluído",
-        description: "Lead foi excluído com sucesso",
-      });
+      
+      // Se for usuário comercial, a notificação já foi enviada pelo contexto
+      if (profile?.role !== 'comercial') {
+        toast({
+          title: "Lead excluído",
+          description: "Lead foi excluído com sucesso",
+        });
+      }
     } catch (error) {
+      console.error('Erro ao excluir lead:', error);
       // Erro já tratado no contexto
     }
   };

@@ -1,3 +1,4 @@
+
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -67,12 +68,17 @@ export default function LeadsTable({ leads, onEditLead, onDeleteLead, actionLoad
   };
 
   const handleEditLead = (lead: Lead) => {
+    console.log('Clicando em editar lead:', lead.name, 'User role:', profile?.role);
     onEditLead(lead);
   };
 
   const handleDeleteLead = (leadId: string) => {
+    const lead = leads.find(l => l.id === leadId);
+    console.log('Clicando em excluir lead:', lead?.name, 'User role:', profile?.role);
+    
     if (profile?.role === 'comercial') {
       // Para usuários comerciais, não mostrar confirmação, apenas enviar solicitação
+      console.log('Enviando solicitação de exclusão para aprovação');
       onDeleteLead(leadId);
     } else {
       // Para admins e supervisores, mostrar confirmação antes de excluir
