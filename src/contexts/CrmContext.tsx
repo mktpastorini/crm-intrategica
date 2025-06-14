@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
@@ -41,6 +40,13 @@ interface Event {
   user_id?: string;
   created_at: string;
   updated_at: string;
+  type: string;
+  date: string;
+  time: string;
+  company?: string;
+  lead_name?: string;
+  responsible_id: string;
+  completed?: boolean;
 }
 
 interface PipelineStage {
@@ -62,18 +68,20 @@ interface PendingAction {
   type: string;
   user_name: string;
   description: string;
-  details: ActionDetails;
+  details: any; // Changed from ActionDetails to any to match Json
   status?: 'pending' | 'approved' | 'rejected';
   created_at: string;
   user_id?: string;
+  user?: any;
+  timestamp?: string;
 }
 
-interface ActionDetails {
-  leadId?: string;
-  leadName?: string;
-  eventId?: string;
-  eventTitle?: string;
-  changes?: Record<string, any>;
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  avatar_url?: string;
 }
 
 interface JourneyMessage {
@@ -95,10 +103,16 @@ interface CrmContextType {
   pipelineStages: PipelineStage[];
   categories: Category[];
   pendingActions: PendingAction[];
+  users: User[];
+  loading: boolean;
+  actionLoading: string | null;
   addLead: (lead: Omit<Lead, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
+  createLead: (lead: Omit<Lead, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
   updateLead: (id: string, updates: Partial<Lead>) => Promise<void>;
   deleteLead: (id: string) => Promise<void>;
+  moveLead: (leadId: string, newStage: string) => Promise<void>;
   addEvent: (event: Omit<Event, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
+  createEvent: (event: any) => Promise<void>;
   updateEvent: (id: string, updates: Partial<Event>) => Promise<void>;
   deleteEvent: (id: string) => Promise<void>;
   addCategory: (category: Omit<Category, 'id'>) => void;
@@ -115,6 +129,7 @@ interface CrmContextType {
   loadPendingActions: () => Promise<void>;
   loadLeads: () => Promise<void>;
   loadEvents: () => Promise<void>;
+  loadUsers: () => Promise<void>;
 }
 
 const CrmContext = createContext<CrmContextType | undefined>(undefined);
@@ -126,6 +141,9 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   
   const [leads, setLeads] = useState<Lead[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [pipelineStages, setPipelineStages] = useState<PipelineStage[]>([
     { id: '1', name: 'Qualificação', description: 'Primeiro contato com o lead', order: 1, color: '#6366F1' },
     { id: '2', name: 'Proposta', description: 'Apresentação da proposta comercial', order: 2, color: '#22C55E' },
@@ -212,10 +230,26 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     loadLeads();
     loadEvents();
     loadPendingActions();
+    loadUsers();
   }, []);
+
+  const loadUsers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      if (data) setUsers(data);
+    } catch (error: any) {
+      console.error('Erro ao carregar usuários:', error);
+    }
+  };
 
   const loadLeads = async () => {
     try {
+      setLoading(true);
       const { data, error } = await supabase
         .from('leads')
         .select('*')
@@ -230,6 +264,8 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         description: "Erro ao carregar leads",
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -253,7 +289,14 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           lead_id: event.lead_id || undefined,
           user_id: event.responsible_id,
           created_at: event.created_at,
-          updated_at: event.created_at
+          updated_at: event.created_at,
+          type: event.type,
+          date: event.date,
+          time: event.time,
+          company: event.company,
+          lead_name: event.lead_name,
+          responsible_id: event.responsible_id,
+          completed: event.completed
         }));
         setEvents(transformedEvents);
       }
@@ -349,8 +392,13 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const moveLead = async (leadId: string, newStage: string) => {
+    await updateLead(leadId, { pipeline_stage: newStage });
+  };
+
   const addLead = async (leadData: Omit<Lead, 'id' | 'created_at' | 'updated_at'>) => {
     try {
+      setActionLoading('create-lead');
       // Ensure required fields are present
       const leadToInsert = {
         ...leadData,
@@ -390,21 +438,26 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         description: "Erro ao criar lead",
         variant: "destructive",
       });
+    } finally {
+      setActionLoading(null);
     }
   };
 
+  const createLead = addLead; // Alias for addLead
+
   const addEvent = async (eventData: Omit<Event, 'id' | 'created_at' | 'updated_at'>) => {
     try {
+      setActionLoading('create-event');
       // Transform Event interface to database format
       const dbEventData = {
         title: eventData.title,
-        lead_name: eventData.description || '',
-        date: eventData.start_time.split('T')[0],
-        time: eventData.start_time.split('T')[1],
-        company: eventData.location || '',
+        lead_name: eventData.description || eventData.lead_name || '',
+        date: eventData.start_time ? eventData.start_time.split('T')[0] : eventData.date,
+        time: eventData.start_time ? eventData.start_time.split('T')[1] : eventData.time,
+        company: eventData.location || eventData.company || '',
         lead_id: eventData.lead_id || null,
-        responsible_id: eventData.user_id || user?.id || '',
-        type: 'meeting'
+        responsible_id: eventData.user_id || eventData.responsible_id || user?.id || '',
+        type: eventData.type || 'meeting'
       };
 
       const { data, error } = await supabase
@@ -427,7 +480,14 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           lead_id: data.lead_id || undefined,
           user_id: data.responsible_id,
           created_at: data.created_at,
-          updated_at: data.created_at
+          updated_at: data.created_at,
+          type: data.type,
+          date: data.date,
+          time: data.time,
+          company: data.company,
+          lead_name: data.lead_name,
+          responsible_id: data.responsible_id,
+          completed: data.completed
         };
         setEvents(prev => [...prev, transformedEvent]);
       }
@@ -443,11 +503,16 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         description: "Erro ao criar evento",
         variant: "destructive",
       });
+    } finally {
+      setActionLoading(null);
     }
   };
 
+  const createEvent = addEvent; // Alias for addEvent
+
   const updateEvent = async (id: string, updates: Partial<Event>) => {
     try {
+      setActionLoading(id);
       // Transform Event interface updates to database format
       const dbUpdates: any = {};
       if (updates.title) dbUpdates.title = updates.title;
@@ -455,6 +520,7 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (updates.location) dbUpdates.company = updates.location;
       if (updates.lead_id !== undefined) dbUpdates.lead_id = updates.lead_id;
       if (updates.user_id) dbUpdates.responsible_id = updates.user_id;
+      if (updates.completed !== undefined) dbUpdates.completed = updates.completed;
       if (updates.start_time) {
         dbUpdates.date = updates.start_time.split('T')[0];
         dbUpdates.time = updates.start_time.split('T')[1];
@@ -481,7 +547,14 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           lead_id: data.lead_id || undefined,
           user_id: data.responsible_id,
           created_at: data.created_at,
-          updated_at: data.created_at
+          updated_at: data.created_at,
+          type: data.type,
+          date: data.date,
+          time: data.time,
+          company: data.company,
+          lead_name: data.lead_name,
+          responsible_id: data.responsible_id,
+          completed: data.completed
         };
         setEvents(prev => prev.map(event => event.id === id ? transformedEvent : event));
       }
@@ -497,6 +570,8 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         description: "Erro ao atualizar evento",
         variant: "destructive",
       });
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -607,7 +682,8 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const actionToInsert = {
         ...action,
         status: 'pending',
-        user_id: action.user_id || user?.id || ''
+        user_id: action.user_id || user?.id || '',
+        details: action.details // Keep as is, will be stored as JSON
       };
 
       const { data, error } = await supabase
@@ -619,7 +695,13 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (error) throw error;
 
       if (data) {
-        setPendingActions(prev => [...prev, data]);
+        // Transform the data to match PendingAction interface
+        const transformedAction = {
+          ...data,
+          user: users.find(u => u.id === data.user_id),
+          timestamp: data.created_at
+        };
+        setPendingActions(prev => [...prev, transformedAction]);
         toast({
           title: "Solicitação enviada",
           description: "Aguardando aprovação do supervisor",
@@ -640,7 +722,7 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const action = pendingActions.find(a => a.id === actionId);
       if (!action) throw new Error('Ação não encontrada');
 
-      const actionDetails = action.details as ActionDetails;
+      const actionDetails = action.details as any;
 
       if (action.type === 'delete_lead' && actionDetails.leadId) {
         const { error } = await supabase
@@ -690,7 +772,14 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             lead_id: data.lead_id || undefined,
             user_id: data.responsible_id,
             created_at: data.created_at,
-            updated_at: data.created_at
+            updated_at: data.created_at,
+            type: data.type,
+            date: data.date,
+            time: data.time,
+            company: data.company,
+            lead_name: data.lead_name,
+            responsible_id: data.responsible_id,
+            completed: data.completed
           };
           setEvents(prev => prev.map(event => event.id === actionDetails.eventId ? transformedEvent : event));
         }
@@ -756,7 +845,15 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      if (data) setPendingActions(data);
+      if (data) {
+        // Transform the data to match PendingAction interface
+        const transformedActions = data.map(action => ({
+          ...action,
+          user: users.find(u => u.id === action.user_id),
+          timestamp: action.created_at
+        }));
+        setPendingActions(transformedActions);
+      }
     } catch (error: any) {
       console.error('Erro ao carregar solicitações:', error);
       toast({
@@ -774,10 +871,16 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       pipelineStages,
       categories,
       pendingActions,
+      users,
+      loading,
+      actionLoading,
       addLead,
+      createLead,
       updateLead,
       deleteLead,
+      moveLead,
       addEvent,
+      createEvent,
       updateEvent,
       deleteEvent,
       addCategory,
@@ -794,6 +897,7 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       loadPendingActions,
       loadLeads,
       loadEvents,
+      loadUsers,
     }}>
       {children}
     </CrmContext.Provider>
