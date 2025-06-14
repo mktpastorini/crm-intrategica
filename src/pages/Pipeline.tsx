@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -17,7 +18,14 @@ import type { Lead, PipelineStage } from '@/components/pipeline/types';
 export default function Pipeline() {
   // Inicializar o rastreador de atividades
   
-  const { leads, pipelineStages, moveLead, addEvent, users } = useCrm();
+  // Fix: Explicitly cast leads and pipelineStages with the canonical types
+  const context = useCrm();
+  const leads = context.leads as Lead[];
+  const pipelineStages = context.pipelineStages as PipelineStage[];
+  const moveLead = context.moveLead;
+  const addEvent = context.addEvent;
+  const users = context.users;
+
   const { user, profile } = useAuth();
   const { toast } = useToast();
   const [showEventDialog, setShowEventDialog] = useState(false);
