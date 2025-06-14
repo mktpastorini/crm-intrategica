@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -29,17 +28,22 @@ export default function Pipeline() {
 
   // Adicionando logs para depuração dos leads recebidos
   useEffect(() => {
-    console.log('Todos os leads carregados:', leads);
-    if (leads.length > 0) {
-      leads.forEach(lead =>
-        console.log(
-          `[DEPURAÇÃO PIPELINE] Lead ${lead.name} (ID: ${lead.id}) está no estágio "${lead.pipeline_stage}"`
-        )
-      );
-    } else {
-      console.log('[DEPURAÇÃO PIPELINE] Nenhum lead carregado.');
-    }
-  }, [leads]);
+    // Log dos estágios cadastrados para debug
+    console.log('[DEPURAÇÃO PIPELINE] pipelineStages:', pipelineStages);
+    // Log todos os leads recebidos e estágio atual:
+    leads.forEach((lead) => {
+      console.log(`[DEPURAÇÃO PIPELINE] Lead ${lead.name} (${lead.id}) - estágio: ${lead.pipeline_stage}`);
+    });
+  }, [leads, pipelineStages]);
+
+  // -- IDs fixos para estágios principais
+  // O primeiro estágio precisa sempre ser o "Aguardando Início" ('aguardando_inicio')
+  // O estágio de reunião precisa sempre ser "Reunião" ('reuniao')
+  // Caso não exista no pipelineStages, exibir aviso (ou criar fallback)
+
+  // Encontrar ids dos estágios:
+  const primeiroStageId = pipelineStages.find(s => s.id === "aguardando_inicio")?.id || pipelineStages[0]?.id;
+  const reuniaoStageId = pipelineStages.find(s => s.id === "reuniao")?.id || null;
 
   const handleDragStart = (e: React.DragEvent, leadId: string) => {
     e.dataTransfer.setData('leadId', leadId);
@@ -54,15 +58,17 @@ export default function Pipeline() {
     const leadId = e.dataTransfer.getData('leadId');
     const lead = leads.find(l => l.id === leadId);
     
-    if (lead && lead.pipeline_stage !== newStage) {
+    if (!lead) return;
+
+    // Para estágio de reunião, abrir modal
+    if (reuniaoStageId && newStage === reuniaoStageId) {
+      setSelectedLead(leadId);
+      setShowEventDialog(true);
+      return;
+    }
+
+    if (lead.pipeline_stage !== newStage) {
       console.log(`Movendo lead ${lead.name} de ${lead.pipeline_stage} para ${newStage}`);
-      
-      // Se movendo para estágio "reuniao", abrir modal de agendamento
-      if (newStage === 'reuniao') {
-        setSelectedLead(leadId);
-        setShowEventDialog(true);
-        return;
-      }
       
       moveLead(leadId, newStage);
       toast({
@@ -85,15 +91,15 @@ export default function Pipeline() {
     const lead = leads.find(l => l.id === selectedLead);
     if (!lead) return;
 
-    // Criar evento com o formato correto
+    // Agendar evento para o lead
     const startTime = `${eventData.date}T${eventData.time}`;
     addEvent({
       title: `${eventData.type === 'reunion' ? 'Reunião' : 
-              eventData.type === 'call' ? 'Telefonema' :
-              eventData.type === 'whatsapp' ? 'WhatsApp' : 'E-mail'} - ${lead.name}`,
+        eventData.type === 'call' ? 'Telefonema' :
+        eventData.type === 'whatsapp' ? 'WhatsApp' : 'E-mail'} - ${lead.name}`,
       description: lead.name,
       start_time: startTime,
-      end_time: startTime, // Same as start time for now
+      end_time: startTime,
       location: lead.company || '',
       lead_id: selectedLead,
       user_id: eventData.responsible_id,
@@ -105,10 +111,11 @@ export default function Pipeline() {
       responsible_id: eventData.responsible_id
     });
 
-    // Mover lead para estágio reunião
-    moveLead(selectedLead, 'reuniao');
+    // Após agendar, move para reunião
+    if (reuniaoStageId) {
+      moveLead(selectedLead, reuniaoStageId);
+    }
 
-    // Reset form
     setEventData({
       type: 'reunion',
       date: '',
@@ -127,15 +134,13 @@ export default function Pipeline() {
   // Retorna leads para um determinado stageId
   // Importante: usa exatamente o id do estágio em pipelineStages para o filtro!
   const getLeadsByStage = (stageId: string) => {
-    // Garantir que o pipeline_stage do lead está sendo comparado com o mesmo valor do pipelineStages.id
-    const res = leads
-      .filter(lead => lead.pipeline_stage === stageId)
+    const leadsEmStage = leads
+      .filter(lead => {
+        return lead.pipeline_stage === stageId
+      })
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    // Log extra para investigar caso retorne vazio
-    if (res.length === 0) {
-      console.log(`[DEPURAÇÃO PIPELINE] Nenhum lead no estágio "${stageId}".`);
-    }
-    return res;
+    console.log(`[DEPURAÇÃO PIPELINE] Leads no estágio '${stageId}':`, leadsEmStage.map(l => l.name));
+    return leadsEmStage;
   };
 
   const eventTypes = [
