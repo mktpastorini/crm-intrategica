@@ -85,7 +85,7 @@ export default function Dashboard() {
       }
       
       monthlyData[monthKey].leads++;
-      if (lead.pipeline_stage === 'contrato-assinado') {
+      if (lead.pipeline_stage === STAGE_CONTRATO_ASSINADO) {
         monthlyData[monthKey].fechamentos++;
       }
     });
@@ -111,7 +111,7 @@ export default function Dashboard() {
         userStats[userId] = { leads: 0, fechamentos: 0, userName };
       }
       userStats[userId].leads++;
-      if (lead.pipeline_stage === 'contrato-assinado') {
+      if (lead.pipeline_stage === STAGE_CONTRATO_ASSINADO) {
         userStats[userId].fechamentos++;
       }
     });
@@ -176,7 +176,7 @@ export default function Dashboard() {
         ...foundUser,
         leads: userLeads,
         events: userEvents,
-        closedDeals: userLeads.filter(lead => lead.pipeline_stage === 'contrato-assinado').length,
+        closedDeals: userLeads.filter(lead => lead.pipeline_stage === STAGE_CONTRATO_ASSINADO).length,
         totalLeads: userLeads.length,
         completedMeetings: userEvents.filter(event => event.completed === true).length,
         scheduledMeetings: userEvents.length
