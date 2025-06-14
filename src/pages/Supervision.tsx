@@ -6,10 +6,17 @@ import { Shield, Clock, CheckCircle, XCircle, User, Edit, Trash2 } from 'lucide-
 import { useCrm } from '@/contexts/CrmContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
 
 export default function Supervision() {
   const { pendingActions, approveAction, rejectAction } = useCrm();
   const { profile } = useAuth();
+
+  // Debug log para verificar as ações pendentes
+  useEffect(() => {
+    console.log('Pending actions na página de supervisão:', pendingActions);
+    console.log('Total de ações pendentes:', pendingActions.length);
+  }, [pendingActions]);
 
   // Apenas supervisores e admins podem acessar
   if (profile?.role === 'comercial') {
@@ -113,6 +120,9 @@ export default function Supervision() {
           <CardTitle className="flex items-center gap-2">
             <Shield className="w-5 h-5" />
             Ações Pendentes de Aprovação
+            <span className="text-sm font-normal text-slate-500">
+              ({pendingActions.length} {pendingActions.length === 1 ? 'ação' : 'ações'})
+            </span>
           </CardTitle>
           <CardDescription>
             Revise e aprove ou rejeite as solicitações dos usuários comerciais

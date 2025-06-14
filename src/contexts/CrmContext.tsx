@@ -216,13 +216,20 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
   };
 
   const requestAction = async (action: Omit<PendingAction, 'id' | 'timestamp'>) => {
+    console.log('Enviando solicitação para aprovação:', action);
+    
     const newAction: PendingAction = {
       id: crypto.randomUUID(),
       ...action,
       timestamp: new Date().toLocaleString('pt-BR'),
     };
 
-    setPendingActions(prev => [...prev, newAction]);
+    console.log('Nova ação criada:', newAction);
+    setPendingActions(prev => {
+      const updated = [...prev, newAction];
+      console.log('Actions atualizadas:', updated);
+      return updated;
+    });
 
     toast({
       title: "Solicitação enviada",
@@ -285,11 +292,15 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     const existingLead = leads.find(l => l.id === id);
     if (!existingLead) return;
 
+    console.log('Profile role:', profile?.role);
+    console.log('Updating lead with data:', leadData);
+
     // Para usuários comerciais, sempre enviar para aprovação
     if (profile?.role === 'comercial') {
+      console.log('Usuário comercial detectado, enviando para aprovação');
       await requestAction({
         type: 'edit_lead',
-        user: profile.name,
+        user: profile.name || profile.email,
         description: `Solicitação para editar lead: ${existingLead.name}`,
         details: { 
           leadId: id,
@@ -336,11 +347,15 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     const leadToDelete = leads.find(l => l.id === id);
     if (!leadToDelete) return;
 
+    console.log('Profile role:', profile?.role);
+    console.log('Deleting lead:', leadToDelete.name);
+
     // Para usuários comerciais, sempre enviar para aprovação
     if (profile?.role === 'comercial') {
+      console.log('Usuário comercial detectado, enviando para aprovação');
       await requestAction({
         type: 'delete_lead',
-        user: profile.name,
+        user: profile.name || profile.email,
         description: `Solicitação para excluir lead: ${leadToDelete.name}`,
         details: { 
           leadId: id,
@@ -503,11 +518,15 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     const existingEvent = events.find(e => e.id === id);
     if (!existingEvent) return;
 
+    console.log('Profile role:', profile?.role);
+    console.log('Updating event with data:', eventData);
+
     // Para usuários comerciais, sempre enviar para aprovação
     if (profile?.role === 'comercial') {
+      console.log('Usuário comercial detectado, enviando para aprovação');
       await requestAction({
         type: 'edit_event',
-        user: profile.name,
+        user: profile.name || profile.email,
         description: `Solicitação para editar evento: ${existingEvent.title}`,
         details: { 
           eventId: id,
@@ -554,11 +573,15 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     const eventToDelete = events.find(e => e.id === id);
     if (!eventToDelete) return;
 
+    console.log('Profile role:', profile?.role);
+    console.log('Deleting event:', eventToDelete.title);
+
     // Para usuários comerciais, sempre enviar para aprovação
     if (profile?.role === 'comercial') {
+      console.log('Usuário comercial detectado, enviando para aprovação');
       await requestAction({
         type: 'delete_event',
-        user: profile.name,
+        user: profile.name || profile.email,
         description: `Solicitação para excluir evento: ${eventToDelete.title}`,
         details: { 
           eventId: id,
