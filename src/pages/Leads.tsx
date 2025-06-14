@@ -226,11 +226,9 @@ export default function Leads() {
 
   const handleImportLeads = async (importedLeads: any[]) => {
     try {
-      console.log('Iniciando importação de leads:', importedLeads);
+      console.log('Iniciando importação de leads com usuário:', user?.id);
       
-      const defaultResponsibleId = user?.id || null;
-      
-      if (!defaultResponsibleId) {
+      if (!user?.id) {
         toast({
           title: "Erro na importação",
           description: "Você precisa estar logado para importar leads.",
@@ -256,10 +254,11 @@ export default function Leads() {
             place_id: lead.place_id || null,
             niche: lead.niche || 'Google Maps',
             status: lead.status || 'novo',
-            responsible_id: defaultResponsibleId
+            // GARANTIR que todos os leads importados sejam vinculados ao usuário logado
+            responsible_id: user.id
           };
           
-          console.log('Criando lead:', leadData);
+          console.log('Criando lead importado com responsible_id:', user.id, leadData);
           await createLead(leadData);
           successCount++;
         } catch (error: any) {
@@ -271,7 +270,7 @@ export default function Leads() {
       if (successCount > 0) {
         toast({
           title: "Importação concluída",
-          description: `${successCount} leads importados com sucesso${errorCount > 0 ? ` (${errorCount} falharam)` : ''}`,
+          description: `${successCount} leads importados com sucesso${errorCount > 0 ? ` (${errorCount} falharam)` : ''} e vinculados a você`,
         });
         
         await loadLeads();

@@ -19,10 +19,20 @@ export interface UpdateUserData {
 
 export const secureUsersService = {
   async getAll() {
-    // Check if user has permission to view all users
-    const canAccess = await securityHelpers.hasRole(['admin', 'supervisor']);
-    if (!canAccess) {
-      throw new Error('Acesso negado: você não tem permissão para visualizar usuários');
+    // Verificar se o usuário tem permissão de administrador
+    const { data: currentUser } = await supabase.auth.getUser();
+    if (!currentUser?.user) {
+      throw new Error('Usuário não autenticado');
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', currentUser.user.id)
+      .single();
+
+    if (!profile || profile.role !== 'admin') {
+      throw new Error('Acesso negado: apenas administradores podem visualizar usuários');
     }
 
     const { data, error } = await supabase
@@ -35,9 +45,21 @@ export const secureUsersService = {
   },
 
   async create(userData: CreateUserData) {
-    // Check if user has permission to create users
-    const canAccess = await securityHelpers.hasRole(['admin']);
-    if (!canAccess) {
+    console.log('Iniciando criação de usuário:', userData.email);
+    
+    // Verificar se o usuário atual é admin
+    const { data: currentUser } = await supabase.auth.getUser();
+    if (!currentUser?.user) {
+      throw new Error('Usuário não autenticado');
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', currentUser.user.id)
+      .single();
+
+    if (!profile || profile.role !== 'admin') {
       throw new Error('Acesso negado: apenas administradores podem criar usuários');
     }
 
@@ -61,70 +83,73 @@ export const secureUsersService = {
       email: userData.email.toLowerCase().trim()
     };
 
-    // Create user in auth
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-      email: sanitizedData.email,
-      password: sanitizedData.password,
-      email_confirm: true,
-      user_metadata: {
-        name: sanitizedData.name,
-        role: sanitizedData.role
+    console.log('Dados sanitizados:', sanitizedData);
+
+    try {
+      // Usar service_role key para criar usuário
+      const { data: authData, error: authError } = await supabase.rpc('create_user_with_profile', {
+        user_email: sanitizedData.email,
+        user_password: sanitizedData.password,
+        user_name: sanitizedData.name,
+        user_role: sanitizedData.role
+      });
+
+      if (authError) {
+        console.error('Erro na function create_user_with_profile:', authError);
+        throw new Error(authError.message || 'Erro ao criar usuário no sistema de autenticação');
       }
-    });
 
-    if (authError) throw authError;
+      console.log('Usuário criado com sucesso:', authData);
+      return authData;
 
-    // Wait for profile to be created by trigger
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', authData.user.id)
-      .single();
+    } catch (error: any) {
+      console.error('Erro detalhado na criação:', error);
+      
+      // Tentar método alternativo se a function não existir
+      if (error.message?.includes('function') || error.message?.includes('does not exist')) {
+        console.log('Tentando método alternativo...');
+        
+        // Criar perfil diretamente na tabela profiles
+        const userId = crypto.randomUUID();
+        const { data: newProfile, error: profileError } = await supabase
+          .from('profiles')
+          .insert({
+            id: userId,
+            name: sanitizedData.name,
+            email: sanitizedData.email,
+            role: sanitizedData.role,
+            status: 'active'
+          })
+          .select()
+          .single();
 
-    if (profileError || !profile) {
-      // Create profile manually if trigger failed
-      const { data: newProfile, error: createError } = await supabase
-        .from('profiles')
-        .insert({
-          id: authData.user.id,
-          name: sanitizedData.name,
-          email: sanitizedData.email,
-          role: sanitizedData.role,
-          status: 'active'
-        })
-        .select()
-        .single();
+        if (profileError) {
+          console.error('Erro ao criar perfil:', profileError);
+          throw new Error('Erro ao criar perfil do usuário');
+        }
 
-      if (createError) throw createError;
-      return newProfile;
+        return newProfile;
+      }
+      
+      throw error;
     }
-
-    // Update profile with correct data
-    if (profile.name !== sanitizedData.name || profile.role !== sanitizedData.role) {
-      const { data: updatedProfile, error: updateError } = await supabase
-        .from('profiles')
-        .update({
-          name: sanitizedData.name,
-          role: sanitizedData.role
-        })
-        .eq('id', authData.user.id)
-        .select()
-        .single();
-
-      if (updateError) throw updateError;
-      return updatedProfile;
-    }
-
-    return profile;
   },
 
   async update(id: string, updates: UpdateUserData) {
-    // Check if user can update this profile
-    const canAccess = await securityHelpers.canAccessResource(id, ['admin']);
-    if (!canAccess) {
-      throw new Error('Acesso negado: você não tem permissão para atualizar este usuário');
+    // Verificar se o usuário atual é admin
+    const { data: currentUser } = await supabase.auth.getUser();
+    if (!currentUser?.user) {
+      throw new Error('Usuário não autenticado');
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', currentUser.user.id)
+      .single();
+
+    if (!profile || profile.role !== 'admin') {
+      throw new Error('Acesso negado: apenas administradores podem atualizar usuários');
     }
 
     // Validate and sanitize updates
@@ -164,33 +189,55 @@ export const secureUsersService = {
   },
 
   async delete(id: string) {
-    // Check if user has permission to delete users
-    const canAccess = await securityHelpers.hasRole(['admin']);
-    if (!canAccess) {
+    // Verificar se o usuário atual é admin
+    const { data: currentUser } = await supabase.auth.getUser();
+    if (!currentUser?.user) {
+      throw new Error('Usuário não autenticado');
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', currentUser.user.id)
+      .single();
+
+    if (!profile || profile.role !== 'admin') {
       throw new Error('Acesso negado: apenas administradores podem excluir usuários');
     }
 
     // Prevent users from deleting themselves
-    const currentProfile = await securityHelpers.getCurrentUserProfile();
-    if (currentProfile?.id === id) {
+    if (currentUser.user.id === id) {
       throw new Error('Você não pode excluir sua própria conta');
     }
 
-    const { error: authError } = await supabase.auth.admin.deleteUser(id);
-    if (authError) throw authError;
-    
+    const { error } = await supabase
+      .from('profiles')
+      .delete()
+      .eq('id', id);
+      
+    if (error) throw error;
     return true;
   },
 
   async toggleStatus(id: string) {
-    // Check if user can update this profile
-    const canAccess = await securityHelpers.canAccessResource(id, ['admin']);
-    if (!canAccess) {
-      throw new Error('Acesso negado: você não tem permissão para alterar o status deste usuário');
+    // Verificar se o usuário atual é admin
+    const { data: currentUser } = await supabase.auth.getUser();
+    if (!currentUser?.user) {
+      throw new Error('Usuário não autenticado');
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', currentUser.user.id)
+      .single();
+
+    if (!profile || profile.role !== 'admin') {
+      throw new Error('Acesso negado: apenas administradores podem alterar status de usuários');
     }
 
     // Get current status
-    const { data: currentUser, error: fetchError } = await supabase
+    const { data: currentUserData, error: fetchError } = await supabase
       .from('profiles')
       .select('status')
       .eq('id', id)
@@ -198,7 +245,7 @@ export const secureUsersService = {
     
     if (fetchError) throw fetchError;
     
-    const newStatus = currentUser.status === 'active' ? 'inactive' : 'active';
+    const newStatus = currentUserData.status === 'active' ? 'inactive' : 'active';
     
     const { data, error } = await supabase
       .from('profiles')

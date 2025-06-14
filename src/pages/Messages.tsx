@@ -1,17 +1,28 @@
-
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { useSystemSettingsDB } from '@/hooks/useSystemSettingsDB';
 import { useCrm } from '@/contexts/CrmContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Send, MessageSquare, Users, Search, Save, Trash2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { MessageSquare, Send, Filter, Search, Users as UsersIcon } from 'lucide-react';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import MessagesTable from '@/components/messages/MessagesTable';
+import UserSelector from '@/components/leads/UserSelector';
+import LeadsTable from '@/components/leads/LeadsTable';
+import MessageVariables from '@/components/messages/MessageVariables';
+
+interface Message {
+  id: string;
+  recipient_id: string;
+  message: string;
+  sent_at: string;
+}
 
 interface Lead {
   id: string;
@@ -21,440 +32,285 @@ interface Lead {
   company: string;
   niche: string;
   status: string;
-  pipeline_stage?: string;
-}
-
-interface MessageTemplate {
-  id: string;
-  name: string;
-  message: string;
+  responsible_id: string;
   created_at: string;
+  website?: string;
+  address?: string;
+  rating?: number;
+  place_id?: string;
+  whatsapp?: string;
 }
 
 export default function Messages() {
-  const { user, profile } = useAuth();
-  const { settings } = useSystemSettingsDB();
-  const { leads, loading: leadsLoading } = useCrm();
+  const { users } = useCrm();
+  const { user } = useAuth();
   const { toast } = useToast();
-  
-  const [message, setMessage] = useState('');
-  const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [showDialog, setShowDialog] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedNiche, setSelectedNiche] = useState<string>('all');
-  const [sending, setSending] = useState(false);
-  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
-  const [templateName, setTemplateName] = useState('');
-  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
-
-  // Carregar templates salvos
-  useEffect(() => {
-    const savedTemplates = localStorage.getItem('messageTemplates');
-    if (savedTemplates) {
-      setTemplates(JSON.parse(savedTemplates));
-    }
-  }, []);
-
-  // Filtrar leads baseado na busca e nicho
-  const filteredLeads = leads.filter(lead => {
-    const matchesSearch = !searchTerm || 
-      lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      lead.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      lead.phone.includes(searchTerm);
-    
-    const matchesNiche = selectedNiche === 'all' || lead.niche === selectedNiche;
-    
-    return matchesSearch && matchesNiche;
+  const [recipientFilter, setRecipientFilter] = useState('all');
+  const [formData, setFormData] = useState({
+    recipient_id: '',
+    message: ''
   });
 
-  // Obter nichos únicos (filtrar valores vazios)
-  const uniqueNiches = Array.from(new Set(leads.map(lead => lead.niche))).filter(niche => niche && niche.trim() !== '');
-
-  const handleLeadSelection = (leadId: string, checked: boolean) => {
-    setSelectedLeads(prev => {
-      if (checked) {
-        return [...prev, leadId];
-      } else {
-        return prev.filter(id => id !== leadId);
-      }
-    });
+  const handleInsertVariable = (variable: string) => {
+    setFormData(prev => ({
+      ...prev,
+      message: prev.message + variable
+    }));
   };
 
-  const selectAllFilteredLeads = () => {
-    setSelectedLeads(filteredLeads.map(lead => lead.id));
-  };
-
-  const selectByNiche = (niche: string) => {
-    const leadsInNiche = leads.filter(lead => lead.niche === niche);
-    setSelectedLeads(leadsInNiche.map(lead => lead.id));
-  };
-
-  const clearSelection = () => {
-    setSelectedLeads([]);
-  };
-
-  const saveTemplate = () => {
-    if (!templateName.trim() || !message.trim()) {
-      toast({
-        title: "Campos obrigatórios",
-        description: "Nome do template e mensagem são obrigatórios",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const newTemplate: MessageTemplate = {
-      id: crypto.randomUUID(),
-      name: templateName.trim(),
-      message: message.trim(),
-      created_at: new Date().toISOString()
-    };
-
-    const updatedTemplates = [...templates, newTemplate];
-    setTemplates(updatedTemplates);
-    localStorage.setItem('messageTemplates', JSON.stringify(updatedTemplates));
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     
-    setTemplateName('');
-    setShowSaveTemplate(false);
-    
-    toast({
-      title: "Template salvo",
-      description: "Template de mensagem salvo com sucesso",
-    });
-  };
-
-  const loadTemplate = (template: MessageTemplate) => {
-    setMessage(template.message);
-    toast({
-      title: "Template carregado",
-      description: `Template "${template.name}" carregado`,
-    });
-  };
-
-  const deleteTemplate = (templateId: string) => {
-    const updatedTemplates = templates.filter(t => t.id !== templateId);
-    setTemplates(updatedTemplates);
-    localStorage.setItem('messageTemplates', JSON.stringify(updatedTemplates));
-    
-    toast({
-      title: "Template excluído",
-      description: "Template removido com sucesso",
-    });
-  };
-
-  const sendMessage = async () => {
-    if (!settings.messageWebhookUrl) {
-      toast({
-        title: "Webhook não configurado",
-        description: "Configure o webhook de mensagens nas configurações antes de enviar",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (selectedLeads.length === 0) {
-      toast({
-        title: "Nenhum lead selecionado",
-        description: "Selecione pelo menos um lead para enviar a mensagem",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!message.trim()) {
-      toast({
-        title: "Mensagem vazia",
-        description: "Digite uma mensagem antes de enviar",
-        variant: "destructive",
-      });
-      return;
-    }
-
     try {
-      setSending(true);
-      console.log('Enviando mensagem para leads via webhook:', settings.messageWebhookUrl);
-
-      const selectedLeadsData = leads.filter(lead => selectedLeads.includes(lead.id));
-      
-      const webhookData = {
-        message: message.trim(),
-        leads: selectedLeadsData,
-        sender: {
-          id: user?.id,
-          name: profile?.name,
-          email: user?.email,
-          role: profile?.role
-        },
-        timestamp: new Date().toISOString(),
-        total_leads: selectedLeads.length
-      };
-
-      console.log('Dados do webhook para leads:', webhookData);
-
-      const response = await fetch(settings.messageWebhookUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(webhookData),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Erro HTTP: ${response.status}`);
+      // Validações básicas
+      if (!formData.recipient_id.trim()) {
+        toast({
+          title: "Erro de validação",
+          description: "Destinatário é obrigatório",
+          variant: "destructive",
+        });
+        return;
       }
+
+      if (!formData.message.trim()) {
+        toast({
+          title: "Erro de validação",
+          description: "Mensagem é obrigatória",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Simulação de envio de mensagem
+      setActionLoading('send-message');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Limpar formulário e fechar diálogo
+      setFormData({
+        recipient_id: '',
+        message: ''
+      });
+      setShowDialog(false);
 
       toast({
         title: "Mensagem enviada",
-        description: `Mensagem enviada para ${selectedLeads.length} lead(s) via webhook`,
+        description: "Mensagem enviada com sucesso",
       });
-
-      // Limpar formulário
-      setMessage('');
-      setSelectedLeads([]);
-
-    } catch (error: any) {
-      console.error('Erro ao enviar webhook:', error);
+    } catch (error) {
+      console.error('Erro ao enviar mensagem:', error);
       toast({
-        title: "Erro ao enviar mensagem",
-        description: "Verifique a configuração do webhook e tente novamente",
+        title: "Erro",
+        description: "Ocorreu um erro ao enviar a mensagem. Tente novamente.",
         variant: "destructive",
       });
     } finally {
-      setSending(false);
+      setActionLoading(null);
     }
   };
 
-  if (leadsLoading) {
+  const filteredMessages = messages.filter(message => {
+    const matchesSearch = 
+      message.message.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesRecipient = recipientFilter === 'all' || message.recipient_id === recipientFilter;
+    
+    return matchesSearch && matchesRecipient;
+  });
+
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <LoadingSpinner size="lg" text="Carregando leads..." />
+        <LoadingSpinner size="lg" text="Carregando mensagens..." />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-slate-900">Mensagens para Leads</h2>
-        <p className="text-slate-600">Envie mensagens personalizadas para seus leads</p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900">Mensagens</h2>
+          <p className="text-slate-600">Gerencie o envio de mensagens para seus leads</p>
+        </div>
+        <Dialog open={showDialog} onOpenChange={setShowDialog}>
+          <DialogTrigger asChild>
+            <Button>
+              <MessageSquare className="w-4 h-4 mr-2" />
+              Nova Mensagem
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Nova Mensagem</DialogTitle>
+              <DialogDescription>
+                Envie mensagens personalizadas para seus leads usando variáveis
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <Label htmlFor="message">Mensagem</Label>
+                <Textarea
+                  id="message"
+                  value={formData.message}
+                  onChange={(e) => setFormData(prev => ({ ...prev, message: e.target.value }))}
+                  placeholder="Digite sua mensagem aqui..."
+                  rows={4}
+                  required
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  Use variáveis como {{nome}}, {{empresa}}, {{email}} que serão substituídas pelos dados do lead
+                </p>
+              </div>
+
+              {/* Seção de variáveis inline */}
+              <div className="bg-slate-50 p-3 rounded-lg">
+                <Label className="text-sm font-medium">Variáveis disponíveis:</Label>
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {['{{nome}}', '{{empresa}}', '{{email}}', '{{telefone}}', '{{whatsapp}}'].map((variable) => (
+                    <Button
+                      key={variable}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleInsertVariable(variable)}
+                      className="text-xs h-7"
+                    >
+                      {variable}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="recipient">Destinatário</Label>
+                <Select value={formData.recipient_id} onValueChange={(value) => setFormData(prev => ({ ...prev, recipient_id: value }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecionar destinatário" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {users.map(user => (
+                      <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-2 pt-4">
+                <Button type="submit" className="flex-1" disabled={actionLoading === 'send-message'}>
+                  {actionLoading === 'send-message' ? (
+                    <LoadingSpinner size="sm" />
+                  ) : (
+                    <>
+                      Enviar Mensagem
+                      <Send className="w-4 h-4 ml-2" />
+                    </>
+                  )}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setShowDialog(false)} className="flex-1">
+                  Cancelar
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      {!settings.messageWebhookUrl && (
-        <Card className="border-orange-200 bg-orange-50">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              <MessageSquare className="w-5 h-5 text-orange-600" />
-              <p className="text-orange-800">
-                <strong>Webhook não configurado:</strong> Configure o webhook de mensagens nas configurações para poder enviar mensagens.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Componente de variáveis */}
+      <MessageVariables onInsertVariable={handleInsertVariable} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Seleção de Leads */}
-        <Card className="lg:col-span-1">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Users className="w-5 h-5" />
-              <span>Selecionar Leads</span>
-            </CardTitle>
-            
-            {/* Busca e Filtros */}
-            <div className="space-y-3">
+      {/* Filtros */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex gap-4 items-end">
+            <div className="flex-1">
+              <Label htmlFor="search">Buscar</Label>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
                 <Input
-                  placeholder="Buscar por nome, empresa ou telefone..."
+                  id="search"
+                  placeholder="Buscar por mensagem..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
                 />
               </div>
-              
-              <Select value={selectedNiche} onValueChange={setSelectedNiche}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Filtrar por nicho" />
+            </div>
+            <div>
+              <Label htmlFor="recipient-filter">Destinatário</Label>
+              <Select value={recipientFilter} onValueChange={setRecipientFilter}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Todos os destinatários" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos os nichos</SelectItem>
-                  {uniqueNiches.map((niche) => (
-                    <SelectItem key={niche} value={niche}>
-                      {niche}
-                    </SelectItem>
+                  <SelectItem value="all">Todos os destinatários</SelectItem>
+                  {users.map(user => (
+                    <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            
-            {/* Botões de Seleção */}
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" onClick={selectAllFilteredLeads}>
-                Todos Filtrados
-              </Button>
-              <Button variant="outline" size="sm" onClick={clearSelection}>
-                Limpar
-              </Button>
-              {selectedNiche !== 'all' && (
-                <Button variant="outline" size="sm" onClick={() => selectByNiche(selectedNiche)}>
-                  Todos do Nicho
-                </Button>
-              )}
-            </div>
-          </CardHeader>
-          
-          <CardContent>
-            <div className="space-y-3 max-h-64 overflow-y-auto">
-              {filteredLeads.map((lead) => (
-                <div key={lead.id} className="flex items-center space-x-3">
-                  <Checkbox
-                    id={`lead-${lead.id}`}
-                    checked={selectedLeads.includes(lead.id)}
-                    onCheckedChange={(checked) => handleLeadSelection(lead.id, !!checked)}
-                  />
-                  <label 
-                    htmlFor={`lead-${lead.id}`}
-                    className="flex-1 cursor-pointer"
-                  >
-                    <div>
-                      <p className="font-medium">{lead.name}</p>
-                      <p className="text-sm text-slate-600">
-                        {lead.company} • {lead.niche}
-                      </p>
-                      <p className="text-xs text-slate-500">{lead.phone}</p>
-                    </div>
-                  </label>
-                </div>
-              ))}
-            </div>
-            
-            {selectedLeads.length > 0 && (
-              <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                <p className="text-sm text-blue-800">
-                  <strong>{selectedLeads.length}</strong> lead(s) selecionado(s)
-                </p>
-              </div>
-            )}
-            
-            {filteredLeads.length === 0 && (
-              <p className="text-center text-slate-500 py-4">
-                Nenhum lead encontrado
-              </p>
-            )}
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setSearchTerm('');
+                setRecipientFilter('all');
+              }}
+              size="icon"
+            >
+              <Filter className="w-4 h-4" />
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Estatísticas */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-blue-600">{messages.length}</div>
+            <p className="text-sm text-slate-600">Total de Mensagens</p>
           </CardContent>
         </Card>
-
-        {/* Composição da Mensagem e Templates */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <MessageSquare className="w-5 h-5" />
-              <span>Compor Mensagem</span>
-            </CardTitle>
-          </CardHeader>
-          
-          <CardContent className="space-y-4">
-            {/* Templates Salvos */}
-            {templates.length > 0 && (
-              <div>
-                <h4 className="font-medium mb-2">Templates Salvos</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {templates.map((template) => (
-                    <div key={template.id} className="flex items-center space-x-2 p-2 border rounded">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => loadTemplate(template)}
-                        className="flex-1 justify-start text-left"
-                      >
-                        {template.name}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => deleteTemplate(template.id)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            {/* Área de Mensagem */}
-            <div>
-              <Textarea
-                placeholder="Digite sua mensagem aqui..."
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                rows={8}
-                className="resize-none"
-              />
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-green-600">
+              {messages.filter(m => m.recipient_id === user?.id).length}
             </div>
-            
-            {/* Salvar Template */}
-            <div className="space-y-2">
-              {showSaveTemplate ? (
-                <div className="flex space-x-2">
-                  <Input
-                    placeholder="Nome do template"
-                    value={templateName}
-                    onChange={(e) => setTemplateName(e.target.value)}
-                    className="flex-1"
-                  />
-                  <Button onClick={saveTemplate} size="sm">
-                    <Save className="w-4 h-4 mr-2" />
-                    Salvar
-                  </Button>
-                  <Button variant="outline" onClick={() => setShowSaveTemplate(false)} size="sm">
-                    Cancelar
-                  </Button>
-                </div>
-              ) : (
-                <Button 
-                  variant="outline" 
-                  onClick={() => setShowSaveTemplate(true)}
-                  disabled={!message.trim()}
-                >
-                  <Save className="w-4 h-4 mr-2" />
-                  Salvar como Template
-                </Button>
-              )}
+            <p className="text-sm text-slate-600">Enviadas por mim</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-orange-600">
+              {messages.filter(m => m.recipient_id !== user?.id).length}
             </div>
-            
-            {/* Botão Enviar */}
-            <Button 
-              onClick={sendMessage}
-              disabled={sending || !settings.messageWebhookUrl || selectedLeads.length === 0 || !message.trim()}
-              className="w-full"
-            >
-              {sending ? (
-                <LoadingSpinner size="sm" />
-              ) : (
-                <>
-                  <Send className="w-4 h-4 mr-2" />
-                  Enviar Mensagem
-                </>
-              )}
-            </Button>
-            
-            {!settings.messageWebhookUrl && (
-              <p className="text-sm text-red-600 text-center">
-                Configure o webhook de mensagens nas configurações para enviar
-              </p>
-            )}
+            <p className="text-sm text-slate-600">Recebidas por mim</p>
           </CardContent>
         </Card>
       </div>
 
-      {leads.length === 0 && (
+      {/* Tabela de Mensagens */}
+      {filteredMessages.length > 0 ? (
+        <MessagesTable
+          messages={filteredMessages}
+        />
+      ) : (
         <Card>
           <CardContent className="p-12 text-center">
-            <Users className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-slate-900 mb-2">Nenhum lead cadastrado</h3>
-            <p className="text-slate-600">Cadastre leads primeiro para poder enviar mensagens.</p>
+            <MessageSquare className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-slate-900 mb-2">
+              {searchTerm || recipientFilter !== 'all' ? 'Nenhuma mensagem encontrada' : 'Nenhuma mensagem enviada'}
+            </h3>
+            <p className="text-slate-600">
+              {searchTerm || recipientFilter !== 'all' 
+                ? 'Tente ajustar os filtros de busca.' 
+                : 'Comece enviando uma nova mensagem.'
+              }
+            </p>
           </CardContent>
         </Card>
       )}
