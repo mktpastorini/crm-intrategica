@@ -140,6 +140,16 @@ interface CrmContextType {
 
 const CrmContext = createContext<CrmContextType | undefined>(undefined);
 
+async function testDbConnection() {
+  try {
+    const { data, error } = await supabase.from('profiles').select('id').limit(1);
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
 export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, profile } = useAuth();
   const { toast } = useToast();
@@ -257,6 +267,19 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     initializeData();
   }, []);
+
+  useEffect(() => {
+    (async () => {
+      const ok = await testDbConnection();
+      if (!ok) {
+        toast({
+          title: "Erro de conexão",
+          description: "Não foi possível conectar ao banco de dados Supabase. Verifique sua conexão e as configurações.",
+          variant: "destructive",
+        });
+      }
+    })();
+  }, []); // Apenas uma vez ao montar
 
   const loadUsers = async () => {
     try {
@@ -799,6 +822,17 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const approveAction = async (actionId: string) => {
+    setActionLoading(actionId);
+    const ok = await testDbConnection();
+    if (!ok) {
+      toast({
+        title: "Erro de conexão",
+        description: "Não foi possível conectar ao banco de dados. Tente novamente!",
+        variant: "destructive",
+      });
+      setActionLoading(null);
+      return;
+    }
     try {
       const action = pendingActions.find(a => a.id === actionId);
       if (!action) throw new Error('Ação não encontrada');
@@ -888,10 +922,24 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         description: "Erro ao aprovar ação",
         variant: "destructive",
       });
+    } finally {
+      setActionLoading(null);
+      await loadPendingActions(); // Sempre recarregar após ação
     }
   };
 
   const rejectAction = async (actionId: string) => {
+    setActionLoading(actionId);
+    const ok = await testDbConnection();
+    if (!ok) {
+      toast({
+        title: "Erro de conexão",
+        description: "Não foi possível conectar ao banco de dados. Tente novamente!",
+        variant: "destructive",
+      });
+      setActionLoading(null);
+      return;
+    }
     try {
       const { error } = await supabase
         .from('pending_approvals')
@@ -913,6 +961,9 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         description: "Erro ao rejeitar ação",
         variant: "destructive",
       });
+    } finally {
+      setActionLoading(null);
+      await loadPendingActions(); // Sempre recarrega
     }
   };
 

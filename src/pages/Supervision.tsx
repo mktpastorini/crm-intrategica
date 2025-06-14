@@ -1,4 +1,3 @@
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,7 +8,7 @@ import { Navigate } from 'react-router-dom';
 import { useEffect } from 'react';
 
 export default function Supervision() {
-  const { pendingActions, approveAction, rejectAction, loadPendingActions } = useCrm();
+  const { pendingActions, approveAction, rejectAction, loadPendingActions, actionLoading } = useCrm();
   const { profile } = useAuth();
 
   // Carregar ações pendentes quando a página for montada
@@ -201,21 +200,23 @@ export default function Supervision() {
 
                     <div className="flex gap-2 ml-4">
                       <Button
+                        disabled={actionLoading === action.id}
                         onClick={() => rejectAction(action.id)}
                         variant="outline"
                         size="sm"
-                        className="text-red-600 hover:text-red-700 hover:border-red-200"
+                        className={`text-red-600 hover:text-red-700 hover:border-red-200 ${actionLoading === action.id ? 'opacity-50 pointer-events-none' : ''}`}
                       >
                         <XCircle className="w-4 h-4 mr-1" />
-                        Rejeitar
+                        {actionLoading === action.id ? "Rejeitando..." : "Rejeitar"}
                       </Button>
                       <Button
+                        disabled={actionLoading === action.id}
                         onClick={() => approveAction(action.id)}
                         size="sm"
-                        className="bg-green-600 hover:bg-green-700"
+                        className={`bg-green-600 hover:bg-green-700 ${actionLoading === action.id ? 'opacity-50 pointer-events-none' : ''}`}
                       >
                         <CheckCircle className="w-4 h-4 mr-1" />
-                        Aprovar
+                        {actionLoading === action.id ? "Aprovando..." : "Aprovar"}
                       </Button>
                     </div>
                   </div>
