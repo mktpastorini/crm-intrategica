@@ -232,13 +232,19 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     return newAction.id;
   };
 
+  const getFirstPipelineStage = () => {
+    const sortedStages = [...pipelineStages].sort((a, b) => a.order - b.order);
+    return sortedStages[0]?.id || 'prospeccao';
+  };
+
   const createLead = async (leadData: Omit<Lead, 'id' | 'created_at' | 'updated_at'>) => {
     setActionLoading('create-lead');
     try {
-      // Garantir que o lead seja criado no primeiro estágio do pipeline
+      // Garantir que o lead seja criado no primeiro estágio do pipeline baseado na ordem
+      const firstStage = getFirstPipelineStage();
       const leadToCreate = {
         ...leadData,
-        pipeline_stage: 'prospeccao',
+        pipeline_stage: firstStage,
         whatsapp: leadData.whatsapp || leadData.phone
       };
 
@@ -254,9 +260,10 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
 
       if (data) {
         setLeads(prev => [data, ...prev]);
+        const firstStageName = pipelineStages.find(s => s.id === firstStage)?.name || 'primeiro estágio';
         toast({
           title: "Lead criado",
-          description: `Lead ${leadData.name} foi criado com sucesso no estágio de Prospecção.`,
+          description: `Lead ${leadData.name} foi criado com sucesso no estágio ${firstStageName}.`,
         });
       }
     } catch (error: any) {

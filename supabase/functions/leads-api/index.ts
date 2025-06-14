@@ -97,11 +97,12 @@ serve(async (req) => {
       case 'create':
         const leadData = await req.json();
         
+        // Usar 'prospeccao' como primeiro estágio padrão (pode ser configurado)
         const { data: newLead, error: createError } = await supabase
           .from('leads')
           .insert([{
             ...leadData,
-            pipeline_stage: 'aguardando-inicio',
+            pipeline_stage: 'prospeccao', // O trigger do banco garantirá o primeiro estágio
             status: leadData.status || 'novo'
           }])
           .select()
