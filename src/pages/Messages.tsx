@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -163,7 +164,7 @@ export default function Messages() {
                   required
                 />
                 <p className="text-xs text-slate-500 mt-1">
-                  Use variáveis como {{nome}}, {{empresa}}, {{email}} que serão substituídas pelos dados do lead
+                  Use variáveis como {'{{nome}}'}, {'{{empresa}}'}, {'{{email}}'} que serão substituídas pelos dados do lead
                 </p>
               </div>
 
