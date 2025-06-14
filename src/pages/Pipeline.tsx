@@ -13,6 +13,7 @@ import { Phone, Mail, Calendar, User, Building, Archive } from 'lucide-react';
 import PipelineColumn from '@/components/pipeline/PipelineColumn';
 import UnknownStageColumn from '@/components/pipeline/UnknownStageColumn';
 import type { Lead, PipelineStage } from '@/components/pipeline/types';
+import { createJourneySchedule } from "@/utils/journeyScheduleService";
 
 export default function Pipeline() {
   // Inicializar o rastreador de atividades
@@ -67,6 +68,57 @@ export default function Pipeline() {
     e.preventDefault();
   };
 
+  // Função auxiliar: carrega mensagens da jornada do localStorage
+  const getJourneyMessages = () => {
+    const saved = localStorage.getItem("journeyMessages");
+    if (!saved) return [];
+    try {
+      return JSON.parse(saved) || [];
+    } catch {
+      return [];
+    }
+  };
+
+  // Adiciona schedules para as mensagens da jornada ao mover o lead
+  const scheduleJourneyMessages = async (lead, newStage) => {
+    const journeyMessages = getJourneyMessages();
+    const messagesForStage = journeyMessages
+      .filter((m) => m.stage === newStage);
+
+    if (!messagesForStage.length) return;
+
+    const scheduled_for_base = new Date();
+    for (const msg of messagesForStage) {
+      const delayMs =
+        msg.delayUnit === "days"
+          ? msg.delay * 24 * 60 * 60 * 1000
+          : msg.delayUnit === "hours"
+          ? msg.delay * 60 * 60 * 1000
+          : msg.delay * 60 * 1000;
+
+      const scheduled_for = new Date(scheduled_for_base.getTime() + delayMs).toISOString();
+
+      try {
+        await createJourneySchedule({
+          lead_id: lead.id,
+          lead_name: lead.name,
+          lead_phone: lead.phone,
+          lead_email: lead.email,
+          stage: newStage,
+          message_title: msg.title,
+          message_content: msg.content,
+          message_type: msg.type,
+          media_url: msg.mediaUrl,
+          scheduled_for,
+          webhook_url: null, // ou preencha se já possuir um webhook fixo/configurado
+        });
+        console.log(`[Jornada] Agendamento criado para ${lead.name}, estágio ${newStage}, mensagem "${msg.title}"`);
+      } catch (err) {
+        console.error("[Jornada] Erro ao agendar mensagem:", err);
+      }
+    }
+  };
+
   const handleDrop = (e: React.DragEvent, newStage: string) => {
     e.preventDefault();
     const leadId = e.dataTransfer.getData('leadId');
@@ -83,12 +135,15 @@ export default function Pipeline() {
 
     if (lead.pipeline_stage !== newStage) {
       console.log(`Movendo lead ${lead.name} de ${lead.pipeline_stage} para ${newStage}`);
-      
+
       moveLead(leadId, newStage);
       toast({
         title: "Lead movido",
         description: `${lead.name} foi movido para ${pipelineStages.find(s => s.id === newStage)?.name}`,
       });
+
+      // NOVO: Agendamento de mensagens da jornada
+      scheduleJourneyMessages(lead, newStage);
     }
   };
 
