@@ -9,8 +9,14 @@ import { Navigate } from 'react-router-dom';
 import { useEffect } from 'react';
 
 export default function Supervision() {
-  const { pendingActions, approveAction, rejectAction } = useCrm();
+  const { pendingActions, approveAction, rejectAction, loadPendingActions } = useCrm();
   const { profile } = useAuth();
+
+  // Carregar ações pendentes quando a página for montada
+  useEffect(() => {
+    console.log('Carregando ações pendentes...');
+    loadPendingActions();
+  }, [loadPendingActions]);
 
   // Debug log para verificar as ações pendentes
   useEffect(() => {
@@ -134,6 +140,13 @@ export default function Supervision() {
               <Shield className="w-12 h-12 text-slate-300 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-slate-900 mb-2">Nenhuma ação pendente</h3>
               <p className="text-slate-600">Todas as solicitações foram processadas</p>
+              <Button 
+                variant="outline" 
+                onClick={loadPendingActions}
+                className="mt-4"
+              >
+                Atualizar
+              </Button>
             </div>
           ) : (
             <div className="space-y-4">
@@ -214,4 +227,45 @@ export default function Supervision() {
       </Card>
     </div>
   );
+}
+
+function getActionIcon(type: string) {
+  switch (type) {
+    case 'edit_lead':
+    case 'edit_event':
+      return <Edit className="w-4 h-4 text-blue-600" />;
+    case 'delete_lead':
+    case 'delete_event':
+      return <Trash2 className="w-4 h-4 text-red-600" />;
+    default:
+      return <Shield className="w-4 h-4 text-slate-600" />;
+  }
+}
+
+function getActionTypeLabel(type: string) {
+  switch (type) {
+    case 'edit_lead':
+      return 'Edição de Lead';
+    case 'delete_lead':
+      return 'Exclusão de Lead';
+    case 'edit_event':
+      return 'Edição de Evento';
+    case 'delete_event':
+      return 'Exclusão de Evento';
+    default:
+      return 'Ação';
+  }
+}
+
+function getActionTypeColor(type: string) {
+  switch (type) {
+    case 'edit_lead':
+    case 'edit_event':
+      return 'bg-blue-100 text-blue-800';
+    case 'delete_lead':
+    case 'delete_event':
+      return 'bg-red-100 text-red-800';
+    default:
+      return 'bg-slate-100 text-slate-800';
+  }
 }

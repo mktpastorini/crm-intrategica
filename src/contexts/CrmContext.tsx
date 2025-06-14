@@ -83,6 +83,7 @@ interface CrmContextType {
   loadData: () => Promise<void>;
   loadLeads: () => Promise<void>;
   loadUsers: () => Promise<void>;
+  loadPendingActions: () => Promise<void>;
   createLead: (lead: Omit<Lead, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
   addLead: (lead: Omit<Lead, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
   updateLead: (id: string, lead: Partial<Lead>) => Promise<void>;
@@ -143,9 +144,37 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
   const loadData = async () => {
     setLoading(true);
     try {
-      await Promise.all([loadLeads(), loadUsers(), loadEvents()]);
+      await Promise.all([loadLeads(), loadUsers(), loadEvents(), loadPendingActions()]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPendingActions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('pending_approvals')
+        .select('*')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao carregar ações pendentes:', error);
+        return;
+      }
+
+      const formattedActions: PendingAction[] = (data || []).map(action => ({
+        id: action.id,
+        type: action.type,
+        user: action.user_name,
+        description: action.description,
+        timestamp: new Date(action.created_at).toLocaleString('pt-BR'),
+        details: action.details
+      }));
+
+      setPendingActions(formattedActions);
+    } catch (error) {
+      console.error('Erro ao carregar ações pendentes:', error);
     }
   };
 
@@ -218,25 +247,47 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
   const requestAction = async (action: Omit<PendingAction, 'id' | 'timestamp'>) => {
     console.log('Enviando solicitação para aprovação:', action);
     
-    const newAction: PendingAction = {
-      id: crypto.randomUUID(),
-      ...action,
-      timestamp: new Date().toLocaleString('pt-BR'),
-    };
+    if (!user?.id || !profile?.name) {
+      console.error('Usuário não encontrado');
+      return;
+    }
 
-    console.log('Nova ação criada:', newAction);
-    setPendingActions(prev => {
-      const updated = [...prev, newAction];
-      console.log('Actions atualizadas:', updated);
-      return updated;
-    });
+    try {
+      const { data, error } = await supabase
+        .from('pending_approvals')
+        .insert([{
+          type: action.type,
+          user_id: user.id,
+          user_name: profile.name,
+          description: action.description,
+          details: action.details || {}
+        }])
+        .select()
+        .single();
 
-    toast({
-      title: "Solicitação enviada",
-      description: "Sua solicitação foi enviada para aprovação do supervisor.",
-    });
+      if (error) {
+        throw error;
+      }
 
-    return newAction.id;
+      console.log('Solicitação salva no banco:', data);
+
+      // Recarregar as ações pendentes
+      await loadPendingActions();
+
+      toast({
+        title: "Solicitação enviada",
+        description: "Sua solicitação foi enviada para aprovação do supervisor.",
+      });
+
+      return data.id;
+    } catch (error: any) {
+      console.error('Erro ao salvar solicitação:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao enviar solicitação para aprovação",
+        variant: "destructive",
+      });
+    }
   };
 
   const getFirstPipelineStage = () => {
@@ -618,28 +669,32 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
   };
 
   const approveAction = async (actionId: string) => {
-    const action = pendingActions.find(a => a.id === actionId);
-    if (!action) return;
-
-    console.log('Aprovando ação:', action);
-
     try {
+      // Buscar a ação no banco de dados
+      const { data: actionData, error: fetchError } = await supabase
+        .from('pending_approvals')
+        .select('*')
+        .eq('id', actionId)
+        .eq('status', 'pending')
+        .single();
+
+      if (fetchError || !actionData) {
+        console.error('Erro ao buscar ação:', fetchError);
+        return;
+      }
+
+      console.log('Aprovando ação:', actionData);
+
       // Execute the action based on type
-      switch (action.type) {
-        case 'add_lead':
-          if (action.details?.leadData) {
-            await createLead(action.details.leadData);
-          }
-          break;
+      switch (actionData.type) {
         case 'edit_lead':
-          if (action.details?.changes && action.details?.leadId) {
-            // Buscar o lead pelo ID para garantir que existe
-            const leadToUpdate = leads.find(l => l.id === action.details.leadId);
+          if (actionData.details?.changes && actionData.details?.leadId) {
+            const leadToUpdate = leads.find(l => l.id === actionData.details.leadId);
             if (leadToUpdate) {
               const { data, error } = await supabase
                 .from('leads')
-                .update(action.details.changes)
-                .eq('id', action.details.leadId)
+                .update(actionData.details.changes)
+                .eq('id', actionData.details.leadId)
                 .select()
                 .single();
 
@@ -647,45 +702,35 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
 
               if (data) {
                 setLeads(prev => prev.map(lead => 
-                  lead.id === action.details.leadId ? data : lead
+                  lead.id === actionData.details.leadId ? data : lead
                 ));
-                
-                toast({
-                  title: "Lead atualizado",
-                  description: `Lead ${leadToUpdate.name} foi atualizado com sucesso.`,
-                });
               }
             }
           }
           break;
         case 'delete_lead':
-          if (action.details?.leadId) {
-            const leadToDelete = leads.find(l => l.id === action.details.leadId);
+          if (actionData.details?.leadId) {
+            const leadToDelete = leads.find(l => l.id === actionData.details.leadId);
             if (leadToDelete) {
               const { error } = await supabase
                 .from('leads')
                 .delete()
-                .eq('id', action.details.leadId);
+                .eq('id', actionData.details.leadId);
 
               if (error) throw error;
 
-              setLeads(prev => prev.filter(lead => lead.id !== action.details.leadId));
-              
-              toast({
-                title: "Lead excluído",
-                description: `Lead ${leadToDelete.name} foi excluído com sucesso.`,
-              });
+              setLeads(prev => prev.filter(lead => lead.id !== actionData.details.leadId));
             }
           }
           break;
         case 'edit_event':
-          if (action.details?.changes && action.details?.eventId) {
-            const eventToUpdate = events.find(e => e.id === action.details.eventId);
+          if (actionData.details?.changes && actionData.details?.eventId) {
+            const eventToUpdate = events.find(e => e.id === actionData.details.eventId);
             if (eventToUpdate) {
               const { data, error } = await supabase
                 .from('events')
-                .update(action.details.changes)
-                .eq('id', action.details.eventId)
+                .update(actionData.details.changes)
+                .eq('id', actionData.details.eventId)
                 .select()
                 .single();
 
@@ -693,40 +738,43 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
 
               if (data) {
                 setEvents(prev => prev.map(event => 
-                  event.id === action.details.eventId ? data : event
+                  event.id === actionData.details.eventId ? data : event
                 ));
-                
-                toast({
-                  title: "Evento atualizado",
-                  description: `Evento ${eventToUpdate.title} foi atualizado com sucesso.`,
-                });
               }
             }
           }
           break;
         case 'delete_event':
-          if (action.details?.eventId) {
-            const eventToDelete = events.find(e => e.id === action.details.eventId);
+          if (actionData.details?.eventId) {
+            const eventToDelete = events.find(e => e.id === actionData.details.eventId);
             if (eventToDelete) {
               const { error } = await supabase
                 .from('events')
                 .delete()
-                .eq('id', action.details.eventId);
+                .eq('id', actionData.details.eventId);
 
               if (error) throw error;
 
-              setEvents(prev => prev.filter(event => event.id !== action.details.eventId));
-              
-              toast({
-                title: "Evento excluído",
-                description: `Evento ${eventToDelete.title} foi excluído com sucesso.`,
-              });
+              setEvents(prev => prev.filter(event => event.id !== actionData.details.eventId));
             }
           }
           break;
       }
 
-      setPendingActions(prev => prev.filter(a => a.id !== actionId));
+      // Marcar a ação como aprovada no banco
+      const { error: updateError } = await supabase
+        .from('pending_approvals')
+        .update({
+          status: 'approved',
+          approved_by: user?.id,
+          approved_at: new Date().toISOString()
+        })
+        .eq('id', actionId);
+
+      if (updateError) throw updateError;
+
+      // Recarregar as ações pendentes
+      await loadPendingActions();
       
       toast({
         title: "Ação aprovada",
@@ -743,13 +791,35 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
   };
 
   const rejectAction = async (actionId: string) => {
-    setPendingActions(prev => prev.filter(a => a.id !== actionId));
-    
-    toast({
-      title: "Ação rejeitada",
-      description: "A solicitação foi rejeitada.",
-      variant: "destructive",
-    });
+    try {
+      // Marcar a ação como rejeitada no banco
+      const { error } = await supabase
+        .from('pending_approvals')
+        .update({
+          status: 'rejected',
+          approved_by: user?.id,
+          approved_at: new Date().toISOString()
+        })
+        .eq('id', actionId);
+
+      if (error) throw error;
+
+      // Recarregar as ações pendentes
+      await loadPendingActions();
+      
+      toast({
+        title: "Ação rejeitada",
+        description: "A solicitação foi rejeitada.",
+        variant: "destructive",
+      });
+    } catch (error: any) {
+      console.error('Erro ao rejeitar ação:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao rejeitar ação",
+        variant: "destructive",
+      });
+    }
   };
 
   const saveMessageTemplate = async (template: Omit<MessageTemplate, 'id'>) => {
@@ -951,6 +1021,7 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     loadData,
     loadLeads,
     loadUsers,
+    loadPendingActions,
     createLead,
     addLead,
     updateLead,

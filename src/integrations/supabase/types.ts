@@ -188,6 +188,45 @@ export type Database = {
           },
         ]
       }
+      pending_approvals: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          description: string
+          details: Json | null
+          id: string
+          status: string
+          type: string
+          user_id: string
+          user_name: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          description: string
+          details?: Json | null
+          id?: string
+          status?: string
+          type: string
+          user_id: string
+          user_name: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          description?: string
+          details?: Json | null
+          id?: string
+          status?: string
+          type?: string
+          user_id?: string
+          user_name?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
