@@ -167,7 +167,6 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const scheduleJourneyMessage = async (leadId: string, message: JourneyMessage, leadData: any) => {
     if (!settings.journeyWebhookUrl) return;
 
-    // Calcular delay em milissegundos
     let delayMs = 0;
     switch (message.delayUnit) {
       case 'minutes':
@@ -181,7 +180,6 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         break;
     }
 
-    // Agendar o envio da mensagem
     setTimeout(async () => {
       try {
         const webhookPayload = {
@@ -232,37 +230,78 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
+  // Carregar dados automaticamente quando o componente for montado
   useEffect(() => {
-    loadLeads();
-    loadEvents();
-    loadPendingActions();
-    loadUsers();
+    console.log('Iniciando carregamento dos dados do banco...');
+    const initializeData = async () => {
+      setLoading(true);
+      try {
+        await Promise.all([
+          loadLeads(),
+          loadEvents(),
+          loadUsers(),
+          loadPendingActions()
+        ]);
+        console.log('Todos os dados foram carregados com sucesso');
+      } catch (error) {
+        console.error('Erro ao carregar dados iniciais:', error);
+        toast({
+          title: "Erro",
+          description: "Erro ao carregar dados do sistema",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeData();
   }, []);
 
   const loadUsers = async () => {
     try {
+      console.log('Carregando usuários do banco...');
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      if (data) setUsers(data as User[]);
+      if (error) {
+        console.error('Erro ao carregar usuários:', error);
+        throw error;
+      }
+      
+      if (data) {
+        console.log(`${data.length} usuários carregados:`, data);
+        setUsers(data as User[]);
+      }
     } catch (error: any) {
       console.error('Erro ao carregar usuários:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar usuários",
+        variant: "destructive",
+      });
     }
   };
 
   const loadLeads = async () => {
     try {
-      setLoading(true);
+      console.log('Carregando leads do banco...');
       const { data, error } = await supabase
         .from('leads')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      if (data) setLeads(data as Lead[]);
+      if (error) {
+        console.error('Erro ao carregar leads:', error);
+        throw error;
+      }
+      
+      if (data) {
+        console.log(`${data.length} leads carregados:`, data);
+        setLeads(data as Lead[]);
+      }
     } catch (error: any) {
       console.error('Erro ao carregar leads:', error);
       toast({
@@ -270,21 +309,24 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         description: "Erro ao carregar leads",
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
     }
   };
 
   const loadEvents = async () => {
     try {
+      console.log('Carregando eventos do banco...');
       const { data, error } = await supabase
         .from('events')
         .select('*')
         .order('date', { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao carregar eventos:', error);
+        throw error;
+      }
+      
       if (data) {
-        // Transform database events to match our Event interface
+        console.log(`${data.length} eventos carregados:`, data);
         const transformedEvents = data.map(event => ({
           id: event.id,
           title: event.title,
@@ -311,6 +353,39 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       toast({
         title: "Erro",
         description: "Erro ao carregar eventos",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const loadPendingActions = async () => {
+    try {
+      console.log('Carregando ações pendentes do banco...');
+      const { data, error } = await supabase
+        .from('pending_approvals')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao carregar ações pendentes:', error);
+        throw error;
+      }
+      
+      if (data) {
+        console.log(`${data.length} ações pendentes carregadas:`, data);
+        const transformedActions: PendingAction[] = data.map(action => ({
+          ...action,
+          status: action.status as 'pending' | 'approved' | 'rejected',
+          user: users.find(u => u.id === action.user_id),
+          timestamp: action.created_at
+        }));
+        setPendingActions(transformedActions);
+      }
+    } catch (error: any) {
+      console.error('Erro ao carregar solicitações:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar solicitações",
         variant: "destructive",
       });
     }
@@ -376,7 +451,6 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (error) throw error;
 
       if (data) {
-        // Verificar se o estágio mudou para disparar mensagens da jornada
         const oldLead = leads.find(l => l.id === id);
         if (oldLead && updates.pipeline_stage && oldLead.pipeline_stage !== updates.pipeline_stage) {
           console.log(`Lead ${id} mudou do estágio ${oldLead.pipeline_stage} para ${updates.pipeline_stage}`);
@@ -407,16 +481,17 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addLead = async (leadData: Omit<Lead, 'id' | 'created_at' | 'updated_at'>) => {
     try {
       setActionLoading('create-lead');
-      // Ensure required fields are present and ensure company is always provided
       const leadToInsert = {
         ...leadData,
         responsible_id: leadData.responsible_id || user?.id || '',
         niche: leadData.niche || 'Geral',
-        company: leadData.company || 'Não informado', // Ensure company is always a string since it's required
+        company: leadData.company || 'Não informado',
         name: leadData.name || 'Lead sem nome',
         phone: leadData.phone || '',
-        status: leadData.status || 'novo' // Ensure status is always provided
+        status: leadData.status || 'novo'
       };
+
+      console.log('Criando novo lead:', leadToInsert);
 
       const { data, error } = await supabase
         .from('leads')
@@ -427,9 +502,9 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (error) throw error;
 
       if (data) {
+        console.log('Lead criado com sucesso:', data);
         setLeads(prev => [...prev, data as Lead]);
         
-        // Disparar mensagens da jornada para o novo lead
         if (data.pipeline_stage) {
           console.log(`Novo lead ${data.id} adicionado no estágio ${data.pipeline_stage}`);
           triggerJourneyMessages(data.id, data.pipeline_stage, data);
@@ -452,12 +527,11 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const createLead = addLead; // Alias for addLead
+  const createLead = addLead;
 
   const addEvent = async (eventData: Omit<Event, 'id' | 'created_at' | 'updated_at'>) => {
     try {
       setActionLoading('create-event');
-      // Transform Event interface to database format
       const dbEventData = {
         title: eventData.title,
         lead_name: eventData.description || eventData.lead_name || '',
@@ -469,6 +543,8 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         type: eventData.type || 'meeting'
       };
 
+      console.log('Criando novo evento:', dbEventData);
+
       const { data, error } = await supabase
         .from('events')
         .insert([dbEventData])
@@ -478,7 +554,7 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (error) throw error;
       
       if (data) {
-        // Transform back to Event interface
+        console.log('Evento criado com sucesso:', data);
         const transformedEvent = {
           id: data.id,
           title: data.title,
@@ -517,12 +593,11 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const createEvent = addEvent; // Alias for addEvent
+  const createEvent = addEvent;
 
   const updateEvent = async (id: string, updates: Partial<Event>) => {
     try {
       setActionLoading(id);
-      // Transform Event interface updates to database format
       const dbUpdates: any = {};
       if (updates.title) dbUpdates.title = updates.title;
       if (updates.description) dbUpdates.lead_name = updates.description;
@@ -545,7 +620,6 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (error) throw error;
       
       if (data) {
-        // Transform back to Event interface
         const transformedEvent = {
           id: data.id,
           title: data.title,
@@ -631,7 +705,6 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  // Pipeline stage methods
   const addPipelineStage = async (stage: Omit<PipelineStage, 'id'>) => {
     const newStage = { ...stage, id: `stage-${Date.now()}` };
     setPipelineStages(prev => [...prev, newStage]);
@@ -665,13 +738,10 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  // Bulk message sender
   const sendBulkMessage = async (leadIds: string[], message: string) => {
     try {
       console.log('Enviando mensagens em massa para:', leadIds.length, 'leads');
       
-      // Here you would implement the actual bulk message sending logic
-      // For now, just show a success toast
       toast({
         title: "Mensagens enviadas",
         description: `${leadIds.length} mensagens enviadas com sucesso`,
@@ -695,6 +765,8 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         details: action.details
       };
 
+      console.log('Solicitando ação:', actionToInsert);
+
       const { data, error } = await supabase
         .from('pending_approvals')
         .insert([actionToInsert])
@@ -704,7 +776,6 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (error) throw error;
 
       if (data) {
-        // Transform the data to match PendingAction interface
         const transformedAction: PendingAction = {
           ...data,
           status: data.status as 'pending' | 'approved' | 'rejected',
@@ -795,7 +866,6 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
 
-      // Update pending action status
       const { error: updateError } = await supabase
         .from('pending_approvals')
         .update({ status: 'approved' })
@@ -823,15 +893,14 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const rejectAction = async (actionId: string) => {
     try {
-       // Update pending action status to 'rejected' in the database
-       const { error } = await supabase
-       .from('pending_approvals')
-       .update({ status: 'rejected' })
-       .eq('id', actionId);
- 
-     if (error) {
-       throw error;
-     }
+      const { error } = await supabase
+        .from('pending_approvals')
+        .update({ status: 'rejected' })
+        .eq('id', actionId);
+
+      if (error) {
+        throw error;
+      }
       setPendingActions(prev => prev.map(a => a.id === actionId ? { ...a, status: 'rejected' as const } : a));
       toast({
         title: "Ação rejeitada",
@@ -842,34 +911,6 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       toast({
         title: "Erro",
         description: "Erro ao rejeitar ação",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const loadPendingActions = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('pending_approvals')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      if (data) {
-        // Transform the data to match PendingAction interface
-        const transformedActions: PendingAction[] = data.map(action => ({
-          ...action,
-          status: action.status as 'pending' | 'approved' | 'rejected',
-          user: users.find(u => u.id === action.user_id),
-          timestamp: action.created_at
-        }));
-        setPendingActions(transformedActions);
-      }
-    } catch (error: any) {
-      console.error('Erro ao carregar solicitações:', error);
-      toast({
-        title: "Erro",
-        description: "Erro ao carregar solicitações",
         variant: "destructive",
       });
     }
