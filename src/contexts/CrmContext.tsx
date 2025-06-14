@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
@@ -68,7 +69,7 @@ interface PendingAction {
   type: string;
   user_name: string;
   description: string;
-  details: any; // Changed from ActionDetails to any to match Json
+  details: any;
   status?: 'pending' | 'approved' | 'rejected';
   created_at: string;
   user_id?: string;
@@ -82,6 +83,7 @@ interface User {
   email: string;
   role: string;
   avatar_url?: string;
+  status: string;
 }
 
 interface JourneyMessage {
@@ -241,7 +243,7 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      if (data) setUsers(data);
+      if (data) setUsers(data as User[]);
     } catch (error: any) {
       console.error('Erro ao carregar usuários:', error);
     }
@@ -256,7 +258,7 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      if (data) setLeads(data);
+      if (data) setLeads(data as Lead[]);
     } catch (error: any) {
       console.error('Erro ao carregar leads:', error);
       toast({
@@ -375,7 +377,7 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           triggerJourneyMessages(id, updates.pipeline_stage, data);
         }
 
-        setLeads(prev => prev.map(lead => lead.id === id ? data : lead));
+        setLeads(prev => prev.map(lead => lead.id === id ? data as Lead : lead));
         
         toast({
           title: "Lead atualizado",
@@ -418,7 +420,7 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (error) throw error;
 
       if (data) {
-        setLeads(prev => [...prev, data]);
+        setLeads(prev => [...prev, data as Lead]);
         
         // Disparar mensagens da jornada para o novo lead
         if (data.pipeline_stage) {
@@ -681,9 +683,9 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const actionToInsert = {
         ...action,
-        status: 'pending',
+        status: 'pending' as const,
         user_id: action.user_id || user?.id || '',
-        details: action.details // Keep as is, will be stored as JSON
+        details: action.details
       };
 
       const { data, error } = await supabase
@@ -696,8 +698,9 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (data) {
         // Transform the data to match PendingAction interface
-        const transformedAction = {
+        const transformedAction: PendingAction = {
           ...data,
+          status: data.status as 'pending' | 'approved' | 'rejected',
           user: users.find(u => u.id === data.user_id),
           timestamp: data.created_at
         };
@@ -742,7 +745,7 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           
         if (error) throw error;
         if (data) {
-          setLeads(prev => prev.map(lead => lead.id === actionDetails.leadId ? data : lead));
+          setLeads(prev => prev.map(lead => lead.id === actionDetails.leadId ? data as Lead : lead));
         }
       } else if (action.type === 'delete_event' && actionDetails.eventId) {
         const { error } = await supabase
@@ -793,7 +796,7 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (updateError) throw updateError;
 
-      setPendingActions(prev => prev.map(a => a.id === actionId ? { ...a, status: 'approved' } : a));
+      setPendingActions(prev => prev.map(a => a.id === actionId ? { ...a, status: 'approved' as const } : a));
 
       toast({
         title: "Ação aprovada",
@@ -822,7 +825,7 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
      if (error) {
        throw error;
      }
-      setPendingActions(prev => prev.map(a => a.id === actionId ? { ...a, status: 'rejected' } : a));
+      setPendingActions(prev => prev.map(a => a.id === actionId ? { ...a, status: 'rejected' as const } : a));
       toast({
         title: "Ação rejeitada",
         description: "Ação foi rejeitada com sucesso",
@@ -847,8 +850,9 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (error) throw error;
       if (data) {
         // Transform the data to match PendingAction interface
-        const transformedActions = data.map(action => ({
+        const transformedActions: PendingAction[] = data.map(action => ({
           ...action,
+          status: action.status as 'pending' | 'approved' | 'rejected',
           user: users.find(u => u.id === action.user_id),
           timestamp: action.created_at
         }));
