@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
@@ -7,14 +8,20 @@ interface Lead {
   id: string;
   name: string;
   company: string;
-  email: string;
+  email?: string;
   phone: string;
-  whatsapp: string;
-  website: string;
-  address: string;
+  whatsapp?: string;
+  website?: string;
+  address?: string;
   niche: string;
   status: string;
-  category: string;
+  responsible_id: string;
+  created_at: string;
+  updated_at: string;
+  rating?: number;
+  place_id?: string;
+  instagram?: string;
+  pipeline_stage?: string;
 }
 
 interface User {
@@ -22,16 +29,25 @@ interface User {
   name: string;
   email: string;
   role: string;
+  status: string;
+  avatar_url?: string;
+  created_at: string;
+  last_login?: string;
 }
 
 interface Event {
   id: string;
   title: string;
-  description: string;
+  description?: string;
   date: string;
   time: string;
-  lead_id: string;
-  user_id: string;
+  lead_id?: string;
+  lead_name?: string;
+  company?: string;
+  type: string;
+  responsible_id: string;
+  completed?: boolean;
+  created_at: string;
 }
 
 interface PendingAction {
@@ -56,13 +72,19 @@ interface CrmContextType {
   pendingActions: PendingAction[];
   messageTemplates: MessageTemplate[];
   loading: boolean;
-  addLead: (lead: Omit<Lead, 'id'>) => Promise<void>;
+  actionLoading: string | null;
+  loadData: () => Promise<void>;
+  loadLeads: () => Promise<void>;
+  loadUsers: () => Promise<void>;
+  createLead: (lead: Omit<Lead, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
+  addLead: (lead: Omit<Lead, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
   updateLead: (id: string, lead: Partial<Lead>) => Promise<void>;
   deleteLead: (id: string) => Promise<void>;
-  addUser: (user: Omit<User, 'id'>) => Promise<void>;
+  addUser: (user: Omit<User, 'id' | 'created_at'>) => Promise<void>;
   updateUser: (id: string, user: Partial<User>) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
-  addEvent: (event: Omit<Event, 'id'>) => Promise<void>;
+  createEvent: (event: Omit<Event, 'id' | 'created_at'>) => Promise<void>;
+  addEvent: (event: Omit<Event, 'id' | 'created_at'>) => Promise<void>;
   updateEvent: (id: string, event: Partial<Event>) => Promise<void>;
   deleteEvent: (id: string) => Promise<void>;
   approveAction: (actionId: string) => Promise<void>;
@@ -84,6 +106,7 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
   const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
   const [messageTemplates, setMessageTemplates] = useState<MessageTemplate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -92,40 +115,75 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Leads
+      await Promise.all([loadLeads(), loadUsers(), loadEvents()]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadLeads = async () => {
+    try {
       const { data: leadsData, error: leadsError } = await supabase
         .from('leads')
-        .select('*');
+        .select('*')
+        .order('created_at', { ascending: false });
 
       if (leadsError) {
         console.error('Erro ao carregar leads:', leadsError);
+        toast({
+          title: "Erro",
+          description: "Erro ao carregar leads",
+          variant: "destructive",
+        });
       } else {
         setLeads(leadsData || []);
       }
+    } catch (error) {
+      console.error('Erro ao carregar leads:', error);
+    }
+  };
 
-      // Users
+  const loadUsers = async () => {
+    try {
       const { data: usersData, error: usersError } = await supabase
-        .from('users')
-        .select('*');
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
 
       if (usersError) {
         console.error('Erro ao carregar usuários:', usersError);
+        toast({
+          title: "Erro",
+          description: "Erro ao carregar usuários",
+          variant: "destructive",
+        });
       } else {
         setUsers(usersData || []);
       }
+    } catch (error) {
+      console.error('Erro ao carregar usuários:', error);
+    }
+  };
 
-      // Events
+  const loadEvents = async () => {
+    try {
       const { data: eventsData, error: eventsError } = await supabase
         .from('events')
-        .select('*');
+        .select('*')
+        .order('date', { ascending: true });
 
       if (eventsError) {
         console.error('Erro ao carregar eventos:', eventsError);
+        toast({
+          title: "Erro",
+          description: "Erro ao carregar eventos",
+          variant: "destructive",
+        });
       } else {
         setEvents(eventsData || []);
       }
-    } finally {
-      setLoading(false);
+    } catch (error) {
+      console.error('Erro ao carregar eventos:', error);
     }
   };
 
@@ -146,28 +204,53 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     return newAction.id;
   };
 
-  const addLead = async (lead: Omit<Lead, 'id'>) => {
-    if (profile?.role === 'comercial') {
-      await requestAction({
-        type: 'add_lead',
-        user: profile.name,
-        description: `Solicitação para adicionar novo lead: ${lead.name}`,
-        details: { leadData: lead }
-      });
-      return;
-    }
+  const createLead = async (leadData: Omit<Lead, 'id' | 'created_at' | 'updated_at'>) => {
+    setActionLoading('create-lead');
+    try {
+      if (profile?.role === 'comercial') {
+        await requestAction({
+          type: 'add_lead',
+          user: profile.name,
+          description: `Solicitação para adicionar novo lead: ${leadData.name}`,
+          details: { leadData }
+        });
+        return;
+      }
 
-    const newLead: Lead = {
-      id: crypto.randomUUID(),
-      ...lead,
-    };
-    setLeads(prev => [...prev, newLead]);
-    
-    toast({
-      title: "Lead adicionado",
-      description: `Lead ${lead.name} foi adicionado com sucesso.`,
-    });
+      const { data, error } = await supabase
+        .from('leads')
+        .insert([{
+          ...leadData,
+          whatsapp: leadData.whatsapp || leadData.phone
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      if (data) {
+        setLeads(prev => [data, ...prev]);
+        toast({
+          title: "Lead criado",
+          description: `Lead ${leadData.name} foi criado com sucesso.`,
+        });
+      }
+    } catch (error: any) {
+      console.error('Erro ao criar lead:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao criar lead",
+        variant: "destructive",
+      });
+      throw error;
+    } finally {
+      setActionLoading(null);
+    }
   };
+
+  const addLead = createLead;
 
   const updateLead = async (id: string, leadData: Partial<Lead>) => {
     const existingLead = leads.find(l => l.id === id);
@@ -186,14 +269,36 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    setLeads(prev => prev.map(lead => 
-      lead.id === id ? { ...lead, ...leadData } : lead
-    ));
-    
-    toast({
-      title: "Lead atualizado",
-      description: `Lead ${existingLead.name} foi atualizado com sucesso.`,
-    });
+    try {
+      const { data, error } = await supabase
+        .from('leads')
+        .update(leadData)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      if (data) {
+        setLeads(prev => prev.map(lead => 
+          lead.id === id ? data : lead
+        ));
+        
+        toast({
+          title: "Lead atualizado",
+          description: `Lead ${existingLead.name} foi atualizado com sucesso.`,
+        });
+      }
+    } catch (error: any) {
+      console.error('Erro ao atualizar lead:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao atualizar lead",
+        variant: "destructive",
+      });
+    }
   };
 
   const deleteLead = async (id: string) => {
@@ -210,59 +315,151 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    setLeads(prev => prev.filter(lead => lead.id !== id));
-    
-    toast({
-      title: "Lead excluído",
-      description: `Lead ${leadToDelete.name} foi excluído com sucesso.`,
-    });
+    try {
+      const { error } = await supabase
+        .from('leads')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        throw error;
+      }
+
+      setLeads(prev => prev.filter(lead => lead.id !== id));
+      
+      toast({
+        title: "Lead excluído",
+        description: `Lead ${leadToDelete.name} foi excluído com sucesso.`,
+      });
+    } catch (error: any) {
+      console.error('Erro ao excluir lead:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao excluir lead",
+        variant: "destructive",
+      });
+    }
   };
 
-  const addUser = async (user: Omit<User, 'id'>) => {
-    const newUser: User = {
-      id: crypto.randomUUID(),
-      ...user,
-    };
-    setUsers(prev => [...prev, newUser]);
-    
-    toast({
-      title: "Usuário adicionado",
-      description: `Usuário ${user.name} foi adicionado com sucesso.`,
-    });
+  const addUser = async (userData: Omit<User, 'id' | 'created_at'>) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .insert([userData])
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      if (data) {
+        setUsers(prev => [data, ...prev]);
+        toast({
+          title: "Usuário adicionado",
+          description: `Usuário ${userData.name} foi adicionado com sucesso.`,
+        });
+      }
+    } catch (error: any) {
+      console.error('Erro ao adicionar usuário:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao adicionar usuário",
+        variant: "destructive",
+      });
+    }
   };
 
   const updateUser = async (id: string, userData: Partial<User>) => {
-    setUsers(prev => prev.map(user => 
-      user.id === id ? { ...user, ...userData } : user
-    ));
-    
-    toast({
-      title: "Usuário atualizado",
-      description: `Usuário foi atualizado com sucesso.`,
-    });
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .update(userData)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      if (data) {
+        setUsers(prev => prev.map(user => 
+          user.id === id ? data : user
+        ));
+        
+        toast({
+          title: "Usuário atualizado",
+          description: `Usuário foi atualizado com sucesso.`,
+        });
+      }
+    } catch (error: any) {
+      console.error('Erro ao atualizar usuário:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao atualizar usuário",
+        variant: "destructive",
+      });
+    }
   };
 
   const deleteUser = async (id: string) => {
-    setUsers(prev => prev.filter(user => user.id !== id));
-    
-    toast({
-      title: "Usuário excluído",
-      description: "Usuário excluído com sucesso.",
-    });
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        throw error;
+      }
+
+      setUsers(prev => prev.filter(user => user.id !== id));
+      
+      toast({
+        title: "Usuário excluído",
+        description: "Usuário excluído com sucesso.",
+      });
+    } catch (error: any) {
+      console.error('Erro ao excluir usuário:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao excluir usuário",
+        variant: "destructive",
+      });
+    }
   };
 
-  const addEvent = async (event: Omit<Event, 'id'>) => {
-    const newEvent: Event = {
-      id: crypto.randomUUID(),
-      ...event,
-    };
-    setEvents(prev => [...prev, newEvent]);
-    
-    toast({
-      title: "Evento adicionado",
-      description: `Evento ${event.title} foi adicionado com sucesso.`,
-    });
+  const createEvent = async (eventData: Omit<Event, 'id' | 'created_at'>) => {
+    try {
+      const { data, error } = await supabase
+        .from('events')
+        .insert([eventData])
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      if (data) {
+        setEvents(prev => [data, ...prev]);
+        toast({
+          title: "Evento criado",
+          description: `Evento ${eventData.title} foi criado com sucesso.`,
+        });
+      }
+    } catch (error: any) {
+      console.error('Erro ao criar evento:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao criar evento",
+        variant: "destructive",
+      });
+    }
   };
+
+  const addEvent = createEvent;
 
   const updateEvent = async (id: string, eventData: Partial<Event>) => {
     const existingEvent = events.find(e => e.id === id);
@@ -281,14 +478,36 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    setEvents(prev => prev.map(event => 
-      event.id === id ? { ...event, ...eventData } : event
-    ));
-    
-    toast({
-      title: "Evento atualizado",
-      description: `Evento ${existingEvent.title} foi atualizado com sucesso.`,
-    });
+    try {
+      const { data, error } = await supabase
+        .from('events')
+        .update(eventData)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      if (data) {
+        setEvents(prev => prev.map(event => 
+          event.id === id ? data : event
+        ));
+        
+        toast({
+          title: "Evento atualizado",
+          description: `Evento ${existingEvent.title} foi atualizado com sucesso.`,
+        });
+      }
+    } catch (error: any) {
+      console.error('Erro ao atualizar evento:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao atualizar evento",
+        variant: "destructive",
+      });
+    }
   };
 
   const deleteEvent = async (id: string) => {
@@ -305,12 +524,30 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    setEvents(prev => prev.filter(event => event.id !== id));
-    
-    toast({
-      title: "Evento excluído",
-      description: `Evento ${eventToDelete.title} foi excluído com sucesso.`,
-    });
+    try {
+      const { error } = await supabase
+        .from('events')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        throw error;
+      }
+
+      setEvents(prev => prev.filter(event => event.id !== id));
+      
+      toast({
+        title: "Evento excluído",
+        description: `Evento ${eventToDelete.title} foi excluído com sucesso.`,
+      });
+    } catch (error: any) {
+      console.error('Erro ao excluir evento:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao excluir evento",
+        variant: "destructive",
+      });
+    }
   };
 
   const approveAction = async (actionId: string) => {
@@ -321,43 +558,35 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     switch (action.type) {
       case 'add_lead':
         if (action.details?.leadData) {
-          const newLead: Lead = {
-            id: crypto.randomUUID(),
-            ...action.details.leadData,
-          };
-          setLeads(prev => [...prev, newLead]);
+          await createLead(action.details.leadData);
         }
         break;
       case 'edit_lead':
         if (action.details?.changes) {
           const leadToUpdate = leads.find(l => l.name === action.details?.leadName);
           if (leadToUpdate) {
-            setLeads(prev => prev.map(lead => 
-              lead.id === leadToUpdate.id ? { ...lead, ...action.details.changes } : lead
-            ));
+            await updateLead(leadToUpdate.id, action.details.changes);
           }
         }
         break;
       case 'delete_lead':
         const leadToDelete = leads.find(l => l.name === action.details?.leadName);
         if (leadToDelete) {
-          setLeads(prev => prev.filter(lead => lead.id !== leadToDelete.id));
+          await deleteLead(leadToDelete.id);
         }
         break;
       case 'edit_event':
         if (action.details?.changes) {
           const eventToUpdate = events.find(e => e.title === action.details?.eventTitle);
           if (eventToUpdate) {
-            setEvents(prev => prev.map(event => 
-              event.id === eventToUpdate.id ? { ...event, ...action.details.changes } : event
-            ));
+            await updateEvent(eventToUpdate.id, action.details.changes);
           }
         }
         break;
       case 'delete_event':
         const eventToDelete = events.find(e => e.title === action.details?.eventTitle);
         if (eventToDelete) {
-          setEvents(prev => prev.filter(event => event.id !== eventToDelete.id));
+          await deleteEvent(eventToDelete.id);
         }
         break;
     }
@@ -418,7 +647,7 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
         .limit(1)
         .single();
 
-      const webhookUrl = settings?.messageWebhookUrl;
+      const webhookUrl = settings?.message_webhook_url;
 
       if (webhookUrl) {
         // Send to webhook
@@ -462,12 +691,18 @@ export function CrmProvider({ children }: { children: React.ReactNode }) {
     pendingActions,
     messageTemplates,
     loading,
+    actionLoading,
+    loadData,
+    loadLeads,
+    loadUsers,
+    createLead,
     addLead,
     updateLead,
     deleteLead,
     addUser,
     updateUser,
     deleteUser,
+    createEvent,
     addEvent,
     updateEvent,
     deleteEvent,

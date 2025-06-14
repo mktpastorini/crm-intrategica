@@ -18,24 +18,6 @@ import ImportLeadsDialog from '@/components/leads/ImportLeadsDialog';
 import { usePhoneMask } from '@/hooks/usePhoneMask';
 import { useIsMobile } from '@/hooks/use-mobile';
 
-interface Lead {
-  id: string;
-  name: string;
-  email?: string;
-  phone: string;
-  company: string;
-  niche: string;
-  status: string;
-  responsible_id: string;
-  created_at: string;
-  website?: string;
-  address?: string;
-  rating?: number;
-  place_id?: string;
-  whatsapp?: string;
-  instagram?: string;
-}
-
 export default function Leads() {
   const { leads, users, loading, actionLoading, createLead, updateLead, deleteLead, loadLeads, loadUsers } = useCrm();
   const { user } = useAuth();
@@ -45,7 +27,7 @@ export default function Leads() {
   
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
-  const [editingLead, setEditingLead] = useState<Lead | null>(null);
+  const [editingLead, setEditingLead] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [formData, setFormData] = useState({
@@ -74,8 +56,8 @@ export default function Leads() {
   }, [user?.id, editingLead]);
 
   const getUserName = (userId: string) => {
-    const user = users.find(u => u.id === userId);
-    return user?.name || 'Não atribuído';
+    const foundUser = users.find(u => u.id === userId);
+    return foundUser?.name || 'Não atribuído';
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -174,7 +156,7 @@ export default function Leads() {
     }
   };
 
-  const handleEdit = (lead: Lead) => {
+  const handleEdit = (lead: any) => {
     setEditingLead(lead);
     setFormData({
       name: lead.name,

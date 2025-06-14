@@ -21,13 +21,11 @@ export default function BulkMessageSender({ onClose }: BulkMessageSenderProps) {
   const [message, setMessage] = useState('');
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [loading, setLoading] = useState(false);
 
   const filteredLeads = leads.filter(lead => {
     const matchesStatus = statusFilter === 'all' || lead.status === statusFilter;
-    const matchesCategory = categoryFilter === 'all' || lead.category === categoryFilter;
-    return matchesStatus && matchesCategory;
+    return matchesStatus;
   });
 
   const handleSelectAll = () => {
@@ -90,11 +88,7 @@ export default function BulkMessageSender({ onClose }: BulkMessageSenderProps) {
         };
       });
 
-      await sendBulkMessage(
-        selectedLeads, 
-        message, 
-        categoryFilter !== 'all' ? categoryFilter : undefined
-      );
+      await sendBulkMessage(selectedLeads, message);
 
       onClose();
     } catch (error) {
@@ -105,7 +99,6 @@ export default function BulkMessageSender({ onClose }: BulkMessageSenderProps) {
   };
 
   const uniqueStatuses = [...new Set(leads.map(lead => lead.status))];
-  const uniqueCategories = [...new Set(leads.map(lead => lead.category))];
 
   return (
     <Card className="w-full">
@@ -128,21 +121,6 @@ export default function BulkMessageSender({ onClose }: BulkMessageSenderProps) {
                 <SelectItem value="all">Todos os status</SelectItem>
                 {uniqueStatuses.map(status => (
                   <SelectItem key={status} value={status}>{status}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <label className="text-sm font-medium mb-2 block">Filtrar por Categoria</label>
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Todas as categorias" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas as categorias</SelectItem>
-                {uniqueCategories.map(category => (
-                  <SelectItem key={category} value={category}>{category}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -177,7 +155,6 @@ export default function BulkMessageSender({ onClose }: BulkMessageSenderProps) {
                 </div>
                 <div className="flex gap-1">
                   <Badge variant="outline" className="text-xs">{lead.status}</Badge>
-                  <Badge variant="secondary" className="text-xs">{lead.category}</Badge>
                 </div>
               </div>
             ))}
