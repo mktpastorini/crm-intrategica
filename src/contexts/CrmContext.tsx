@@ -336,15 +336,38 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .from('leads')
         .select('*')
         .order('created_at', { ascending: false });
-
       if (error) {
         console.error('Erro ao carregar leads:', error);
         throw error;
       }
-      
+      let validLeads: Lead[] = [];
       if (data) {
         console.log(`${data.length} leads carregados:`, data);
-        setLeads(data as Lead[]);
+
+        // Obtenha estágios válidos a partir do estado atual
+        const pipelineStagesSnapshot = pipelineStages.length > 0 ? pipelineStages : await supabase.from('pipeline_stages').select('*').then(r => r.data || []);
+        const validStageIds = pipelineStagesSnapshot.map(s => s.id);
+        const primeiroStageId = getPrimeiroStageId(pipelineStagesSnapshot);
+
+        // Trate os leads com estágio inválido
+        const leadsToFix = data.filter((lead: Lead) => !validStageIds.includes(lead.pipeline_stage));
+        if (leadsToFix.length > 0 && primeiroStageId) {
+          console.log(`Corrigindo ${leadsToFix.length} leads de estágio inválido para '${primeiroStageId}'`);
+          await Promise.all(
+            leadsToFix.map(async (lead: Lead) => {
+              await supabase.from('leads').update({ pipeline_stage: primeiroStageId }).eq('id', lead.id);
+            })
+          );
+          // Refaz o load após a atualização
+          const { data: fixedLeadsData } = await supabase
+            .from('leads')
+            .select('*')
+            .order('created_at', { ascending: false });
+          validLeads = fixedLeadsData as Lead[];
+        } else {
+          validLeads = data as Lead[];
+        }
+        setLeads(validLeads);
       }
     } catch (error: any) {
       console.error('Erro ao carregar leads:', error);
@@ -522,11 +545,24 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await updateLead(leadId, { pipeline_stage: newStage });
   };
 
+  // Função utilitária: retorna o id do 1º estágio ('aguardando_contato')
+  const getPrimeiroStageId = (pipelineStages: PipelineStage[]) => {
+    return pipelineStages.find(s => s.id === "aguardando_contato")?.id || pipelineStages[0]?.id;
+  };
+
   const addLead = async (leadData: Omit<Lead, 'id' | 'created_at' | 'updated_at'>) => {
     try {
       setActionLoading('create-lead');
+      // Pega o estágio "Aguardando Início" 
+      let primeiroStageId = 'aguardando_contato';
+      // Se pipelineStages não está vazio, busca pelo id mesmo que o nome mude
+      if (pipelineStages.length > 0) {
+        primeiroStageId = getPrimeiroStageId(pipelineStages) || 'aguardando_contato';
+      }
+
       const leadToInsert = {
         ...leadData,
+        pipeline_stage: primeiroStageId,
         responsible_id: leadData.responsible_id || user?.id || '',
         niche: leadData.niche || 'Geral',
         company: leadData.company || 'Não informado',
@@ -534,7 +570,6 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         phone: leadData.phone || '',
         status: leadData.status || 'novo'
       };
-
       console.log('Criando novo lead:', leadToInsert);
 
       const { data, error } = await supabase
@@ -546,14 +581,10 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (error) throw error;
 
       if (data) {
-        console.log('Lead criado com sucesso:', data);
         setLeads(prev => [...prev, data as Lead]);
-        
         if (data.pipeline_stage) {
-          console.log(`Novo lead ${data.id} adicionado no estágio ${data.pipeline_stage}`);
           triggerJourneyMessages(data.id, data.pipeline_stage, data);
         }
-        
         toast({
           title: "Lead criado",
           description: "Lead foi criado com sucesso",

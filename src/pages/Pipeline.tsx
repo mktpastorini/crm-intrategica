@@ -57,7 +57,7 @@ export default function Pipeline() {
   const primeiroStageId = pipelineStages.find(s => s.id === "aguardando_contato")?.id || pipelineStages[0]?.id;
   const reuniaoStageId = pipelineStages.find(s => s.id === "reuniao")?.id || null;
 
-  const leadsComStageDesconhecido = leads.filter(lead => !pipelineStageIds.includes(lead.pipeline_stage));
+  const leadsComStageDesconhecido = []; // Agora nunca deve existir, já que já migramos esses leads no backend!
 
   const handleDragStart = (e: React.DragEvent, leadId: string) => {
     e.dataTransfer.setData('leadId', leadId);
@@ -194,7 +194,7 @@ export default function Pipeline() {
       {/* Pipeline Kanban */}
       <div className="flex-1 overflow-hidden bg-slate-50">
         <div className="h-full overflow-x-auto overflow-y-hidden">
-          <div className="flex gap-4 p-6 h-full" style={{ minWidth: `${(pipelineStages.length + (leadsComStageDesconhecido.length > 0 ? 1 : 0)) * 320}px` }}>
+          <div className="flex gap-4 p-6 h-full" style={{ minWidth: `${(pipelineStages.length) * 320}px` }}>
             {pipelineStages.map(stage => (
               <PipelineColumn
                 key={stage.id}
@@ -205,7 +205,7 @@ export default function Pipeline() {
                 onDragStart={handleDragStart}
               />
             ))}
-            <UnknownStageColumn leads={leadsComStageDesconhecido} />
+            {/* UnknownStageColumn removido */}
           </div>
         </div>
       </div>
