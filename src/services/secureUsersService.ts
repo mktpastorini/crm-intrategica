@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { securityHelpers } from '@/utils/securityHelpers';
 import { inputValidation } from '@/utils/inputValidation';
@@ -86,51 +85,30 @@ export const secureUsersService = {
     console.log('Dados sanitizados:', sanitizedData);
 
     try {
-      // Usar service_role key para criar usuário
-      const { data: authData, error: authError } = await supabase.rpc('create_user_with_profile', {
-        user_email: sanitizedData.email,
-        user_password: sanitizedData.password,
-        user_name: sanitizedData.name,
-        user_role: sanitizedData.role
-      });
+      // Criar perfil diretamente na tabela profiles
+      const userId = crypto.randomUUID();
+      const { data: newProfile, error: profileError } = await supabase
+        .from('profiles')
+        .insert({
+          id: userId,
+          name: sanitizedData.name,
+          email: sanitizedData.email,
+          role: sanitizedData.role,
+          status: 'active'
+        })
+        .select()
+        .single();
 
-      if (authError) {
-        console.error('Erro na function create_user_with_profile:', authError);
-        throw new Error(authError.message || 'Erro ao criar usuário no sistema de autenticação');
+      if (profileError) {
+        console.error('Erro ao criar perfil:', profileError);
+        throw new Error('Erro ao criar perfil do usuário');
       }
 
-      console.log('Usuário criado com sucesso:', authData);
-      return authData;
+      console.log('Usuário criado com sucesso:', newProfile);
+      return newProfile;
 
     } catch (error: any) {
       console.error('Erro detalhado na criação:', error);
-      
-      // Tentar método alternativo se a function não existir
-      if (error.message?.includes('function') || error.message?.includes('does not exist')) {
-        console.log('Tentando método alternativo...');
-        
-        // Criar perfil diretamente na tabela profiles
-        const userId = crypto.randomUUID();
-        const { data: newProfile, error: profileError } = await supabase
-          .from('profiles')
-          .insert({
-            id: userId,
-            name: sanitizedData.name,
-            email: sanitizedData.email,
-            role: sanitizedData.role,
-            status: 'active'
-          })
-          .select()
-          .single();
-
-        if (profileError) {
-          console.error('Erro ao criar perfil:', profileError);
-          throw new Error('Erro ao criar perfil do usuário');
-        }
-
-        return newProfile;
-      }
-      
       throw error;
     }
   },
