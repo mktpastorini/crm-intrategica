@@ -82,13 +82,60 @@ export default function Leads() {
     e.preventDefault();
     
     try {
+      // Validações básicas
+      if (!formData.name.trim()) {
+        toast({
+          title: "Erro de validação",
+          description: "Nome é obrigatório",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!formData.company.trim()) {
+        toast({
+          title: "Erro de validação",
+          description: "Empresa é obrigatória",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!formData.phone.trim()) {
+        toast({
+          title: "Erro de validação",
+          description: "Telefone é obrigatório",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!formData.niche.trim()) {
+        toast({
+          title: "Erro de validação",
+          description: "Nicho é obrigatório",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const submitData = {
         ...formData,
+        name: formData.name.trim(),
+        company: formData.company.trim(),
+        phone: formData.phone.trim(),
+        niche: formData.niche.trim(),
+        email: formData.email.trim() || undefined,
+        website: formData.website.trim() || undefined,
+        address: formData.address.trim() || undefined,
+        instagram: formData.instagram.trim() || undefined,
         // Se o WhatsApp não foi preenchido, usa o telefone
-        whatsapp: formData.whatsapp || formData.phone,
+        whatsapp: formData.whatsapp.trim() || formData.phone.trim(),
         // Se não há responsável selecionado, usa o usuário logado
         responsible_id: formData.responsible_id || user?.id || ''
       };
+
+      console.log('Dados que serão enviados:', submitData);
 
       if (editingLead) {
         await updateLead(editingLead.id, submitData);
@@ -107,9 +154,21 @@ export default function Leads() {
       handleCloseDialog();
     } catch (error) {
       console.error('Erro ao salvar lead:', error);
+      
+      // Extrair mensagem de erro mais específica
+      let errorMessage = "Ocorreu um erro ao salvar o lead. Tente novamente.";
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      } else if (error && typeof error === 'object' && 'message' in error) {
+        errorMessage = (error as any).message;
+      }
+      
       toast({
         title: "Erro",
-        description: "Ocorreu um erro ao salvar o lead. Tente novamente.",
+        description: errorMessage,
         variant: "destructive",
       });
     }
@@ -169,7 +228,6 @@ export default function Leads() {
     try {
       console.log('Iniciando importação de leads:', importedLeads);
       
-      // Usar o usuário logado como responsável padrão
       const defaultResponsibleId = user?.id || null;
       
       if (!defaultResponsibleId) {
@@ -186,7 +244,6 @@ export default function Leads() {
 
       for (const lead of importedLeads) {
         try {
-          // Ensure required fields are present
           const leadData = {
             name: lead.name || 'Nome não informado',
             company: lead.company || lead.name || 'Empresa não informada',
@@ -199,7 +256,7 @@ export default function Leads() {
             place_id: lead.place_id || null,
             niche: lead.niche || 'Google Maps',
             status: lead.status || 'novo',
-            responsible_id: defaultResponsibleId // Sempre usar o usuário logado
+            responsible_id: defaultResponsibleId
           };
           
           console.log('Criando lead:', leadData);
@@ -217,7 +274,6 @@ export default function Leads() {
           description: `${successCount} leads importados com sucesso${errorCount > 0 ? ` (${errorCount} falharam)` : ''}`,
         });
         
-        // Recarregar a lista de leads
         await loadLeads();
       } else {
         toast({
@@ -291,30 +347,38 @@ export default function Leads() {
               <form onSubmit={handleSubmit} className="space-y-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <Label htmlFor="name" className="text-sm font-medium">Nome do Contato</Label>
+                    <Label htmlFor="name" className="text-sm font-medium">
+                      Nome do Contato <span className="text-red-500">*</span>
+                    </Label>
                     <Input
                       id="name"
                       value={formData.name}
                       onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                       required
                       className="mt-1"
+                      placeholder="Nome completo"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="company" className="text-sm font-medium">Empresa</Label>
+                    <Label htmlFor="company" className="text-sm font-medium">
+                      Empresa <span className="text-red-500">*</span>
+                    </Label>
                     <Input
                       id="company"
                       value={formData.company}
                       onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
                       required
                       className="mt-1"
+                      placeholder="Nome da empresa"
                     />
                   </div>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <Label htmlFor="phone" className="text-sm font-medium">Telefone</Label>
+                    <Label htmlFor="phone" className="text-sm font-medium">
+                      Telefone <span className="text-red-500">*</span>
+                    </Label>
                     <Input
                       id="phone"
                       value={formData.phone}
@@ -345,6 +409,7 @@ export default function Leads() {
                       value={formData.email}
                       onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
                       className="mt-1"
+                      placeholder="email@exemplo.com"
                     />
                   </div>
                   <div>
@@ -385,13 +450,16 @@ export default function Leads() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <Label htmlFor="niche" className="text-sm font-medium">Nicho</Label>
+                    <Label htmlFor="niche" className="text-sm font-medium">
+                      Nicho <span className="text-red-500">*</span>
+                    </Label>
                     <Input
                       id="niche"
                       value={formData.niche}
                       onChange={(e) => setFormData(prev => ({ ...prev, niche: e.target.value }))}
                       required
                       className="mt-1"
+                      placeholder="Ex: Saúde, Tecnologia..."
                     />
                   </div>
                   <div>
