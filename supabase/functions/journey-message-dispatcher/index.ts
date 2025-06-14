@@ -85,6 +85,26 @@ serve(async (req) => {
       .from("journey_message_schedules")
       .update({ sent_at: new Date().toISOString() })
       .eq("id", sch.id);
+
+    // [NOVO] Registra no histórico o envio, 1 registro por schedule disparado
+    await supabase
+      .from("journey_message_history")
+      .insert([
+        {
+          schedule_id: sch.id,
+          lead_id: sch.lead_id,
+          lead_name: sch.lead_name,
+          lead_phone: sch.lead_phone,
+          lead_email: sch.lead_email,
+          stage: sch.stage,
+          message_title: sch.message_title,
+          message_content: sch.message_content,
+          message_type: sch.message_type,
+          media_url: sch.media_url,
+          webhook_url: sch.webhook_url,
+          sent_at: new Date().toISOString(),
+        },
+      ]);
   }
 
   return new Response(

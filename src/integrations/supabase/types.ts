@@ -113,6 +113,62 @@ export type Database = {
           },
         ]
       }
+      journey_message_history: {
+        Row: {
+          id: string
+          lead_email: string | null
+          lead_id: string | null
+          lead_name: string | null
+          lead_phone: string | null
+          media_url: string | null
+          message_content: string | null
+          message_title: string | null
+          message_type: string | null
+          schedule_id: string | null
+          sent_at: string
+          stage: string | null
+          webhook_url: string | null
+        }
+        Insert: {
+          id?: string
+          lead_email?: string | null
+          lead_id?: string | null
+          lead_name?: string | null
+          lead_phone?: string | null
+          media_url?: string | null
+          message_content?: string | null
+          message_title?: string | null
+          message_type?: string | null
+          schedule_id?: string | null
+          sent_at?: string
+          stage?: string | null
+          webhook_url?: string | null
+        }
+        Update: {
+          id?: string
+          lead_email?: string | null
+          lead_id?: string | null
+          lead_name?: string | null
+          lead_phone?: string | null
+          media_url?: string | null
+          message_content?: string | null
+          message_title?: string | null
+          message_type?: string | null
+          schedule_id?: string | null
+          sent_at?: string
+          stage?: string | null
+          webhook_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "journey_message_history_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "journey_message_schedules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       journey_message_schedules: {
         Row: {
           created_at: string
