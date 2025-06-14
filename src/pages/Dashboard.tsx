@@ -17,11 +17,25 @@ export default function Dashboard() {
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [showDetails, setShowDetails] = useState(false);
 
+  // O id do estágio inicial agora é 'aguardando_inicio'
+  const STAGE_INITIAL = 'aguardando_inicio';
+  const STAGE_PROPOSTA = 'proposta';
+  const STAGE_FECHAMENTO = 'fechamento';
+  const STAGE_REUNIAO = 'reuniao';
+  const STAGE_CONTRATO_ASSINADO = 'contrato_assinado';
+
+  // Atualizado para pegar os leads corretamente com base no novo id do estágio inicial
   const totalLeads = leads.length;
-  const leadsInPipeline = leads.filter(lead => lead.pipeline_stage !== 'contrato-assinado').length;
-  const proposalsSent = leads.filter(lead => lead.pipeline_stage === 'proposta-enviada').length;
-  const meetingsScheduled = events.filter(event => 
-    event.type === 'reuniao' && 
+
+  // Leads que não estão em contrato assinado (filtrando por id correto)
+  const leadsInPipeline = leads.filter(lead => lead.pipeline_stage !== STAGE_CONTRATO_ASSINADO).length;
+
+  // Contagem corretas de propostas/enviadas (caso tenha esse id nos estágios)
+  const proposalsSent = leads.filter(lead => lead.pipeline_stage === STAGE_PROPOSTA).length;
+
+  // Eventos de reunião agendados para os próximos 7 dias
+  const meetingsScheduled = events.filter(event =>
+    event.type === STAGE_REUNIAO &&
     new Date(event.date + 'T' + event.time) >= new Date() &&
     new Date(event.date + 'T' + event.time) <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
   ).length;
