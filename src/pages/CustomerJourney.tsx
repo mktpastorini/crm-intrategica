@@ -16,19 +16,6 @@ import JourneyKanban from "../components/journey/JourneyKanban";
 import JourneyHistoryTable from "../components/journey/JourneyHistoryTable";
 import type { JourneyMessage } from "../components/journey/types";
 
-interface JourneyMessage {
-  id: string;
-  title: string;
-  content: string;
-  delay: number;
-  delayUnit: 'minutes' | 'hours' | 'days';
-  stage: string;
-  type: 'text' | 'image' | 'video';
-  mediaUrl?: string;
-  order: number;
-  created_at: string;
-}
-
 export default function CustomerJourney() {
   const { toast } = useToast();
   const { pipelineStages } = useCrm();
