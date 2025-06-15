@@ -100,6 +100,36 @@ interface JourneyMessage {
   created_at: string;
 }
 
+interface ProductService {
+  id: string;
+  name: string;
+  description?: string;
+  price: number;
+  type: 'product' | 'service';
+  created_at: string;
+  updated_at: string;
+}
+
+interface Proposal {
+  id: string;
+  title: string;
+  content: string;
+  total_value: number;
+  lead_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ProposalItem {
+  id: string;
+  proposal_id: string;
+  product_service_id?: string;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  created_at: string;
+}
+
 interface CrmContextType {
   leads: Lead[];
   events: Event[];
@@ -133,6 +163,17 @@ interface CrmContextType {
   loadLeads: () => Promise<void>;
   loadEvents: () => Promise<void>;
   loadUsers: () => Promise<void>;
+  productsServices: ProductService[];
+  proposals: Proposal[];
+  addProductService: (item: Omit<ProductService, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
+  updateProductService: (id: string, updates: Partial<ProductService>) => Promise<void>;
+  deleteProductService: (id: string) => Promise<void>;
+  addProposal: (proposal: Omit<Proposal, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
+  updateProposal: (id: string, updates: Partial<Proposal>) => Promise<void>;
+  deleteProposal: (id: string) => Promise<void>;
+  loadProductsServices: () => Promise<void>;
+  loadProposals: () => Promise<void>;
+  linkProposalToLead: (leadId: string, proposalId: string) => Promise<void>;
 }
 
 const CrmContext = createContext<CrmContextType | undefined>(undefined);
@@ -164,6 +205,8 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     { id: '3', name: 'Outros', description: 'Outras fontes de leads' },
   ]);
   const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
+  const [productsServices, setProductsServices] = useState<ProductService[]>([]);
+  const [proposals, setProposals] = useState<Proposal[]>([]);
 
   // Função para carregar estágios do pipeline do banco de dados
   const loadPipelineStages = async () => {
@@ -295,7 +338,9 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           loadEvents(),
           loadUsers(),
           loadPendingActions(),
-          loadPipelineStages()
+          loadPipelineStages(),
+          loadProductsServices(),
+          loadProposals()
         ]);
         console.log('Todos os dados foram carregados com sucesso');
       } catch (error) {
@@ -1132,6 +1177,202 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const addProductService = async (item: Omit<ProductService, 'id' | 'created_at' | 'updated_at'>) => {
+    try {
+      setActionLoading('create-product-service');
+      console.log('Criando produto/serviço:', item);
+
+      const { data, error } = await supabase
+        .from('products_services')
+        .insert([item])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setProductsServices(prev => [...prev, data as ProductService]);
+        toast({
+          title: "Produto/Serviço criado",
+          description: "Item foi criado com sucesso",
+        });
+      }
+    } catch (error: any) {
+      console.error('Erro ao criar produto/serviço:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao criar produto/serviço",
+        variant: "destructive",
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const updateProductService = async (id: string, updates: Partial<ProductService>) => {
+    try {
+      const { data, error } = await supabase
+        .from('products_services')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setProductsServices(prev => prev.map(item => item.id === id ? data as ProductService : item));
+        toast({
+          title: "Produto/Serviço atualizado",
+          description: "Item foi atualizado com sucesso",
+        });
+      }
+    } catch (error: any) {
+      console.error('Erro ao atualizar produto/serviço:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao atualizar produto/serviço",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deleteProductService = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('products_services')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setProductsServices(prev => prev.filter(item => item.id !== id));
+      toast({
+        title: "Produto/Serviço excluído",
+        description: "Item foi excluído com sucesso",
+      });
+    } catch (error: any) {
+      console.error('Erro ao excluir produto/serviço:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao excluir produto/serviço",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const addProposal = async (proposal: Omit<Proposal, 'id' | 'created_at' | 'updated_at'>) => {
+    try {
+      setActionLoading('create-proposal');
+      console.log('Criando proposta:', proposal);
+
+      const { data, error } = await supabase
+        .from('proposals')
+        .insert([proposal])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setProposals(prev => [...prev, data as Proposal]);
+        toast({
+          title: "Proposta criada",
+          description: "Proposta foi criada com sucesso",
+        });
+      }
+    } catch (error: any) {
+      console.error('Erro ao criar proposta:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao criar proposta",
+        variant: "destructive",
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const updateProposal = async (id: string, updates: Partial<Proposal>) => {
+    try {
+      const { data, error } = await supabase
+        .from('proposals')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setProposals(prev => prev.map(prop => prop.id === id ? data as Proposal : prop));
+        toast({
+          title: "Proposta atualizada",
+          description: "Proposta foi atualizada com sucesso",
+        });
+      }
+    } catch (error: any) {
+      console.error('Erro ao atualizar proposta:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao atualizar proposta",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deleteProposal = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('proposals')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setProposals(prev => prev.filter(prop => prop.id !== id));
+      toast({
+        title: "Proposta excluída",
+        description: "Proposta foi excluída com sucesso",
+      });
+    } catch (error: any) {
+      console.error('Erro ao excluir proposta:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao excluir proposta",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const linkProposalToLead = async (leadId: string, proposalId: string) => {
+    try {
+      const { error } = await supabase
+        .from('leads')
+        .update({ proposal_id: proposalId })
+        .eq('id', leadId);
+
+      if (error) throw error;
+
+      // Update local state
+      setLeads(prev => prev.map(lead => 
+        lead.id === leadId ? { ...lead, proposal_id: proposalId } : lead
+      ));
+
+      toast({
+        title: "Proposta vinculada",
+        description: "Proposta foi vinculada ao lead com sucesso",
+      });
+    } catch (error: any) {
+      console.error('Erro ao vincular proposta ao lead:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao vincular proposta ao lead",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <CrmContext.Provider value={{
       leads,
@@ -1166,6 +1407,17 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       loadLeads,
       loadEvents,
       loadUsers,
+      productsServices,
+      proposals,
+      addProductService,
+      updateProductService,
+      deleteProductService,
+      addProposal,
+      updateProposal,
+      deleteProposal,
+      loadProductsServices,
+      loadProposals,
+      linkProposalToLead,
     }}>
       {children}
     </CrmContext.Provider>

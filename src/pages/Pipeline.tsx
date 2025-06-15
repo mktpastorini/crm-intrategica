@@ -25,6 +25,7 @@ export default function Pipeline() {
   const moveLead = context.moveLead;
   const addEvent = context.addEvent;
   const users = context.users;
+  const proposals = context.proposals;
 
   const { user, profile } = useAuth();
   const { toast } = useToast();
@@ -36,6 +37,9 @@ export default function Pipeline() {
     time: '',
     responsible_id: user?.id || ''
   });
+  const [showProposalDialog, setShowProposalDialog] = useState(false);
+  const [selectedLeadForProposal, setSelectedLeadForProposal] = useState<string | null>(null);
+  const [selectedProposalId, setSelectedProposalId] = useState<string>('');
 
   // Adicionando logs para depuração dos leads recebidos
   useEffect(() => {
@@ -162,6 +166,29 @@ export default function Pipeline() {
     
     if (!lead) return;
 
+    // Check if moving to "Proposta Enviada" stage
+    const propostaEnviadaStage = pipelineStages.find(s => 
+      s.name.toLowerCase().includes('proposta') && s.name.toLowerCase().includes('enviada')
+    );
+    
+    if (propostaEnviadaStage && newStage === propostaEnviadaStage.id) {
+      // Check if lead already has a proposal
+      if (lead.proposal_id) {
+        // Lead already has proposal, allow move
+        moveLead(leadId, newStage);
+        toast({
+          title: "Lead movido",
+          description: `${lead.name} foi movido para ${propostaEnviadaStage.name}`,
+        });
+        scheduleJourneyMessages(lead, newStage);
+      } else {
+        // Lead needs a proposal, show dialog
+        setSelectedLeadForProposal(leadId);
+        setShowProposalDialog(true);
+      }
+      return;
+    }
+
     // Para estágio de reunião, abrir modal
     if (reuniaoStageId && newStage === reuniaoStageId) {
       setSelectedLead(leadId);
@@ -236,6 +263,46 @@ export default function Pipeline() {
     });
   };
 
+  const handleProposalSelection = async () => {
+    if (!selectedLeadForProposal || !selectedProposalId) {
+      toast({
+        title: "Seleção obrigatória",
+        description: "É necessário selecionar uma proposta",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Link proposal to lead
+      await context.linkProposalToLead(selectedLeadForProposal, selectedProposalId);
+      
+      // Move lead to "Proposta Enviada"
+      const propostaEnviadaStage = pipelineStages.find(s => 
+        s.name.toLowerCase().includes('proposta') && s.name.toLowerCase().includes('enviada')
+      );
+      
+      if (propostaEnviadaStage) {
+        const lead = leads.find(l => l.id === selectedLeadForProposal);
+        if (lead) {
+          moveLead(selectedLeadForProposal, propostaEnviadaStage.id);
+          scheduleJourneyMessages(lead, propostaEnviadaStage.id);
+        }
+      }
+
+      setShowProposalDialog(false);
+      setSelectedLeadForProposal(null);
+      setSelectedProposalId('');
+      
+      toast({
+        title: "Proposta vinculada",
+        description: "Lead foi movido para Proposta Enviada com a proposta selecionada",
+      });
+    } catch (error) {
+      console.error('Erro ao vincular proposta:', error);
+    }
+  };
+
   // Retorna leads para um determinado stageId
   // Importante: usa exatamente o id do estágio em pipelineStages para o filtro!
   const getLeadsByStage = (stageId: string) => {
@@ -253,6 +320,30 @@ export default function Pipeline() {
     { value: 'email', label: 'E-mail' }
   ];
 
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(value);
+  };
+
+  // Calculate total value of proposals in "Proposta Enviada" stage
+  const getProposalTotalValue = () => {
+    const propostaEnviadaStage = pipelineStages.find(s => 
+      s.name.toLowerCase().includes('proposta') && s.name.toLowerCase().includes('enviada')
+    );
+    
+    if (!propostaEnviadaStage) return 0;
+
+    const leadsWithProposals = getLeadsByStage(propostaEnviadaStage.id).filter(lead => lead.proposal_id);
+    const total = leadsWithProposals.reduce((sum, lead) => {
+      const proposal = proposals.find(p => p.id === lead.proposal_id);
+      return sum + (proposal?.total_value || 0);
+    }, 0);
+
+    return total;
+  };
+
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       {/* Header fixo - não move com scroll */}
@@ -267,6 +358,9 @@ export default function Pipeline() {
           <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
             {pipelineStages.map(stage => {
               const leadsInStage = getLeadsByStage(stage.id);
+              const isPropostaEnviada = stage.name.toLowerCase().includes('proposta') && stage.name.toLowerCase().includes('enviada');
+              const totalValue = isPropostaEnviada ? getProposalTotalValue() : null;
+              
               return (
                 <Card key={stage.id} className="bg-white shadow-sm border-l-4" style={{ borderLeftColor: stage.color }}>
                   <CardContent className="p-3">
@@ -274,6 +368,11 @@ export default function Pipeline() {
                       {leadsInStage.length}
                     </div>
                     <div className="text-xs text-slate-600 mt-1">{stage.name}</div>
+                    {totalValue !== null && (
+                      <div className="text-sm font-semibold text-green-600 mt-1">
+                        {formatCurrency(totalValue)}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               );
@@ -296,7 +395,6 @@ export default function Pipeline() {
                 onDragStart={handleDragStart}
               />
             ))}
-            {/* UnknownStageColumn removido */}
           </div>
         </div>
       </div>
@@ -371,6 +469,62 @@ export default function Pipeline() {
               <Button onClick={handleScheduleEvent} className="flex-1">
                 <Calendar className="w-4 h-4 mr-2" />
                 Agendar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Proposal Selection Dialog */}
+      <Dialog open={showProposalDialog} onOpenChange={setShowProposalDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Selecionar Proposta</DialogTitle>
+            <DialogDescription>
+              Para mover o lead para "Proposta Enviada", é necessário vincular uma proposta
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="proposal">Selecionar Proposta *</Label>
+              {proposals.length === 0 ? (
+                <div className="p-3 text-center text-slate-500 bg-slate-50 rounded-md">
+                  Nenhuma proposta disponível. Crie uma proposta primeiro.
+                </div>
+              ) : (
+                <Select value={selectedProposalId} onValueChange={setSelectedProposalId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Escolha uma proposta" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {proposals.map((proposal) => (
+                      <SelectItem key={proposal.id} value={proposal.id}>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{proposal.title}</span>
+                          <span className="text-xs text-green-600">
+                            {formatCurrency(proposal.total_value)}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+            <div className="flex gap-2 pt-4">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowProposalDialog(false)} 
+                className="flex-1"
+              >
+                Cancelar
+              </Button>
+              <Button 
+                onClick={handleProposalSelection} 
+                className="flex-1"
+                disabled={proposals.length === 0}
+              >
+                Confirmar e Mover
               </Button>
             </div>
           </div>

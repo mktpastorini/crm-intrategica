@@ -1,212 +1,204 @@
 
-import { Link, useLocation } from 'react-router-dom';
+import { useState } from 'react';
+import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { useSystemSettingsDB } from '@/hooks/useSystemSettingsDB';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import {
-  Calendar,
-  Users,
-  MessageSquare,
-  Settings,
-  GitBranch,
-  Route,
-  BarChart3,
-  Eye,
-  UserPlus,
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { 
+  LayoutDashboard, 
+  Users, 
+  Calendar, 
+  GitBranch, 
+  MessageSquare, 
+  Settings, 
   LogOut,
-  Activity,
+  Menu,
+  X,
   User,
-  ChevronDown,
-  Menu
+  Shield,
+  Route,
+  FileText,
+  Package
 } from 'lucide-react';
-import { useState } from 'react';
+import { cn } from '@/lib/utils';
 
-interface LayoutProps {
-  children: React.ReactNode;
-}
-
-export default function Layout({ children }: LayoutProps) {
-  const { user, profile, signOut } = useAuth();
-  const { settings, loading: settingsLoading } = useSystemSettingsDB();
+const Layout = () => {
+  const { user, profile, logout } = useAuth();
   const location = useLocation();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const navigation = [
-    { name: 'Dashboard', href: '/', icon: BarChart3 },
-    { name: 'Agenda', href: '/calendar', icon: Calendar },
-    { name: 'Leads', href: '/leads', icon: UserPlus },
-    { name: 'Pipeline', href: '/pipeline', icon: GitBranch },
-    { name: 'Mensagens', href: '/messages', icon: MessageSquare },
-    { name: 'Jornada do Cliente', href: '/customer-journey', icon: Route },
-    { name: 'Usuários', href: '/users', icon: Users },
-    { name: 'Supervisão', href: '/supervision', icon: Eye },
-    { name: 'Configurações', href: '/settings', icon: Settings },
+  const menuItems = [
+    { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
+    { icon: Users, label: 'Leads', path: '/leads' },
+    { icon: Calendar, label: 'Calendário', path: '/calendar' },
+    { icon: GitBranch, label: 'Pipeline', path: '/pipeline' },
+    { icon: Route, label: 'Jornada do Cliente', path: '/customer-journey' },
+    { icon: MessageSquare, label: 'Mensagens', path: '/messages' },
+    { icon: FileText, label: 'Propostas e Valores', path: '/proposals-values' },
   ];
 
-  const isActive = (path: string) => {
-    if (path === '/') {
-      return location.pathname === '/';
-    }
-    return location.pathname.startsWith(path);
-  };
+  const adminItems = [
+    { icon: Shield, label: 'Supervisão', path: '/supervision' },
+    { icon: User, label: 'Usuários', path: '/users' },
+    { icon: Settings, label: 'Configurações', path: '/settings' },
+  ];
 
-  const handleLogout = () => {
-    signOut();
-  };
+  const isActive = (path: string) => location.pathname === path;
 
-  const handleMobileNavClick = () => {
-    setMobileMenuOpen(false);
-  };
+  const SidebarContent = () => (
+    <div className="flex flex-col h-full">
+      <div className="p-6">
+        <h2 className="text-2xl font-bold text-slate-900">CRM</h2>
+        {profile && (
+          <div className="mt-4 p-3 bg-slate-50 rounded-lg">
+            <div className="flex items-center space-x-3">
+              <Avatar className="w-8 h-8">
+                <AvatarImage src={profile.avatar_url} />
+                <AvatarFallback>
+                  {profile.name?.charAt(0).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-slate-900 truncate">
+                  {profile.name}
+                </p>
+                <Badge variant={profile.role === 'admin' ? 'default' : 'secondary'} className="text-xs">
+                  {profile.role === 'admin' ? 'Administrador' : 'Comercial'}
+                </Badge>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
-  // Use default color if settings are still loading
-  const primaryColor = settings.primaryColor || '#1d0029';
-
-  const NavigationMenu = ({ isMobile = false }: { isMobile?: boolean }) => (
-    <div className={`space-y-1 ${isMobile ? 'p-6' : 'p-6'}`}>
-      {navigation.map((item) => {
-        const Icon = item.icon;
-        const active = isActive(item.href);
-        return (
+      <nav className="flex-1 px-4 space-y-1">
+        {menuItems.map((item) => (
           <Link
-            key={item.name}
-            to={item.href}
-            onClick={isMobile ? handleMobileNavClick : undefined}
-            className={`flex items-center space-x-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors ${
-              active
-                ? 'text-white border'
-                : 'text-slate-700 hover:bg-slate-100'
-            }`}
-            style={active ? { 
-              backgroundColor: primaryColor,
-              borderColor: primaryColor 
-            } : {}}
+            key={item.path}
+            to={item.path}
+            className={cn(
+              "flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors",
+              isActive(item.path)
+                ? "bg-blue-100 text-blue-700"
+                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+            )}
+            onClick={() => setSidebarOpen(false)}
           >
-            <Icon className="w-5 h-5" />
-            <span>{item.name}</span>
+            <item.icon className="mr-3 h-5 w-5" />
+            {item.label}
           </Link>
-        );
-      })}
+        ))}
+      </nav>
+
+      {profile?.role === 'admin' && (
+        <>
+          <Separator className="mx-4" />
+          <nav className="px-4 py-4 space-y-1">
+            <p className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              Administração
+            </p>
+            {adminItems.map((item) => (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={cn(
+                  "flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors",
+                  isActive(item.path)
+                    ? "bg-blue-100 text-blue-700"
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                )}
+                onClick={() => setSidebarOpen(false)}
+              >
+                <item.icon className="mr-3 h-5 w-5" />
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+        </>
+      )}
+
+      <div className="p-4">
+        <Separator className="mb-4" />
+        <div className="flex items-center justify-between">
+          <Link
+            to="/profile"
+            className="flex items-center space-x-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors"
+            onClick={() => setSidebarOpen(false)}
+          >
+            <User className="h-4 w-4" />
+            <span>Perfil</span>
+          </Link>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={logout}
+            className="text-slate-600 hover:text-slate-900"
+          >
+            <LogOut className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
     </div>
   );
 
   return (
-    <div className="h-screen flex flex-col bg-slate-50">
-      {/* Header fixo */}
-      <header className="flex-shrink-0 bg-white border-b border-slate-200 shadow-sm z-50">
-        <div className="px-4 md:px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              {/* Menu hambúrguer - apenas mobile */}
-              <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-                <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon" className="md:hidden">
-                    <Menu className="w-6 h-6" />
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="left" className="w-80 bg-white p-0">
-                  <div className="flex flex-col h-full">
-                    <div className="flex items-center space-x-4 p-6 border-b">
-                      {settings.logoUrl && (
-                        <img 
-                          src={settings.logoUrl} 
-                          alt="Logo" 
-                          className="h-8 w-auto object-contain" 
-                          data-logo 
-                        />
-                      )}
-                      {settings.systemName && (
-                        <h1 className="text-lg font-semibold text-slate-900">
-                          {settings.systemName}
-                        </h1>
-                      )}
-                    </div>
-                    <nav className="flex-1 overflow-y-auto">
-                      <NavigationMenu isMobile={true} />
-                    </nav>
-                  </div>
-                </SheetContent>
-              </Sheet>
+    <div className="flex h-screen bg-slate-50">
+      {/* Desktop Sidebar */}
+      <div className="hidden lg:flex lg:flex-shrink-0">
+        <div className="flex flex-col w-64 bg-white border-r border-slate-200">
+          <SidebarContent />
+        </div>
+      </div>
 
-              {/* Logo e nome do sistema */}
-              {settings.logoUrl && (
-                <img 
-                  src={settings.logoUrl} 
-                  alt="Logo" 
-                  className="h-8 w-auto object-contain" 
-                  data-logo 
-                />
-              )}
-              {settings.systemName && (
-                <div>
-                  <h1 className="text-lg md:text-xl font-semibold text-slate-900">
-                    {settings.systemName}
-                  </h1>
-                </div>
-              )}
+      {/* Mobile Sidebar */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div
+            className="fixed inset-0 bg-slate-600 bg-opacity-75"
+            onClick={() => setSidebarOpen(false)}
+          />
+          <div className="relative flex flex-col max-w-xs w-full bg-white">
+            <div className="absolute top-0 right-0 -mr-12 pt-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSidebarOpen(false)}
+                className="text-white hover:text-white hover:bg-slate-600"
+              >
+                <X className="h-6 w-6" />
+              </Button>
             </div>
-            
-            <div className="flex items-center space-x-2 md:space-x-4">
-              <div className="hidden md:flex items-center space-x-2 text-sm text-slate-600">
-                <Activity className="w-4 h-4" />
-                <span>Sistema ativo</span>
-              </div>
-              
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="flex items-center space-x-2">
-                    <Avatar className="w-8 h-8">
-                      {profile?.avatar_url ? (
-                        <AvatarImage src={profile.avatar_url} alt={profile.name} />
-                      ) : null}
-                      <AvatarFallback style={{ backgroundColor: primaryColor, color: 'white' }}>
-                        {profile?.name?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || 'U'}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="hidden md:flex flex-col items-start">
-                      <span className="text-sm font-medium">
-                        {profile?.name || user?.email?.split('@')[0] || 'Usuário'}
-                      </span>
-                      <span className="text-xs text-slate-500">
-                        {profile?.role || 'Usuário'}
-                      </span>
-                    </div>
-                    <ChevronDown className="w-4 h-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56 bg-white">
-                  <DropdownMenuItem asChild>
-                    <Link to="/profile" className="flex items-center">
-                      <User className="w-4 h-4 mr-2" />
-                      Perfil
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleLogout}>
-                    <LogOut className="w-4 h-4 mr-2" />
-                    Sair
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+            <SidebarContent />
           </div>
         </div>
-      </header>
+      )}
 
-      <div className="flex flex-1 min-h-0">
-        {/* Sidebar fixo - apenas desktop */}
-        <nav className="hidden md:flex flex-shrink-0 w-64 bg-white border-r border-slate-200 shadow-sm overflow-y-auto">
-          <NavigationMenu />
-        </nav>
-
-        {/* Main content com scroll */}
-        <main className="flex-1 min-h-0 overflow-auto bg-slate-50">
-          <div className="p-4 md:p-6 h-full">
-            {children}
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Mobile Header */}
+        <div className="lg:hidden bg-white border-b border-slate-200 px-4 py-2">
+          <div className="flex items-center justify-between">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <Menu className="h-6 w-6" />
+            </Button>
+            <h1 className="text-xl font-semibold text-slate-900">CRM</h1>
+            <div className="w-8" /> {/* Spacer */}
           </div>
+        </div>
+
+        {/* Page Content */}
+        <main className="flex-1 overflow-y-auto">
+          <Outlet />
         </main>
       </div>
     </div>
   );
-}
+};
+
+export default Layout;
