@@ -29,6 +29,7 @@ interface Lead {
   instagram?: string;
   place_id?: string;
   rating?: number;
+  proposal_id?: string; // Add proposal_id field
 }
 
 interface Event {
@@ -1368,6 +1369,60 @@ export const CrmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       toast({
         title: "Erro",
         description: "Erro ao vincular proposta ao lead",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const loadProductsServices = async () => {
+    try {
+      console.log('Carregando produtos/serviços do banco...');
+      const { data, error } = await supabase
+        .from('products_services')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao carregar produtos/serviços:', error);
+        throw error;
+      }
+      
+      if (data) {
+        console.log(`${data.length} produtos/serviços carregados:`, data);
+        setProductsServices(data as ProductService[]);
+      }
+    } catch (error: any) {
+      console.error('Erro ao carregar produtos/serviços:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar produtos/serviços",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const loadProposals = async () => {
+    try {
+      console.log('Carregando propostas do banco...');
+      const { data, error } = await supabase
+        .from('proposals')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao carregar propostas:', error);
+        throw error;
+      }
+      
+      if (data) {
+        console.log(`${data.length} propostas carregadas:`, data);
+        setProposals(data as Proposal[]);
+      }
+    } catch (error: any) {
+      console.error('Erro ao carregar propostas:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar propostas",
         variant: "destructive",
       });
     }

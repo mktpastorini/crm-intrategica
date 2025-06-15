@@ -1,165 +1,207 @@
-import { useState, useEffect } from 'react';
+
 import { useAuth } from '@/contexts/AuthContext';
 import { useCrm } from '@/contexts/CrmContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CalendarDays, CheckCircle, User, Users, TrendingUp, FileText } from 'lucide-react';
-import { useActivityTracker } from '@/hooks/useActivityTracker';
-
-interface DashboardMetrics {
-  totalLeads: number;
-  newLeadsToday: number;
-  activeLeads: number;
-  eventsToday: number;
-  completedEvents: number;
-}
+import { Badge } from '@/components/ui/badge';
+import { 
+  Users, 
+  Calendar, 
+  TrendingUp, 
+  Clock,
+  DollarSign,
+  Target,
+  CheckCircle,
+  AlertCircle
+} from 'lucide-react';
+import { useMeetingMetrics } from '@/hooks/useMeetingMetrics';
 
 export default function Dashboard() {
-  const { user, profile } = useAuth();
+  const { profile } = useAuth();
   const { leads, events, pipelineStages, proposals } = useCrm();
-  
-  // Calculate metrics
-  const newLeadsToday = leads.filter(lead => {
-    const leadDate = new Date(lead.created_at).toDateString();
-    const todayDate = new Date().toDateString();
-    return leadDate === todayDate;
+  const { completionRate, averageDuration } = useMeetingMetrics();
+
+  // Calcular estatísticas
+  const totalLeads = leads.length;
+  const todayEvents = events.filter(event => {
+    const today = new Date().toISOString().split('T')[0];
+    return event.date === today;
   }).length;
 
-  const activeLeads = leads.filter(lead => lead.status !== 'concluido' && lead.status !== 'perdido');
+  // Calcular leads por estágio
+  const leadsByStage = pipelineStages.map(stage => ({
+    ...stage,
+    count: leads.filter(lead => lead.pipeline_stage === stage.id).length
+  }));
 
-  const todayEvents = events.filter(event => {
-    const eventDate = new Date(event.start_time).toDateString();
-    const todayDate = new Date().toDateString();
-    return eventDate === todayDate;
-  });
+  // Calcular valor total das propostas enviadas
+  const proposalsSentLeads = leads.filter(lead => 
+    lead.pipeline_stage === 'proposta_enviada' && lead.proposal_id
+  );
+  
+  const totalProposalValue = proposalsSentLeads.reduce((sum, lead) => {
+    const proposal = proposals.find(p => p.id === lead.proposal_id);
+    return sum + (proposal?.total_value || 0);
+  }, 0);
 
-  const completedEvents = todayEvents.filter(event => event.completed).length;
-
-  // Calculate proposal metrics
-  const getProposalMetrics = () => {
-    const propostaEnviadaStage = pipelineStages.find(s => 
-      s.name.toLowerCase().includes('proposta') && s.name.toLowerCase().includes('enviada')
-    );
-    
-    if (!propostaEnviadaStage) return 0;
-
-    const leadsWithProposals = leads
-      .filter(lead => lead.pipeline_stage === propostaEnviadaStage.id && lead.proposal_id);
-    
-    const totalValue = leadsWithProposals.reduce((sum, lead) => {
-      const proposal = proposals.find(p => p.id === lead.proposal_id);
-      return sum + (proposal?.total_value || 0);
-    }, 0);
-
-    return totalValue;
-  };
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(value);
-  };
-
-  // Inicializar o rastreador de atividades
-  const { trackActivity } = useActivityTracker();
-
-  useEffect(() => {
-    // Rastrear a visita à página
-    trackActivity('visit_dashboard', { userId: user?.id, userName: user?.email });
-  }, [trackActivity, user?.id, user?.email]);
+  // Estatísticas de conversão
+  const conversionRate = totalLeads > 0 ? 
+    (leads.filter(lead => lead.pipeline_stage === 'fechado').length / totalLeads * 100).toFixed(1) : '0';
 
   return (
-    <div className="space-y-6 p-6">
-      <div>
+    <div className="container mx-auto p-6">
+      <div className="mb-6">
         <h1 className="text-3xl font-bold text-slate-900">
-          Olá, {profile?.name || user?.email?.split('@')[0]}! 👋
+          Bem-vindo, {profile?.name || 'Usuário'}!
         </h1>
         <p className="text-slate-600">
           Aqui está um resumo das suas atividades hoje
         </p>
       </div>
 
-      {/* Metrics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Cards de estatísticas principais */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total de Leads</CardTitle>
-            <Users className="h-4 w-4 text-slate-600" />
+            <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{leads.length}</div>
-            <div className="flex items-center gap-1 text-xs text-slate-600 mt-1">
-              <CalendarDays className="h-3 w-3" />
-              <span>{newLeadsToday} novos hoje</span>
-            </div>
+            <div className="text-2xl font-bold">{totalLeads}</div>
+            <p className="text-xs text-muted-foreground">
+              Leads cadastrados no sistema
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Eventos Hoje</CardTitle>
-            <CalendarDays className="h-4 w-4 text-slate-600" />
+            <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{todayEvents.length}</div>
-            <div className="flex items-center gap-1 text-xs text-slate-600 mt-1">
-              <CheckCircle className="h-3 w-3" />
-              <span>{completedEvents} concluídos</span>
-            </div>
+            <div className="text-2xl font-bold">{todayEvents}</div>
+            <p className="text-xs text-muted-foreground">
+              Reuniões e compromissos
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Leads Ativos</CardTitle>
-            <TrendingUp className="h-4 w-4 text-slate-600" />
+            <CardTitle className="text-sm font-medium">Taxa de Conversão</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{activeLeads.length}</div>
-            <div className="text-xs text-slate-600 mt-1">
-              Em processo de vendas
-            </div>
+            <div className="text-2xl font-bold">{conversionRate}%</div>
+            <p className="text-xs text-muted-foreground">
+              Leads convertidos em vendas
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Valor em Propostas</CardTitle>
-            <FileText className="h-4 w-4 text-slate-600" />
+            <CardTitle className="text-sm font-medium">Valor em Propos.</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {formatCurrency(getProposalMetrics())}
+            <div className="text-2xl font-bold">
+              R$ {totalProposalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </div>
-            <div className="text-xs text-slate-600 mt-1">
-              Estimativa financeira
+            <p className="text-xs text-muted-foreground">
+              {proposalsSentLeads.length} propostas enviadas
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Pipeline Overview */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Target className="h-5 w-5" />
+              Pipeline de Vendas
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {leadsByStage.map(stage => (
+                <div key={stage.id} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className="w-3 h-3 rounded-full" 
+                      style={{ backgroundColor: stage.color }}
+                    />
+                    <span className="text-sm font-medium">{stage.name}</span>
+                  </div>
+                  <Badge variant="secondary">{stage.count}</Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              Métricas de Reuniões
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Taxa de Conclusão</span>
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <span className="font-bold">{completionRate}%</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Duração Média</span>
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-blue-600" />
+                  <span className="font-bold">{averageDuration} min</span>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Recent Activities */}
-      {/* <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Atividades Recentes</CardTitle>
-            <CardDescription>Suas últimas ações no sistema</CardDescription>
-          </CardHeader>
-          <CardContent>
-            Em breve...
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Próximos Eventos</CardTitle>
-            <CardDescription>Seus compromissos agendados</CardDescription>
-          </CardHeader>
-          <CardContent>
-            Em breve...
-          </CardContent>
-        </Card>
-      </div> */}
+      {/* Eventos próximos */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5" />
+            Próximos Eventos
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {events.slice(0, 5).length > 0 ? (
+            <div className="space-y-3">
+              {events.slice(0, 5).map(event => (
+                <div key={event.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                  <div>
+                    <div className="font-medium">{event.title}</div>
+                    <div className="text-sm text-slate-600">
+                      {event.date} às {event.time} - {event.company}
+                    </div>
+                  </div>
+                  <Badge variant={event.completed ? "default" : "secondary"}>
+                    {event.completed ? "Concluído" : "Pendente"}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-slate-500 text-center py-4">
+              Nenhum evento próximo encontrado
+            </p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
