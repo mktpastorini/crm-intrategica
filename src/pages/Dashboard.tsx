@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -115,10 +114,37 @@ export default function Dashboard() {
     queryFn: proposalService.getAll,
   });
 
+  // Buscar estágios do pipeline para identificar corretamente o estágio "Proposta Enviada"
+  const { data: pipelineStages = [] } = useQuery({
+    queryKey: ['pipeline-stages'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('pipeline_stages')
+        .select('*')
+        .order('order');
+      
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
   // Calcular estatísticas
   useEffect(() => {
     const today = new Date();
     const lastWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    console.log('[Dashboard] Calculando estatísticas...');
+    console.log('[Dashboard] Total de leads:', leads.length);
+    console.log('[Dashboard] Total de propostas:', proposals.length);
+    console.log('[Dashboard] Estágios do pipeline:', pipelineStages);
+
+    // Encontrar o estágio "Proposta Enviada" pelos estágios cadastrados
+    const propostaEnviadaStage = pipelineStages.find(stage => 
+      stage.name.toLowerCase().includes('proposta') && 
+      stage.name.toLowerCase().includes('enviada')
+    );
+    
+    console.log('[Dashboard] Estágio Proposta Enviada encontrado:', propostaEnviadaStage);
 
     // Leads básicos
     const totalLeads = leads.length;
@@ -133,12 +159,20 @@ export default function Dashboard() {
       pipelineDistribution[stage] = (pipelineDistribution[stage] || 0) + 1;
     });
 
-    // Métricas de propostas enviadas (apenas leads em estágio de proposta enviada)
-    const proposalsSentLeads = leads.filter(lead => 
-      lead.pipeline_stage?.toLowerCase().includes('proposta') && 
-      lead.pipeline_stage?.toLowerCase().includes('enviada')
-    );
+    // Métricas de propostas enviadas - usar o ID do estágio encontrado
+    let proposalsSentLeads = [];
+    if (propostaEnviadaStage) {
+      proposalsSentLeads = leads.filter(lead => lead.pipeline_stage === propostaEnviadaStage.id);
+    } else {
+      // Fallback: buscar por nome do estágio que contenha "proposta" e "enviada"
+      proposalsSentLeads = leads.filter(lead => {
+        const stageName = lead.pipeline_stage?.toLowerCase() || '';
+        return stageName.includes('proposta') && stageName.includes('enviada');
+      });
+    }
     
+    console.log('[Dashboard] Leads no estágio Proposta Enviada:', proposalsSentLeads);
+
     const proposalMetrics = proposalsSentLeads.reduce((acc, lead) => {
       acc.count += 1;
       if (lead.proposal_id) {
@@ -150,15 +184,18 @@ export default function Dashboard() {
       return acc;
     }, { count: 0, totalValue: 0 });
 
-    // Previsão de faturamento (propostas enviadas que ainda não foram assinadas)
+    console.log('[Dashboard] Métricas de propostas enviadas:', proposalMetrics);
+
+    // Previsão de faturamento (valor total das propostas enviadas)
     const expectedRevenue = proposalMetrics.totalValue;
 
     // Métricas de contratos assinados (apenas receita real)
-    const contractsSignedLeads = leads.filter(lead =>
-      lead.pipeline_stage?.toLowerCase().includes('contrato') ||
-      lead.pipeline_stage?.toLowerCase().includes('fechado') ||
-      lead.pipeline_stage?.toLowerCase().includes('assinado')
-    );
+    const contractsSignedLeads = leads.filter(lead => {
+      const stageName = lead.pipeline_stage?.toLowerCase() || '';
+      return stageName.includes('contrato') ||
+             stageName.includes('fechado') ||
+             stageName.includes('assinado');
+    });
 
     const contractMetrics = contractsSignedLeads.reduce((acc, lead) => {
       acc.count += 1;
@@ -190,9 +227,10 @@ export default function Dashboard() {
     const performanceMap = new Map<string, { deals: number; revenue: number }>();
     leads.forEach(lead => {
       const userId = lead.responsible_id;
-      if (lead.pipeline_stage?.toLowerCase().includes('contrato') || 
-          lead.pipeline_stage?.toLowerCase().includes('fechado') ||
-          lead.pipeline_stage?.toLowerCase().includes('assinado')) {
+      const stageName = lead.pipeline_stage?.toLowerCase() || '';
+      if (stageName.includes('contrato') || 
+          stageName.includes('fechado') ||
+          stageName.includes('assinado')) {
         
         const current = performanceMap.get(userId) || { deals: 0, revenue: 0 };
         current.deals += 1;
@@ -217,6 +255,12 @@ export default function Dashboard() {
       .sort((a, b) => b.totalRevenue - a.totalRevenue)
       .slice(0, 5);
 
+    console.log('[Dashboard] Estatísticas finais:', {
+      proposalsSent: proposalMetrics,
+      expectedRevenue,
+      contractsSigned: contractMetrics
+    });
+
     setStats({
       totalLeads,
       newLeads,
@@ -227,10 +271,10 @@ export default function Dashboard() {
       pipelineDistribution,
       proposalsSent: proposalMetrics,
       contractsSigned: contractMetrics,
-      expectedRevenue, // Nova métrica
+      expectedRevenue,
       topPerformers
     });
-  }, [leads, events, proposals, users]);
+  }, [leads, events, proposals, users, pipelineStages]);
 
   // Preparar dados para gráficos
   const pipelineChartData = Object.entries(stats.pipelineDistribution).map(([stage, count]) => ({
@@ -250,11 +294,12 @@ export default function Dashboard() {
   const handleUserClick = (user: User) => {
     const userLeads = leads.filter(lead => lead.responsible_id === user.id);
     const userEvents = events.filter(event => event.responsible_id === user.id);
-    const closedDeals = userLeads.filter(lead => 
-      lead.pipeline_stage?.toLowerCase().includes('contrato') ||
-      lead.pipeline_stage?.toLowerCase().includes('fechado') ||
-      lead.pipeline_stage?.toLowerCase().includes('assinado')
-    ).length;
+    const closedDeals = userLeads.filter(lead => {
+      const stageName = lead.pipeline_stage?.toLowerCase() || '';
+      return stageName.includes('contrato') ||
+             stageName.includes('fechado') ||
+             stageName.includes('assinado');
+    }).length;
     
     const completedMeetings = userEvents.filter(event => event.completed).length;
     const scheduledMeetings = userEvents.filter(event => !event.completed).length;
