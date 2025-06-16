@@ -17,6 +17,7 @@ import Users from "./pages/Users";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import Profile from "./pages/Profile";
+import Proposals from "./pages/Proposals";
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import CustomerJourney from "./pages/CustomerJourney";
@@ -60,6 +61,7 @@ function App() {
                 <Route index element={<Dashboard />} />
                 <Route path="leads" element={<Leads />} />
                 <Route path="pipeline" element={<Pipeline />} />
+                <Route path="proposals" element={<Proposals />} />
                 <Route path="messages" element={<Messages />} />
                 <Route path="calendar" element={<Calendar />} />
                 <Route path="profile" element={<Profile />} />

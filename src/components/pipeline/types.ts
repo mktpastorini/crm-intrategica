@@ -9,6 +9,7 @@ export interface Lead {
   responsible_id: string;
   created_at: string;
   pipeline_stage: string; // required everywhere
+  proposal_id?: string; // Nova propriedade
 }
 
 export interface PipelineStage {

@@ -1,4 +1,3 @@
-
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSystemSettingsDB } from '@/hooks/useSystemSettingsDB';
@@ -20,7 +19,8 @@ import {
   Activity,
   User,
   ChevronDown,
-  Menu
+  Menu,
+  FileText
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -39,6 +39,7 @@ export default function Layout({ children }: LayoutProps) {
     { name: 'Agenda', href: '/calendar', icon: Calendar },
     { name: 'Leads', href: '/leads', icon: UserPlus },
     { name: 'Pipeline', href: '/pipeline', icon: GitBranch },
+    { name: 'Propostas', href: '/proposals', icon: FileText },
     { name: 'Mensagens', href: '/messages', icon: MessageSquare },
     { name: 'Jornada do Cliente', href: '/customer-journey', icon: Route },
     { name: 'Usuários', href: '/users', icon: Users },
