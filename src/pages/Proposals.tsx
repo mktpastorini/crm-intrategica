@@ -83,7 +83,14 @@ export default function Proposals() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      if (data) setProducts(data);
+      if (data) {
+        // Type cast the data to ensure proper typing
+        const typedProducts: Product[] = data.map(item => ({
+          ...item,
+          type: item.type as 'product' | 'service'
+        }));
+        setProducts(typedProducts);
+      }
     } catch (error) {
       console.error('Erro ao carregar produtos/serviços:', error);
     }
@@ -147,7 +154,12 @@ export default function Proposals() {
       if (error) throw error;
 
       if (data) {
-        setProducts(prev => [data, ...prev]);
+        // Type cast the response to ensure proper typing
+        const typedProduct: Product = {
+          ...data,
+          type: data.type as 'product' | 'service'
+        };
+        setProducts(prev => [typedProduct, ...prev]);
         setNewProduct({ name: '', description: '', price: 0, type: 'product' });
         setShowProductDialog(false);
         toast({

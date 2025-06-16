@@ -11,7 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 export default function Dashboard() {
   const { leads, events } = useCrm();
   const { user, profile } = useAuth();
-  const meetingMetrics = useMeetingMetrics();
+  const meetingMetrics = useMeetingMetrics(events); // Pass events as argument
   const [proposalValue, setProposalValue] = useState(0);
 
   useEffect(() => {
