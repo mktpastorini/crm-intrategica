@@ -233,6 +233,7 @@ export type Database = {
           phone: string
           pipeline_stage: string
           place_id: string | null
+          proposal_id: string | null
           rating: number | null
           responsible_id: string
           status: string
@@ -252,6 +253,7 @@ export type Database = {
           phone: string
           pipeline_stage?: string
           place_id?: string | null
+          proposal_id?: string | null
           rating?: number | null
           responsible_id: string
           status?: string
@@ -271,6 +273,7 @@ export type Database = {
           phone?: string
           pipeline_stage?: string
           place_id?: string | null
+          proposal_id?: string | null
           rating?: number | null
           responsible_id?: string
           status?: string
@@ -284,6 +287,13 @@ export type Database = {
             columns: ["responsible_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
             referencedColumns: ["id"]
           },
           {
@@ -364,6 +374,36 @@ export type Database = {
         }
         Relationships: []
       }
+      products_services: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          price: number
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          price: number
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          price?: number
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -396,6 +436,89 @@ export type Database = {
           status?: string
         }
         Relationships: []
+      }
+      proposal_items: {
+        Row: {
+          created_at: string
+          id: string
+          product_service_id: string | null
+          proposal_id: string | null
+          quantity: number
+          total_price: number
+          unit_price: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          product_service_id?: string | null
+          proposal_id?: string | null
+          quantity?: number
+          total_price: number
+          unit_price: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          product_service_id?: string | null
+          proposal_id?: string | null
+          quantity?: number
+          total_price?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_items_product_service_id_fkey"
+            columns: ["product_service_id"]
+            isOneToOne: false
+            referencedRelation: "products_services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_items_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposals: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          lead_id: string | null
+          title: string
+          total_value: number
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          lead_id?: string | null
+          title: string
+          total_value?: number
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          lead_id?: string | null
+          title?: string
+          total_value?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposals_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       system_settings: {
         Row: {

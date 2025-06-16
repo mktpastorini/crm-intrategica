@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMeetingMetrics } from '@/hooks/useMeetingMetrics';
@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { Users, Target, Calendar, TrendingUp, Phone, Mail, Clock, Award, CheckCircle, Eye } from 'lucide-react';
 import UserDetailsModal from '@/components/dashboard/UserDetailsModal';
+import { DollarSign } from 'lucide-react';
 
 export default function Dashboard() {
   const { leads, pipelineStages, events, users } = useCrm();
@@ -16,6 +17,7 @@ export default function Dashboard() {
   const meetingMetrics = useMeetingMetrics(events);
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [showDetails, setShowDetails] = useState(false);
+  const [proposalValue, setProposalValue] = useState(0);
 
   // O id do estágio inicial agora é 'aguardando_inicio'
   const STAGE_INITIAL = 'aguardando_inicio';
@@ -185,85 +187,91 @@ export default function Dashboard() {
     }
   };
 
+  useEffect(() => {
+    calculateProposalValue();
+  }, [leads]);
+
+  const calculateProposalValue = async () => {
+    try {
+      // Buscar leads no estágio "proposta_enviada" e estágios superiores
+      const proposalStages = ['proposta_enviada', 'contrato_assinado', 'perdido'];
+      const leadsWithProposals = leads.filter(lead => 
+        proposalStages.includes(lead.pipeline_stage) && lead.proposal_id
+      );
+
+      if (leadsWithProposals.length === 0) {
+        setProposalValue(0);
+        return;
+      }
+
+      // Buscar as propostas vinculadas
+      const proposalIds = leadsWithProposals.map(lead => lead.proposal_id).filter(Boolean);
+      
+      const { data: proposals, error } = await supabase
+        .from('proposals')
+        .select('total_value')
+        .in('id', proposalIds);
+
+      if (error) throw error;
+
+      const total = proposals?.reduce((sum, proposal) => sum + proposal.total_value, 0) || 0;
+      setProposalValue(total);
+    } catch (error) {
+      console.error('Erro ao calcular valor das propostas:', error);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
-        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-blue-700">Total de Leads</CardTitle>
-            <Users className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-900">{totalLeads}</div>
-            <p className="text-xs text-blue-600 mt-1">
-              {totalLeads > 0 ? 'Leads cadastrados no sistema' : 'Nenhum lead cadastrado'}
-            </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-blue-100 text-sm font-medium">Total de Leads</p>
+                <p className="text-3xl font-bold">{leads.length}</p>
+              </div>
+              <Users className="h-8 w-8 text-blue-200" />
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-orange-700">Leads no Pipeline</CardTitle>
-            <Target className="h-4 w-4 text-orange-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-900">{leadsInPipeline}</div>
-            <p className="text-xs text-orange-600 mt-1">
-              Em acompanhamento ativo
-            </p>
+        <Card className="bg-gradient-to-r from-green-500 to-green-600 text-white">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-green-100 text-sm font-medium">Reuniões Concluídas</p>
+                <p className="text-3xl font-bold">{meetingMetrics.total}</p>
+              </div>
+              <Calendar className="h-8 w-8 text-green-200" />
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-purple-700">Propostas Enviadas</CardTitle>
-            <Mail className="h-4 w-4 text-purple-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-purple-900">{proposalsSent}</div>
-            <p className="text-xs text-purple-600 mt-1">
-              Aguardando retorno
-            </p>
+        <Card className="bg-gradient-to-r from-purple-500 to-purple-600 text-white">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-purple-100 text-sm font-medium">Propostas Enviadas</p>
+                <p className="text-2xl font-bold">
+                  R$ {proposalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+              <DollarSign className="h-8 w-8 text-purple-200" />
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-green-700">Reuniões Agendadas</CardTitle>
-            <Calendar className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-900">{meetingsScheduled}</div>
-            <p className="text-xs text-green-600 mt-1">
-              Próximos 7 dias
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-emerald-700">Reuniões Hoje</CardTitle>
-            <CheckCircle className="h-4 w-4 text-emerald-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-emerald-900">{meetingMetrics.today}</div>
-            <p className="text-xs text-emerald-600 mt-1">
-              Realizadas hoje
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-teal-50 to-teal-100 border-teal-200">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-teal-700">Total Reuniões</CardTitle>
-            <Award className="h-4 w-4 text-teal-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-teal-900">{meetingMetrics.total}</div>
-            <p className="text-xs text-teal-600 mt-1">
-              Semana: {meetingMetrics.thisWeek} | Mês: {meetingMetrics.thisMonth}
-            </p>
+        <Card className="bg-gradient-to-r from-orange-500 to-orange-600 text-white">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-orange-100 text-sm font-medium">Eventos Hoje</p>
+                <p className="text-3xl font-bold">{meetingMetrics.today}</p>
+              </div>
+              <CalendarDays className="h-8 w-8 text-orange-200" />
+            </div>
           </CardContent>
         </Card>
       </div>
