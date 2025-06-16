@@ -1,6 +1,5 @@
-
 import { useState } from 'react';
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -24,7 +23,11 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const Layout = () => {
+interface LayoutProps {
+  children: React.ReactNode;
+}
+
+const Layout = ({ children }: LayoutProps) => {
   const { user, profile, logout } = useAuth();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -194,7 +197,7 @@ const Layout = () => {
 
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto">
-          <Outlet />
+          {children}
         </main>
       </div>
     </div>

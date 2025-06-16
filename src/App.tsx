@@ -41,19 +41,17 @@ const App = () => (
               <Route path="/login" element={<Login />} />
               
               {/* Rotas protegidas com Layout */}
-              <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/leads" element={<Leads />} />
-                <Route path="/calendar" element={<Calendar />} />
-                <Route path="/pipeline" element={<Pipeline />} />
-                <Route path="/customer-journey" element={<CustomerJourney />} />
-                <Route path="/messages" element={<Messages />} />
-                <Route path="/proposals-values" element={<ProposalsAndValues />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/profile" element={<Profile />} />
-                <Route path="/users" element={<Users />} />
-                <Route path="/supervision" element={<Supervision />} />
-              </Route>
+              <Route path="/dashboard" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
+              <Route path="/leads" element={<ProtectedRoute><Layout><Leads /></Layout></ProtectedRoute>} />
+              <Route path="/calendar" element={<ProtectedRoute><Layout><Calendar /></Layout></ProtectedRoute>} />
+              <Route path="/pipeline" element={<ProtectedRoute><Layout><Pipeline /></Layout></ProtectedRoute>} />
+              <Route path="/customer-journey" element={<ProtectedRoute><Layout><CustomerJourney /></Layout></ProtectedRoute>} />
+              <Route path="/messages" element={<ProtectedRoute><Layout><Messages /></Layout></ProtectedRoute>} />
+              <Route path="/proposals-values" element={<ProtectedRoute><Layout><ProposalsAndValues /></Layout></ProtectedRoute>} />
+              <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
+              <Route path="/profile" element={<ProtectedRoute><Layout><Profile /></Layout></ProtectedRoute>} />
+              <Route path="/users" element={<ProtectedRoute><Layout><Users /></Layout></ProtectedRoute>} />
+              <Route path="/supervision" element={<ProtectedRoute><Layout><Supervision /></Layout></ProtectedRoute>} />
               
               {/* Rota 404 */}
               <Route path="*" element={<NotFound />} />
