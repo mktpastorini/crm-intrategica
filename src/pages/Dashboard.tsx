@@ -21,7 +21,7 @@ import {
   Target,
   BarChart3
 } from 'lucide-react';
-import { format, parseISO, isToday, isTomorrow, addDays } from 'date-fns';
+import { format, parseISO, isToday, isTomorrow, addDays, subDays, startOfWeek, endOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import UserDetailsModal from '@/components/dashboard/UserDetailsModal';
@@ -55,15 +55,18 @@ export default function Dashboard() {
   const [stats, setStats] = useState({
     totalLeads: 0,
     newLeads: 0,
-    scheduledMeetings: 0,
-    todayMeetings: 0,
+    pipelineActive: 0, // Alterado para mostrar leads em acompanhamento
     totalMeetings: 0,
+    todayMeetings: 0,
+    scheduledMeetings: 0,
+    completedMeetings: 0,
     sentMessages: 0,
     pipelineDistribution: {} as Record<string, number>,
     proposalsSent: { count: 0, totalValue: 0 },
     contractsSigned: { count: 0, revenue: 0 },
-    expectedRevenue: 0, // Nova métrica para previsão de faturamento
-    topPerformers: [] as Array<{ user: User; dealCount: number; totalRevenue: number; }>
+    expectedRevenue: 0,
+    topPerformers: [] as Array<{ user: User; dealCount: number; totalRevenue: number; }>,
+    performanceData: [] as Array<{ period: string; captados: number; fechamentos: number; }>
   });
 
   // Buscar leads
@@ -138,13 +141,26 @@ export default function Dashboard() {
     console.log('[Dashboard] Total de propostas:', proposals.length);
     console.log('[Dashboard] Estágios do pipeline:', pipelineStages);
 
-    // Encontrar o estágio "Proposta Enviada" pelos estágios cadastrados
+    // Encontrar estágios específicos
     const propostaEnviadaStage = pipelineStages.find(stage => 
       stage.name.toLowerCase().includes('proposta') && 
       stage.name.toLowerCase().includes('enviada')
     );
     
-    console.log('[Dashboard] Estágio Proposta Enviada encontrado:', propostaEnviadaStage);
+    const aguardandoInicioStage = pipelineStages.find(stage => 
+      stage.name.toLowerCase().includes('aguardando') && 
+      stage.name.toLowerCase().includes('início')
+    );
+    
+    const perdidoStage = pipelineStages.find(stage => 
+      stage.name.toLowerCase().includes('perdido')
+    );
+
+    console.log('[Dashboard] Estágios encontrados:', {
+      propostaEnviada: propostaEnviadaStage,
+      aguardandoInicio: aguardandoInicioStage,
+      perdido: perdidoStage
+    });
 
     // Leads básicos
     const totalLeads = leads.length;
@@ -152,21 +168,33 @@ export default function Dashboard() {
       new Date(lead.created_at) >= lastWeek
     ).length;
 
+    // Pipeline Ativo: todos os leads menos "Aguardando Início" e "Perdido"
+    const excludedStages = [
+      aguardandoInicioStage?.id,
+      perdidoStage?.id
+    ].filter(Boolean);
+    
+    const pipelineActive = leads.filter(lead => 
+      !excludedStages.includes(lead.pipeline_stage)
+    ).length;
+
+    console.log('[Dashboard] Pipeline Ativo - Estágios excluídos:', excludedStages);
+    console.log('[Dashboard] Pipeline Ativo - Total:', pipelineActive);
+
     // Distribuição por pipeline
     const pipelineDistribution: Record<string, number> = {};
     leads.forEach(lead => {
-      const stage = lead.pipeline_stage || 'Sem estágio';
+      const stage = pipelineStages.find(s => s.id === lead.pipeline_stage)?.name || 'Sem estágio';
       pipelineDistribution[stage] = (pipelineDistribution[stage] || 0) + 1;
     });
 
-    // Métricas de propostas enviadas - usar o ID do estágio encontrado
+    // Métricas de propostas enviadas
     let proposalsSentLeads = [];
     if (propostaEnviadaStage) {
       proposalsSentLeads = leads.filter(lead => lead.pipeline_stage === propostaEnviadaStage.id);
     } else {
-      // Fallback: buscar por nome do estágio que contenha "proposta" e "enviada"
       proposalsSentLeads = leads.filter(lead => {
-        const stageName = lead.pipeline_stage?.toLowerCase() || '';
+        const stageName = pipelineStages.find(s => s.id === lead.pipeline_stage)?.name?.toLowerCase() || '';
         return stageName.includes('proposta') && stageName.includes('enviada');
       });
     }
@@ -184,14 +212,12 @@ export default function Dashboard() {
       return acc;
     }, { count: 0, totalValue: 0 });
 
-    console.log('[Dashboard] Métricas de propostas enviadas:', proposalMetrics);
-
-    // Previsão de faturamento (valor total das propostas enviadas)
+    // Previsão de faturamento
     const expectedRevenue = proposalMetrics.totalValue;
 
-    // Métricas de contratos assinados (apenas receita real)
+    // Métricas de contratos assinados
     const contractsSignedLeads = leads.filter(lead => {
-      const stageName = lead.pipeline_stage?.toLowerCase() || '';
+      const stageName = pipelineStages.find(s => s.id === lead.pipeline_stage)?.name?.toLowerCase() || '';
       return stageName.includes('contrato') ||
              stageName.includes('fechado') ||
              stageName.includes('assinado');
@@ -208,7 +234,7 @@ export default function Dashboard() {
       return acc;
     }, { count: 0, revenue: 0 });
 
-    // Reuniões
+    // Reuniões consolidadas
     const scheduledMeetings = events.filter(event =>
       event.type === 'reunion' && !event.completed
     ).length;
@@ -218,32 +244,53 @@ export default function Dashboard() {
       return isToday(eventDate) && !event.completed;
     });
 
+    const completedMeetings = events.filter(event => 
+      event.type === 'reunion' && event.completed
+    ).length;
+
     const totalMeetingsThisWeek = events.filter(event => {
       const eventDate = parseISO(event.date);
       return eventDate >= lastWeek && eventDate <= addDays(today, 7);
     }).length;
 
-    // Top Performers com revenue
+    // Dados de performance por período (últimas 4 semanas)
+    const performanceData = [];
+    for (let i = 3; i >= 0; i--) {
+      const weekStart = startOfWeek(subDays(today, i * 7), { weekStartsOn: 1 });
+      const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+      
+      const captadosNaSemana = leads.filter(lead => {
+        const leadDate = parseISO(lead.created_at);
+        return leadDate >= weekStart && leadDate <= weekEnd;
+      }).length;
+      
+      const fechamentosNaSemana = contractsSignedLeads.filter(lead => {
+        const leadDate = parseISO(lead.created_at);
+        return leadDate >= weekStart && leadDate <= weekEnd;
+      }).length;
+      
+      performanceData.push({
+        period: format(weekStart, 'dd/MM', { locale: ptBR }),
+        captados: captadosNaSemana,
+        fechamentos: fechamentosNaSemana
+      });
+    }
+
+    // Top Performers
     const performanceMap = new Map<string, { deals: number; revenue: number }>();
-    leads.forEach(lead => {
+    contractsSignedLeads.forEach(lead => {
       const userId = lead.responsible_id;
-      const stageName = lead.pipeline_stage?.toLowerCase() || '';
-      if (stageName.includes('contrato') || 
-          stageName.includes('fechado') ||
-          stageName.includes('assinado')) {
-        
-        const current = performanceMap.get(userId) || { deals: 0, revenue: 0 };
-        current.deals += 1;
-        
-        if (lead.proposal_id) {
-          const proposal = proposals.find(p => p.id === lead.proposal_id);
-          if (proposal && typeof proposal.total_value === 'number') {
-            current.revenue += proposal.total_value;
-          }
+      const current = performanceMap.get(userId) || { deals: 0, revenue: 0 };
+      current.deals += 1;
+      
+      if (lead.proposal_id) {
+        const proposal = proposals.find(p => p.id === lead.proposal_id);
+        if (proposal && typeof proposal.total_value === 'number') {
+          current.revenue += proposal.total_value;
         }
-        
-        performanceMap.set(userId, current);
       }
+      
+      performanceMap.set(userId, current);
     });
 
     const topPerformers = Array.from(performanceMap.entries())
@@ -258,21 +305,26 @@ export default function Dashboard() {
     console.log('[Dashboard] Estatísticas finais:', {
       proposalsSent: proposalMetrics,
       expectedRevenue,
-      contractsSigned: contractMetrics
+      contractsSigned: contractMetrics,
+      pipelineActive,
+      performanceData
     });
 
     setStats({
       totalLeads,
       newLeads,
-      scheduledMeetings,
-      todayMeetings: todayEvents.length,
+      pipelineActive,
       totalMeetings: totalMeetingsThisWeek,
+      todayMeetings: todayEvents.length,
+      scheduledMeetings,
+      completedMeetings,
       sentMessages: 0,
       pipelineDistribution,
       proposalsSent: proposalMetrics,
       contractsSigned: contractMetrics,
       expectedRevenue,
-      topPerformers
+      topPerformers,
+      performanceData
     });
   }, [leads, events, proposals, users, pipelineStages]);
 
@@ -394,7 +446,7 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-orange-800">{stats.totalLeads - stats.newLeads}</div>
+            <div className="text-3xl font-bold text-orange-800">{stats.pipelineActive}</div>
             <p className="text-xs text-orange-600 mt-1">
               Em acompanhamento
             </p>
@@ -434,14 +486,14 @@ export default function Dashboard() {
         <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100 border-l-4 border-l-cyan-500 hover:shadow-lg transition-shadow">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-cyan-700">Reuniões Hoje</CardTitle>
+              <CardTitle className="text-sm font-medium text-cyan-700">Reuniões</CardTitle>
               <CalendarIcon className="h-6 w-6 text-cyan-600" />
             </div>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-cyan-800">{stats.todayMeetings}</div>
             <p className="text-xs text-cyan-600 mt-1">
-              {stats.scheduledMeetings} agendadas
+              Hoje • {stats.scheduledMeetings} agendadas • {stats.completedMeetings} concluídas
             </p>
           </CardContent>
         </Card>
@@ -496,137 +548,162 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Gráfico Performance */}
+        {/* Novo Gráfico: Desempenho por Período */}
         <Card className="hover:shadow-lg transition-shadow">
           <CardHeader>
             <CardTitle className="flex items-center">
               <TrendingUp className="w-5 h-5 mr-2" />
-              Performance dos Vendedores
+              Desempenho por Período
             </CardTitle>
+            <p className="text-sm text-slate-600">Leads captados vs Fechamentos</p>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={performanceChartData}>
+              <BarChart data={stats.performanceData}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
+                <XAxis dataKey="period" />
                 <YAxis />
                 <Tooltip 
                   formatter={(value, name) => [
-                    name === 'revenue' ? `R$ ${(Number(value) * 1000).toLocaleString('pt-BR')}` : value,
-                    name === 'revenue' ? 'Receita' : 'Negócios'
+                    value,
+                    name === 'captados' ? 'Leads Captados' : 'Fechamentos'
                   ]}
                 />
-                <Bar dataKey="deals" fill="#8884d8" name="deals" />
-                <Bar dataKey="revenue" fill="#82ca9d" name="revenue" />
+                <Bar dataKey="captados" fill="#3b82f6" name="captados" />
+                <Bar dataKey="fechamentos" fill="#10b981" name="fechamentos" />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Top Performers */}
-        <Card className="lg:col-span-2 bg-gradient-to-br from-green-50 to-emerald-50 hover:shadow-lg transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center text-green-800">
-                <Award className="w-5 h-5 mr-2" />
-                Top Performers
-              </CardTitle>
-              <p className="text-sm text-green-600">Ranking por receita gerada</p>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {stats.topPerformers.length === 0 ? (
-                <p className="text-sm text-slate-500 text-center py-8">Nenhum fechamento registrado ainda</p>
-              ) : (
-                stats.topPerformers.map((performer, index) => (
-                  <div 
-                    key={performer.user.id} 
-                    className="flex items-center justify-between p-4 bg-white rounded-lg border border-green-200 hover:border-green-300 cursor-pointer transition-all hover:shadow-md"
-                    onClick={() => handleUserClick(performer.user)}
-                  >
-                    <div className="flex items-center space-x-4">
-                      <div className="relative">
-                        <div className={`flex items-center justify-center w-12 h-12 rounded-full font-bold text-white ${
-                          index === 0 ? 'bg-gradient-to-br from-yellow-400 to-yellow-600' :
-                          index === 1 ? 'bg-gradient-to-br from-gray-300 to-gray-500' :
-                          index === 2 ? 'bg-gradient-to-br from-orange-400 to-orange-600' :
-                          'bg-gradient-to-br from-green-400 to-green-600'
-                        }`}>
-                          {index + 1}
-                        </div>
-                        {index < 3 && (
-                          <Award className={`absolute -top-1 -right-1 w-5 h-5 ${
-                            index === 0 ? 'text-yellow-500' :
-                            index === 1 ? 'text-gray-400' :
-                            'text-orange-500'
-                          }`} />
-                        )}
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        {performer.user.avatar_url ? (
-                          <img 
-                            src={performer.user.avatar_url} 
-                            alt={performer.user.name}
-                            className="w-10 h-10 rounded-full border-2 border-white shadow-sm"
-                          />
-                        ) : (
-                          <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center border-2 border-white shadow-sm">
-                            <span className="text-xs font-medium text-white">
-                              {performer.user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
-                            </span>
-                          </div>
-                        )}
-                        <div>
-                          <div className="font-semibold text-green-800">{performer.user.name}</div>
-                          <div className="text-sm text-green-600">
-                            {performer.dealCount} negócios • R$ {performer.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <Button variant="ghost" size="sm" className="text-green-600 hover:text-green-800">
-                      <Eye className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ))
-              )}
-            </div>
-          </CardContent>
-        </Card>
+      {/* Gráfico Performance dos Vendedores */}
+      <Card className="hover:shadow-lg transition-shadow">
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <TrendingUp className="w-5 h-5 mr-2" />
+            Performance dos Vendedores
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={performanceChartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" />
+              <YAxis />
+              <Tooltip 
+                formatter={(value, name) => [
+                  name === 'revenue' ? `R$ ${(Number(value) * 1000).toLocaleString('pt-BR')}` : value,
+                  name === 'revenue' ? 'Receita' : 'Negócios'
+                ]}
+              />
+              <Bar dataKey="deals" fill="#8884d8" name="deals" />
+              <Bar dataKey="revenue" fill="#82ca9d" name="revenue" />
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
 
-        {/* Atividades Recentes */}
-        <Card className="hover:shadow-lg transition-shadow">
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Clock className="w-5 h-5 mr-2" />
-              Atividades Recentes
+      {/* Top Performers */}
+      <Card className="lg:col-span-2 bg-gradient-to-br from-green-50 to-emerald-50 hover:shadow-lg transition-shadow">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center text-green-800">
+              <Award className="w-5 h-5 mr-2" />
+              Top Performers
             </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {recentActivities.length === 0 ? (
-                <p className="text-sm text-slate-500 text-center py-8">Nenhuma atividade recente</p>
-              ) : (
-                recentActivities.map((activity) => (
-                  <div key={activity.id} className="flex items-start space-x-3 p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-slate-900">{activity.text}</div>
-                      <div className="text-xs text-slate-500 mt-1">
-                        Por {activity.user} • {activity.date}
+            <p className="text-sm text-green-600">Ranking por receita gerada</p>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {stats.topPerformers.length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-8">Nenhum fechamento registrado ainda</p>
+            ) : (
+              stats.topPerformers.map((performer, index) => (
+                <div 
+                  key={performer.user.id} 
+                  className="flex items-center justify-between p-4 bg-white rounded-lg border border-green-200 hover:border-green-300 cursor-pointer transition-all hover:shadow-md"
+                  onClick={() => handleUserClick(performer.user)}
+                >
+                  <div className="flex items-center space-x-4">
+                    <div className="relative">
+                      <div className={`flex items-center justify-center w-12 h-12 rounded-full font-bold text-white ${
+                        index === 0 ? 'bg-gradient-to-br from-yellow-400 to-yellow-600' :
+                        index === 1 ? 'bg-gradient-to-br from-gray-300 to-gray-500' :
+                        index === 2 ? 'bg-gradient-to-br from-orange-400 to-orange-600' :
+                        'bg-gradient-to-br from-green-400 to-green-600'
+                      }`}>
+                        {index + 1}
+                      </div>
+                      {index < 3 && (
+                        <Award className={`absolute -top-1 -right-1 w-5 h-5 ${
+                          index === 0 ? 'text-yellow-500' :
+                          index === 1 ? 'text-gray-400' :
+                          'text-orange-500'
+                        }`} />
+                      )}
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      {performer.user.avatar_url ? (
+                        <img 
+                          src={performer.user.avatar_url} 
+                          alt={performer.user.name}
+                          className="w-10 h-10 rounded-full border-2 border-white shadow-sm"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center border-2 border-white shadow-sm">
+                          <span className="text-xs font-medium text-white">
+                            {performer.user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                          </span>
+                        </div>
+                      )}
+                      <div>
+                        <div className="font-semibold text-green-800">{performer.user.name}</div>
+                        <div className="text-sm text-green-600">
+                          {performer.dealCount} negócios • R$ {performer.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </div>
                       </div>
                     </div>
                   </div>
-                ))
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+                  <Button variant="ghost" size="sm" className="text-green-600 hover:text-green-800">
+                    <Eye className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
+      {/* Atividades Recentes */}
+      <Card className="hover:shadow-lg transition-shadow">
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <Clock className="w-5 h-5 mr-2" />
+            Atividades Recentes
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {recentActivities.length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-8">Nenhuma atividade recente</p>
+            ) : (
+              recentActivities.map((activity) => (
+                <div key={activity.id} className="flex items-start space-x-3 p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-slate-900">{activity.text}</div>
+                    <div className="text-xs text-slate-500 mt-1">
+                      Por {activity.user} • {activity.date}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </CardContent>
+      </Card>
       <UserDetailsModal 
         isOpen={showUserModal}
         onClose={() => setShowUserModal(false)}
