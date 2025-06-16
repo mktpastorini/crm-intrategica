@@ -31,7 +31,6 @@ export default function PipelineColumn({
   const [showProposalDialog, setShowProposalDialog] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [selectedProposalId, setSelectedProposalId] = useState('');
-  const [pendingDrop, setPendingDrop] = useState<{ e: React.DragEvent, stageId: string } | null>(null);
   const { toast } = useToast();
 
   // Buscar propostas
@@ -48,48 +47,59 @@ export default function PipelineColumn({
     if (isPropostaEnviadaStage) {
       e.preventDefault();
       const leadId = e.dataTransfer.getData('text/plain');
-      const lead = leads.find(l => l.id === leadId) || 
-                   document.querySelectorAll('[draggable="true"]');
       
-      // Buscar o lead atual de todas as colunas
-      let currentLead: Lead | null = null;
-      const allLeadElements = document.querySelectorAll('[data-lead-id]');
-      allLeadElements.forEach(element => {
-        const elementLeadId = element.getAttribute('data-lead-id');
-        if (elementLeadId === leadId) {
-          // Recuperar dados do lead do elemento
-          const leadName = element.querySelector('.lead-name')?.textContent;
-          const leadCompany = element.querySelector('.lead-company')?.textContent;
-          if (leadName && leadCompany) {
-            currentLead = {
+      // Buscar o lead pelos leads fornecidos na props
+      const lead = leads.find(l => l.id === leadId);
+      
+      if (!lead) {
+        // Se não encontrou nos leads desta coluna, buscar em todas as colunas
+        const allLeads = document.querySelectorAll('[data-lead-id]');
+        let foundLead = null;
+        
+        allLeads.forEach(element => {
+          const elementLeadId = element.getAttribute('data-lead-id');
+          if (elementLeadId === leadId) {
+            const leadName = element.querySelector('.lead-name')?.textContent || '';
+            const leadCompany = element.querySelector('.lead-company')?.textContent || '';
+            const leadPhone = element.querySelector('.lead-phone')?.textContent || '';
+            const leadEmail = element.querySelector('.lead-email')?.textContent || '';
+            
+            foundLead = {
               id: leadId,
               name: leadName,
               company: leadCompany,
-              phone: '',
+              phone: leadPhone,
+              email: leadEmail,
               niche: '',
               responsible_id: '',
               created_at: '',
               pipeline_stage: ''
             } as Lead;
           }
-        }
-      });
-
-      if (!currentLead) {
-        toast({
-          title: "Erro",
-          description: "Lead não encontrado",
-          variant: "destructive",
         });
-        return;
-      }
 
-      // Se o lead não tem proposta vinculada, mostrar dialog
-      if (!currentLead.proposal_id) {
-        setSelectedLead(currentLead);
-        setPendingDrop({ e, stageId });
-        setShowProposalDialog(true);
-        return;
+        if (!foundLead) {
+          toast({
+            title: "Erro",
+            description: "Lead não encontrado. Tente recarregar a página.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        // Se o lead não tem proposta vinculada, mostrar dialog
+        if (!foundLead.proposal_id) {
+          setSelectedLead(foundLead);
+          setShowProposalDialog(true);
+          return;
+        }
+      } else {
+        // Se o lead não tem proposta vinculada, mostrar dialog
+        if (!lead.proposal_id) {
+          setSelectedLead(lead);
+          setShowProposalDialog(true);
+          return;
+        }
       }
     }
     
@@ -116,10 +126,15 @@ export default function PipelineColumn({
         onLeadUpdate(selectedLead.id, { proposal_id: selectedProposalId });
       }
 
-      // Executar o drop pendente
-      if (pendingDrop) {
-        onDrop(pendingDrop.e, pendingDrop.stageId);
-      }
+      // Executar o drop para mover o lead
+      const mockEvent = {
+        preventDefault: () => {},
+        dataTransfer: {
+          getData: () => selectedLead.id
+        }
+      } as any;
+      
+      onDrop(mockEvent, stage.id);
 
       toast({
         title: "Sucesso",
@@ -127,10 +142,9 @@ export default function PipelineColumn({
       });
 
       // Reset
-      setShowProposalDialog(false);
       setSelectedLead(null);
       setSelectedProposalId('');
-      setPendingDrop(null);
+      setShowProposalDialog(false);
     } catch (error) {
       toast({
         title: "Erro",
@@ -185,12 +199,12 @@ export default function PipelineColumn({
                 </div>
                 <div className="flex items-center text-xs text-slate-600">
                   <Phone className="w-3 h-3 mr-1" />
-                  {lead.phone}
+                  <span className="lead-phone">{lead.phone}</span>
                 </div>
                 {lead.email && (
                   <div className="flex items-center text-xs text-slate-600">
                     <Mail className="w-3 h-3 mr-1" />
-                    {lead.email}
+                    <span className="lead-email">{lead.email}</span>
                   </div>
                 )}
                 

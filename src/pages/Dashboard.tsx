@@ -17,10 +17,15 @@ import {
   CheckCircle,
   FileText,
   DollarSign,
-  Eye
+  Eye,
+  Award,
+  Target,
+  BarChart3
 } from 'lucide-react';
 import { format, parseISO, isToday, isTomorrow, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
+import UserDetailsModal from '@/components/dashboard/UserDetailsModal';
 
 interface Lead {
   id: string;
@@ -56,6 +61,8 @@ interface User {
 
 export default function Dashboard() {
   const { profile } = useAuth();
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [showUserModal, setShowUserModal] = useState(false);
   const [stats, setStats] = useState({
     totalLeads: 0,
     newLeads: 0,
@@ -65,7 +72,8 @@ export default function Dashboard() {
     sentMessages: 0,
     pipelineDistribution: {} as Record<string, number>,
     proposalsSent: { count: 0, totalValue: 0 },
-    topPerformers: [] as Array<{ user: User; dealCount: number; }>
+    contractsSigned: { count: 0, revenue: 0 },
+    topPerformers: [] as Array<{ user: User; dealCount: number; totalRevenue: number; }>
   });
 
   // Buscar leads
@@ -151,6 +159,24 @@ export default function Dashboard() {
       return acc;
     }, { count: 0, totalValue: 0 });
 
+    // Métricas de contratos assinados
+    const contractsSignedLeads = leads.filter(lead =>
+      lead.pipeline_stage?.toLowerCase().includes('contrato') ||
+      lead.pipeline_stage?.toLowerCase().includes('fechado') ||
+      lead.pipeline_stage?.toLowerCase().includes('assinado')
+    );
+
+    const contractMetrics = contractsSignedLeads.reduce((acc, lead) => {
+      acc.count += 1;
+      if (lead.proposal_id) {
+        const proposal = proposals.find(p => p.id === lead.proposal_id);
+        if (proposal) {
+          acc.revenue += proposal.total_value;
+        }
+      }
+      return acc;
+    }, { count: 0, revenue: 0 });
+
     // Reuniões
     const scheduledMeetings = events.filter(event =>
       event.type === 'reunion' && !event.completed
@@ -166,23 +192,36 @@ export default function Dashboard() {
       return eventDate >= lastWeek && eventDate <= addDays(today, 7);
     }).length;
 
-    // Top Performers
-    const performanceMap = new Map<string, number>();
+    // Top Performers com revenue
+    const performanceMap = new Map<string, { deals: number; revenue: number }>();
     leads.forEach(lead => {
       const userId = lead.responsible_id;
       if (lead.pipeline_stage?.toLowerCase().includes('contrato') || 
-          lead.pipeline_stage?.toLowerCase().includes('fechado')) {
-        performanceMap.set(userId, (performanceMap.get(userId) || 0) + 1);
+          lead.pipeline_stage?.toLowerCase().includes('fechado') ||
+          lead.pipeline_stage?.toLowerCase().includes('assinado')) {
+        
+        const current = performanceMap.get(userId) || { deals: 0, revenue: 0 };
+        current.deals += 1;
+        
+        if (lead.proposal_id) {
+          const proposal = proposals.find(p => p.id === lead.proposal_id);
+          if (proposal) {
+            current.revenue += proposal.total_value;
+          }
+        }
+        
+        performanceMap.set(userId, current);
       }
     });
 
     const topPerformers = Array.from(performanceMap.entries())
-      .map(([userId, dealCount]) => ({
+      .map(([userId, performance]) => ({
         user: users.find(u => u.id === userId) || { id: userId, name: 'Usuário Desconhecido', email: '', role: '' },
-        dealCount
+        dealCount: performance.deals,
+        totalRevenue: performance.revenue
       }))
-      .sort((a, b) => b.dealCount - a.dealCount)
-      .slice(0, 3);
+      .sort((a, b) => b.totalRevenue - a.totalRevenue)
+      .slice(0, 5);
 
     setStats({
       totalLeads,
@@ -190,12 +229,52 @@ export default function Dashboard() {
       scheduledMeetings,
       todayMeetings: todayEvents.length,
       totalMeetings: totalMeetingsThisWeek,
-      sentMessages: 0, // Placeholder
+      sentMessages: 0,
       pipelineDistribution,
       proposalsSent: proposalMetrics,
+      contractsSigned: contractMetrics,
       topPerformers
     });
   }, [leads, events, proposals, users]);
+
+  // Preparar dados para gráficos
+  const pipelineChartData = Object.entries(stats.pipelineDistribution).map(([stage, count]) => ({
+    name: stage,
+    value: count,
+    leads: count
+  }));
+
+  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D'];
+
+  const performanceChartData = stats.topPerformers.map(performer => ({
+    name: performer.user.name.split(' ')[0],
+    deals: performer.dealCount,
+    revenue: performer.totalRevenue / 1000 // Em milhares
+  }));
+
+  const handleUserClick = (user: User) => {
+    const userLeads = leads.filter(lead => lead.responsible_id === user.id);
+    const userEvents = events.filter(event => event.responsible_id === user.id);
+    const closedDeals = userLeads.filter(lead => 
+      lead.pipeline_stage?.toLowerCase().includes('contrato') ||
+      lead.pipeline_stage?.toLowerCase().includes('fechado') ||
+      lead.pipeline_stage?.toLowerCase().includes('assinado')
+    ).length;
+    
+    const completedMeetings = userEvents.filter(event => event.completed).length;
+    const scheduledMeetings = userEvents.filter(event => !event.completed).length;
+
+    setSelectedUser({
+      ...user,
+      leads: userLeads,
+      events: userEvents,
+      closedDeals,
+      totalLeads: userLeads.length,
+      completedMeetings,
+      scheduledMeetings
+    });
+    setShowUserModal(true);
+  };
 
   // Próximos eventos
   const upcomingEvents = events
@@ -214,11 +293,12 @@ export default function Dashboard() {
   // Atividades recentes
   const recentActivities = leads
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .slice(0, 3)
+    .slice(0, 5)
     .map(lead => ({
       id: lead.id,
-      text: `Novo lead adicionado: ${lead.name} - ${lead.company} (Responsável: ${users.find(u => u.id === lead.responsible_id)?.name || 'Administrador'})`,
-      date: format(parseISO(lead.created_at), 'dd/MM/yyyy', { locale: ptBR })
+      text: `Novo lead: ${lead.name} - ${lead.company}`,
+      user: users.find(u => u.id === lead.responsible_id)?.name || 'Admin',
+      date: format(parseISO(lead.created_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })
     }));
 
   const getEventDateLabel = (dateStr: string) => {
@@ -229,201 +309,241 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6 bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-slate-900">Dashboard</h1>
-        <div className="text-sm text-slate-500">
-          Bem-vindo, {profile?.name || 'Usuário'}!
+        <div>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            Dashboard Executivo
+          </h1>
+          <p className="text-slate-600 mt-1">Bem-vindo, {profile?.name || 'Usuário'}!</p>
+        </div>
+        <div className="text-right">
+          <div className="text-2xl font-bold text-green-600">
+            R$ {(stats.contractsSigned.revenue + stats.proposalsSent.totalValue).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          </div>
+          <div className="text-sm text-slate-500">Pipeline Total</div>
         </div>
       </div>
 
       {/* Cards de métricas principais */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-        <Card className="bg-blue-50 border-l-4 border-l-blue-500">
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-l-4 border-l-blue-500 hover:shadow-lg transition-shadow">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-blue-700">Total de Leads</CardTitle>
-            <Users className="h-6 w-6 text-blue-600" />
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-blue-700">Total de Leads</CardTitle>
+              <Users className="h-6 w-6 text-blue-600" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-800">{stats.totalLeads}</div>
-            <p className="text-xs text-blue-600">
-              Leads cadastrados no sistema
+            <div className="text-3xl font-bold text-blue-800">{stats.totalLeads}</div>
+            <p className="text-xs text-blue-600 mt-1">
+              +{stats.newLeads} esta semana
             </p>
           </CardContent>
         </Card>
 
-        <Card className="bg-orange-50 border-l-4 border-l-orange-500">
+        <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-l-4 border-l-orange-500 hover:shadow-lg transition-shadow">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-orange-700">Leads no Pipeline</CardTitle>
-            <TrendingUp className="h-6 w-6 text-orange-600" />
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-orange-700">Pipeline Ativo</CardTitle>
+              <TrendingUp className="h-6 w-6 text-orange-600" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-800">{stats.totalLeads - stats.newLeads}</div>
-            <p className="text-xs text-orange-600">
-              Em acompanhamento ativo
+            <div className="text-3xl font-bold text-orange-800">{stats.totalLeads - stats.newLeads}</div>
+            <p className="text-xs text-orange-600 mt-1">
+              Em acompanhamento
             </p>
           </CardContent>
         </Card>
 
-        <Card className="bg-purple-50 border-l-4 border-l-purple-500">
+        <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-l-4 border-l-purple-500 hover:shadow-lg transition-shadow">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-purple-700">Propostas Enviadas</CardTitle>
-            <FileText className="h-6 w-6 text-purple-600" />
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-purple-700">Propostas Enviadas</CardTitle>
+              <FileText className="h-6 w-6 text-purple-600" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-purple-800">{stats.proposalsSent.count}</div>
-            <p className="text-xs text-purple-600">
-              Aguardando retorno
+            <div className="text-3xl font-bold text-purple-800">{stats.proposalsSent.count}</div>
+            <p className="text-xs text-purple-600 mt-1">
+              R$ {stats.proposalsSent.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </p>
           </CardContent>
         </Card>
 
-        <Card className="bg-green-50 border-l-4 border-l-green-500">
+        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-l-4 border-l-green-500 hover:shadow-lg transition-shadow">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-green-700">Reuniões Agendadas</CardTitle>
-            <CalendarIcon className="h-6 w-6 text-green-600" />
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-green-700">Contratos Assinados</CardTitle>
+              <Award className="h-6 w-6 text-green-600" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-800">{stats.scheduledMeetings}</div>
-            <p className="text-xs text-green-600">
-              Próximos 7 dias
+            <div className="text-3xl font-bold text-green-800">{stats.contractsSigned.count}</div>
+            <p className="text-xs text-green-600 mt-1">
+              R$ {stats.contractsSigned.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </p>
           </CardContent>
         </Card>
 
-        <Card className="bg-green-50 border-l-4 border-l-green-500">
+        <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100 border-l-4 border-l-cyan-500 hover:shadow-lg transition-shadow">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-green-700">Reuniões Hoje</CardTitle>
-            <CheckCircle className="h-6 w-6 text-green-600" />
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-cyan-700">Reuniões Hoje</CardTitle>
+              <CalendarIcon className="h-6 w-6 text-cyan-600" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-800">{stats.todayMeetings}</div>
-            <p className="text-xs text-green-600">
-              Realizadas hoje
+            <div className="text-3xl font-bold text-cyan-800">{stats.todayMeetings}</div>
+            <p className="text-xs text-cyan-600 mt-1">
+              {stats.scheduledMeetings} agendadas
             </p>
           </CardContent>
         </Card>
 
-        <Card className="bg-cyan-50 border-l-4 border-l-cyan-500">
+        <Card className="bg-gradient-to-br from-indigo-50 to-indigo-100 border-l-4 border-l-indigo-500 hover:shadow-lg transition-shadow">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-cyan-700">Total Reuniões</CardTitle>
-            <Users className="h-6 w-6 text-cyan-600" />
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-indigo-700">Taxa Conversão</CardTitle>
+              <Target className="h-6 w-6 text-indigo-600" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-cyan-800">{stats.totalMeetings}</div>
-            <p className="text-xs text-cyan-600">
-              Semana: 0 | Mês: {stats.totalMeetings}
+            <div className="text-3xl font-bold text-indigo-800">
+              {stats.totalLeads > 0 ? ((stats.contractsSigned.count / stats.totalLeads) * 100).toFixed(1) : 0}%
+            </div>
+            <p className="text-xs text-indigo-600 mt-1">
+              Lead para contrato
             </p>
           </CardContent>
         </Card>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Status do Pipeline */}
-        <Card>
+        {/* Gráfico Pipeline */}
+        <Card className="hover:shadow-lg transition-shadow">
           <CardHeader>
-            <CardTitle>Status do Pipeline</CardTitle>
-            <p className="text-sm text-slate-600">Distribuição de leads por estágio</p>
+            <CardTitle className="flex items-center">
+              <BarChart3 className="w-5 h-5 mr-2" />
+              Distribuição do Pipeline
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {Object.entries(stats.pipelineDistribution).map(([stage, count], index) => {
-                const colors = ['#9CA3AF', '#F59E0B', '#8B5CF6', '#10B981', '#EF4444'];
-                const color = colors[index % colors.length];
-                const percentage = stats.totalLeads > 0 ? Math.round((count / stats.totalLeads) * 100) : 0;
-                
-                return (
-                  <div key={stage} className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
-                      <span className="text-sm">{stage}</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-sm font-medium">{percentage}%</span>
-                      <span className="text-xs text-slate-500">({count})</span>
-                    </div>
-                  </div>
-                );
-              })}
-              {stats.proposalsSent.totalValue > 0 && (
-                <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-green-800">Valor Total em Propostas</span>
-                    <span className="text-lg font-bold text-green-800">
-                      R$ {stats.proposalsSent.totalValue.toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={pipelineChartData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {pipelineChartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
           </CardContent>
         </Card>
 
-        {/* Desempenho por Período */}
-        <Card>
+        {/* Gráfico Performance */}
+        <Card className="hover:shadow-lg transition-shadow">
           <CardHeader>
-            <CardTitle>Desempenho por Período</CardTitle>
-            <p className="text-sm text-slate-600">Leads captados vs Fechamentos</p>
+            <CardTitle className="flex items-center">
+              <TrendingUp className="w-5 h-5 mr-2" />
+              Performance dos Vendedores
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-48 flex items-center justify-center text-slate-400">
-              <div className="text-center">
-                <TrendingUp className="w-12 h-12 mx-auto mb-2" />
-                <p className="text-sm">Dados de performance em desenvolvimento</p>
-              </div>
-            </div>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={performanceChartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip 
+                  formatter={(value, name) => [
+                    name === 'revenue' ? `R$ ${(value * 1000).toLocaleString('pt-BR')}` : value,
+                    name === 'revenue' ? 'Receita' : 'Negócios'
+                  ]}
+                />
+                <Bar dataKey="deals" fill="#8884d8" name="deals" />
+                <Bar dataKey="revenue" fill="#82ca9d" name="revenue" />
+              </BarChart>
+            </ResponsiveContainer>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Top Performers */}
-        <Card className="bg-green-50">
+        <Card className="lg:col-span-2 bg-gradient-to-br from-green-50 to-emerald-50 hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="flex items-center">
-                <TrendingUp className="w-5 h-5 mr-2" />
+              <CardTitle className="flex items-center text-green-800">
+                <Award className="w-5 h-5 mr-2" />
                 Top Performers
               </CardTitle>
-              <p className="text-sm text-slate-600">Usuários com mais fechamentos</p>
+              <p className="text-sm text-green-600">Ranking por receita gerada</p>
             </div>
-            <Button variant="ghost" size="sm" className="text-slate-500">
-              <Eye className="w-4 h-4 mr-1" />
-              Detalhamento
-            </Button>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
+            <div className="space-y-4">
               {stats.topPerformers.length === 0 ? (
-                <p className="text-sm text-slate-500">Nenhum fechamento registrado ainda</p>
+                <p className="text-sm text-slate-500 text-center py-8">Nenhum fechamento registrado ainda</p>
               ) : (
                 stats.topPerformers.map((performer, index) => (
-                  <div key={performer.user.id} className="flex items-center justify-between p-3 bg-white rounded-lg border">
-                    <div className="flex items-center space-x-3">
-                      <div className="flex items-center justify-center w-8 h-8 bg-green-100 text-green-800 rounded-full font-bold">
-                        {index + 1}
+                  <div 
+                    key={performer.user.id} 
+                    className="flex items-center justify-between p-4 bg-white rounded-lg border border-green-200 hover:border-green-300 cursor-pointer transition-all hover:shadow-md"
+                    onClick={() => handleUserClick(performer.user)}
+                  >
+                    <div className="flex items-center space-x-4">
+                      <div className="relative">
+                        <div className={`flex items-center justify-center w-12 h-12 rounded-full font-bold text-white ${
+                          index === 0 ? 'bg-gradient-to-br from-yellow-400 to-yellow-600' :
+                          index === 1 ? 'bg-gradient-to-br from-gray-300 to-gray-500' :
+                          index === 2 ? 'bg-gradient-to-br from-orange-400 to-orange-600' :
+                          'bg-gradient-to-br from-green-400 to-green-600'
+                        }`}>
+                          {index + 1}
+                        </div>
+                        {index < 3 && (
+                          <Award className={`absolute -top-1 -right-1 w-5 h-5 ${
+                            index === 0 ? 'text-yellow-500' :
+                            index === 1 ? 'text-gray-400' :
+                            'text-orange-500'
+                          }`} />
+                        )}
                       </div>
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-3">
                         {performer.user.avatar_url ? (
                           <img 
                             src={performer.user.avatar_url} 
                             alt={performer.user.name}
-                            className="w-8 h-8 rounded-full"
+                            className="w-10 h-10 rounded-full border-2 border-white shadow-sm"
                           />
                         ) : (
-                          <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center">
-                            <span className="text-xs font-medium text-slate-600">
+                          <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center border-2 border-white shadow-sm">
+                            <span className="text-xs font-medium text-white">
                               {performer.user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                             </span>
                           </div>
                         )}
                         <div>
-                          <div className="font-medium text-sm">{performer.user.name}</div>
-                          <div className="text-xs text-slate-500">{performer.dealCount} fechamentos</div>
+                          <div className="font-semibold text-green-800">{performer.user.name}</div>
+                          <div className="text-sm text-green-600">
+                            {performer.dealCount} negócios • R$ {performer.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </div>
                         </div>
                       </div>
                     </div>
-                    <Button variant="ghost" size="sm">
+                    <Button variant="ghost" size="sm" className="text-green-600 hover:text-green-800">
                       <Eye className="w-4 h-4" />
                     </Button>
                   </div>
@@ -434,25 +554,26 @@ export default function Dashboard() {
         </Card>
 
         {/* Atividades Recentes */}
-        <Card>
+        <Card className="hover:shadow-lg transition-shadow">
           <CardHeader>
             <CardTitle className="flex items-center">
               <Clock className="w-5 h-5 mr-2" />
               Atividades Recentes
             </CardTitle>
-            <p className="text-sm text-slate-600">Últimas ações do sistema</p>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
+            <div className="space-y-4">
               {recentActivities.length === 0 ? (
-                <p className="text-sm text-slate-500">Nenhuma atividade recente</p>
+                <p className="text-sm text-slate-500 text-center py-8">Nenhuma atividade recente</p>
               ) : (
                 recentActivities.map((activity) => (
-                  <div key={activity.id} className="flex items-start space-x-3 p-3 bg-slate-50 rounded-lg">
-                    <div className="w-2 h-2 bg-green-500 rounded-full mt-2 flex-shrink-0" />
-                    <div className="flex-1">
-                      <div className="text-sm">{activity.text}</div>
-                      <div className="text-xs text-slate-500 mt-1">{activity.date}</div>
+                  <div key={activity.id} className="flex items-start space-x-3 p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-slate-900">{activity.text}</div>
+                      <div className="text-xs text-slate-500 mt-1">
+                        Por {activity.user} • {activity.date}
+                      </div>
                     </div>
                   </div>
                 ))
@@ -461,6 +582,12 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <UserDetailsModal 
+        isOpen={showUserModal}
+        onClose={() => setShowUserModal(false)}
+        userData={selectedUser}
+      />
     </div>
   );
 }
