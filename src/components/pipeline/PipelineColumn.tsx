@@ -10,7 +10,6 @@ import { useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import type { Lead, PipelineStage } from './types';
 import { proposalService } from '@/services/proposalService';
-import { Proposal } from '@/types/proposal';
 
 interface Props {
   stage: PipelineStage;
@@ -42,21 +41,59 @@ export default function PipelineColumn({
   });
 
   const handleDrop = async (e: React.DragEvent, stageId: string) => {
-    // Se está tentando mover para "Proposta Enviada", interceptar
-    if (stageId === 'proposta-enviada' || stage.name.toLowerCase().includes('proposta') && stage.name.toLowerCase().includes('enviada')) {
+    // Verificar se está tentando mover para "Proposta Enviada"
+    const isPropostaEnviadaStage = stage.name.toLowerCase().includes('proposta') && 
+                                   stage.name.toLowerCase().includes('enviada');
+    
+    if (isPropostaEnviadaStage) {
+      e.preventDefault();
       const leadId = e.dataTransfer.getData('text/plain');
-      const lead = leads.find(l => l.id === leadId);
+      const lead = leads.find(l => l.id === leadId) || 
+                   document.querySelectorAll('[draggable="true"]');
       
-      if (lead && !lead.proposal_id) {
-        // Lead não tem proposta vinculada, mostrar dialog
-        setSelectedLead(lead);
+      // Buscar o lead atual de todas as colunas
+      let currentLead: Lead | null = null;
+      const allLeadElements = document.querySelectorAll('[data-lead-id]');
+      allLeadElements.forEach(element => {
+        const elementLeadId = element.getAttribute('data-lead-id');
+        if (elementLeadId === leadId) {
+          // Recuperar dados do lead do elemento
+          const leadName = element.querySelector('.lead-name')?.textContent;
+          const leadCompany = element.querySelector('.lead-company')?.textContent;
+          if (leadName && leadCompany) {
+            currentLead = {
+              id: leadId,
+              name: leadName,
+              company: leadCompany,
+              phone: '',
+              niche: '',
+              responsible_id: '',
+              created_at: '',
+              pipeline_stage: ''
+            } as Lead;
+          }
+        }
+      });
+
+      if (!currentLead) {
+        toast({
+          title: "Erro",
+          description: "Lead não encontrado",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Se o lead não tem proposta vinculada, mostrar dialog
+      if (!currentLead.proposal_id) {
+        setSelectedLead(currentLead);
         setPendingDrop({ e, stageId });
         setShowProposalDialog(true);
         return;
       }
     }
     
-    // Continuar com drop normal
+    // Continuar com drop normal para outros estágios
     onDrop(e, stageId);
   };
 
@@ -136,14 +173,15 @@ export default function PipelineColumn({
               className="cursor-move hover:shadow-md transition-shadow bg-white border border-slate-200"
               draggable
               onDragStart={(e) => onDragStart(e, lead.id)}
+              data-lead-id={lead.id}
             >
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-slate-900">{lead.name}</CardTitle>
+                <CardTitle className="text-sm font-medium text-slate-900 lead-name">{lead.name}</CardTitle>
               </CardHeader>
               <CardContent className="pt-0 space-y-2">
                 <div className="flex items-center text-xs text-slate-600">
                   <Building className="w-3 h-3 mr-1" />
-                  {lead.company}
+                  <span className="lead-company">{lead.company}</span>
                 </div>
                 <div className="flex items-center text-xs text-slate-600">
                   <Phone className="w-3 h-3 mr-1" />

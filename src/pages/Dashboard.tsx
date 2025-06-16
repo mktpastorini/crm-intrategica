@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -14,7 +15,8 @@ import {
   Clock,
   CheckCircle,
   FileText,
-  DollarSign
+  DollarSign,
+  Eye
 } from 'lucide-react';
 import { format, parseISO, isToday, isTomorrow, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -43,15 +45,26 @@ interface Event {
   company?: string;
 }
 
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  avatar_url?: string;
+}
+
 export default function Dashboard() {
   const { profile } = useAuth();
   const [stats, setStats] = useState({
     totalLeads: 0,
     newLeads: 0,
     scheduledMeetings: 0,
+    todayMeetings: 0,
+    totalMeetings: 0,
     sentMessages: 0,
     pipelineDistribution: {} as Record<string, number>,
-    proposalsSent: { count: 0, totalValue: 0 }
+    proposalsSent: { count: 0, totalValue: 0 },
+    topPerformers: [] as Array<{ user: User; dealCount: number; }>
   });
 
   // Buscar leads
@@ -76,6 +89,20 @@ export default function Dashboard() {
         .from('events')
         .select('*')
         .order('date', { ascending: true });
+      
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  // Buscar usuários
+  const { data: users = [] } = useQuery({
+    queryKey: ['users'],
+    queryFn: async (): Promise<User[]> => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('name');
       
       if (error) throw error;
       return data || [];
@@ -123,20 +150,51 @@ export default function Dashboard() {
       return acc;
     }, { count: 0, totalValue: 0 });
 
-    // Reuniões agendadas
+    // Reuniões
     const scheduledMeetings = events.filter(event =>
-      event.type === 'reuniao' && !event.completed
+      event.type === 'reunion' && !event.completed
     ).length;
+
+    const todayEvents = events.filter(event => {
+      const eventDate = parseISO(event.date);
+      return isToday(eventDate) && !event.completed;
+    });
+
+    const totalMeetingsThisWeek = events.filter(event => {
+      const eventDate = parseISO(event.date);
+      return eventDate >= lastWeek && eventDate <= addDays(today, 7);
+    }).length;
+
+    // Top Performers
+    const performanceMap = new Map<string, number>();
+    leads.forEach(lead => {
+      const userId = lead.responsible_id;
+      if (lead.pipeline_stage?.toLowerCase().includes('contrato') || 
+          lead.pipeline_stage?.toLowerCase().includes('fechado')) {
+        performanceMap.set(userId, (performanceMap.get(userId) || 0) + 1);
+      }
+    });
+
+    const topPerformers = Array.from(performanceMap.entries())
+      .map(([userId, dealCount]) => ({
+        user: users.find(u => u.id === userId) || { id: userId, name: 'Usuário Desconhecido', email: '', role: '' },
+        dealCount
+      }))
+      .sort((a, b) => b.dealCount - a.dealCount)
+      .slice(0, 3);
 
     setStats({
       totalLeads,
       newLeads,
       scheduledMeetings,
+      todayMeetings: todayEvents.length,
+      totalMeetings: totalMeetingsThisWeek,
       sentMessages: 0, // Placeholder
       pipelineDistribution,
-      proposalsSent: proposalMetrics
+      proposalsSent: proposalMetrics,
+      topPerformers
     });
-  }, [leads, events, proposals]);
+  }, [leads, events, proposals, users]);
 
   // Próximos eventos
   const upcomingEvents = events
@@ -151,6 +209,16 @@ export default function Dashboard() {
 
   // Leads recentes
   const recentLeads = leads.slice(0, 5);
+
+  // Atividades recentes
+  const recentActivities = leads
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 3)
+    .map(lead => ({
+      id: lead.id,
+      text: `Novo lead adicionado: ${lead.name} - ${lead.company} (Responsável: ${users.find(u => u.id === lead.responsible_id)?.name || 'Administrador'})`,
+      date: format(parseISO(lead.created_at), 'dd/MM/yyyy', { locale: ptBR })
+    }));
 
   const getEventDateLabel = (dateStr: string) => {
     const eventDate = parseISO(dateStr);
@@ -169,106 +237,194 @@ export default function Dashboard() {
       </div>
 
       {/* Cards de métricas principais */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total de Leads</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+        <Card className="bg-blue-50 border-l-4 border-l-blue-500">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-blue-700">Total de Leads</CardTitle>
+            <Users className="h-6 w-6 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalLeads}</div>
-            <p className="text-xs text-muted-foreground">
-              +{stats.newLeads} nos últimos 7 dias
+            <div className="text-2xl font-bold text-blue-800">{stats.totalLeads}</div>
+            <p className="text-xs text-blue-600">
+              Leads cadastrados no sistema
             </p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Novos Leads</CardTitle>
-            <UserPlus className="h-4 w-4 text-muted-foreground" />
+        <Card className="bg-orange-50 border-l-4 border-l-orange-500">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-orange-700">Leads no Pipeline</CardTitle>
+            <TrendingUp className="h-6 w-6 text-orange-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.newLeads}</div>
-            <p className="text-xs text-muted-foreground">
-              Últimos 7 dias
+            <div className="text-2xl font-bold text-orange-800">{stats.totalLeads - stats.newLeads}</div>
+            <p className="text-xs text-orange-600">
+              Em acompanhamento ativo
             </p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Reuniões Agendadas</CardTitle>
-            <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+        <Card className="bg-purple-50 border-l-4 border-l-purple-500">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-purple-700">Propostas Enviadas</CardTitle>
+            <FileText className="h-6 w-6 text-purple-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.scheduledMeetings}</div>
-            <p className="text-xs text-muted-foreground">
-              Próximas reuniões
+            <div className="text-2xl font-bold text-purple-800">{stats.proposalsSent.count}</div>
+            <p className="text-xs text-purple-600">
+              Aguardando retorno
             </p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Propostas Enviadas</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
+        <Card className="bg-green-50 border-l-4 border-l-green-500">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-green-700">Reuniões Agendadas</CardTitle>
+            <CalendarIcon className="h-6 w-6 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.proposalsSent.count}</div>
-            <p className="text-xs text-green-600 font-medium">
-              R$ {stats.proposalsSent.totalValue.toFixed(2)}
+            <div className="text-2xl font-bold text-green-800">{stats.scheduledMeetings}</div>
+            <p className="text-xs text-green-600">
+              Próximos 7 dias
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-green-50 border-l-4 border-l-green-500">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-green-700">Reuniões Hoje</CardTitle>
+            <CheckCircle className="h-6 w-6 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-800">{stats.todayMeetings}</div>
+            <p className="text-xs text-green-600">
+              Realizadas hoje
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-cyan-50 border-l-4 border-l-cyan-500">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-cyan-700">Total Reuniões</CardTitle>
+            <Users className="h-6 w-6 text-cyan-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-cyan-800">{stats.totalMeetings}</div>
+            <p className="text-xs text-cyan-600">
+              Semana: 0 | Mês: {stats.totalMeetings}
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Distribuição do Pipeline */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Distribuição por Estágio do Pipeline</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {Object.entries(stats.pipelineDistribution).map(([stage, count]) => (
-              <div key={stage} className="text-center">
-                <div className="text-2xl font-bold text-blue-600">{count}</div>
-                <div className="text-sm text-slate-600">{stage}</div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Próximos Eventos */}
+        {/* Status do Pipeline */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center">
-              <Clock className="w-5 h-5 mr-2" />
-              Próximos Eventos
-            </CardTitle>
+            <CardTitle>Status do Pipeline</CardTitle>
+            <p className="text-sm text-slate-600">Distribuição de leads por estágio</p>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {upcomingEvents.length === 0 ? (
-                <p className="text-sm text-slate-500">Nenhum evento próximo</p>
+              {Object.entries(stats.pipelineDistribution).map(([stage, count], index) => {
+                const colors = ['#9CA3AF', '#F59E0B', '#8B5CF6', '#10B981', '#EF4444'];
+                const color = colors[index % colors.length];
+                const percentage = stats.totalLeads > 0 ? Math.round((count / stats.totalLeads) * 100) : 0;
+                
+                return (
+                  <div key={stage} className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
+                      <span className="text-sm">{stage}</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm font-medium">{percentage}%</span>
+                      <span className="text-xs text-slate-500">({count})</span>
+                    </div>
+                  </div>
+                );
+              })}
+              {stats.proposalsSent.totalValue > 0 && (
+                <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-green-800">Valor Total em Propostas</span>
+                    <span className="text-lg font-bold text-green-800">
+                      R$ {stats.proposalsSent.totalValue.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Desempenho por Período */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Desempenho por Período</CardTitle>
+            <p className="text-sm text-slate-600">Leads captados vs Fechamentos</p>
+          </CardHeader>
+          <CardContent>
+            <div className="h-48 flex items-center justify-center text-slate-400">
+              <div className="text-center">
+                <TrendingUp className="w-12 h-12 mx-auto mb-2" />
+                <p className="text-sm">Dados de performance em desenvolvimento</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Top Performers */}
+        <Card className="bg-green-50">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center">
+                <TrendingUp className="w-5 h-5 mr-2" />
+                Top Performers
+              </CardTitle>
+              <p className="text-sm text-slate-600">Usuários com mais fechamentos</p>
+            </div>
+            <Button variant="ghost" size="sm" className="text-slate-500">
+              <Eye className="w-4 h-4 mr-1" />
+              Detalhamento
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {stats.topPerformers.length === 0 ? (
+                <p className="text-sm text-slate-500">Nenhum fechamento registrado ainda</p>
               ) : (
-                upcomingEvents.map((event) => (
-                  <div key={event.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                    <div className="flex-1">
-                      <div className="font-medium text-sm">{event.title}</div>
-                      <div className="text-xs text-slate-500">
-                        {event.lead_name && `${event.lead_name} - `}
-                        {event.company}
+                stats.topPerformers.map((performer, index) => (
+                  <div key={performer.user.id} className="flex items-center justify-between p-3 bg-white rounded-lg border">
+                    <div className="flex items-center space-x-3">
+                      <div className="flex items-center justify-center w-8 h-8 bg-green-100 text-green-800 rounded-full font-bold">
+                        {index + 1}
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        {performer.user.avatar_url ? (
+                          <img 
+                            src={performer.user.avatar_url} 
+                            alt={performer.user.name}
+                            className="w-8 h-8 rounded-full"
+                          />
+                        ) : (
+                          <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center">
+                            <span className="text-xs font-medium text-slate-600">
+                              {performer.user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                            </span>
+                          </div>
+                        )}
+                        <div>
+                          <div className="font-medium text-sm">{performer.user.name}</div>
+                          <div className="text-xs text-slate-500">{performer.dealCount} fechamentos</div>
+                        </div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-xs font-medium text-blue-600">
-                        {getEventDateLabel(event.date)}
-                      </div>
-                      <div className="text-xs text-slate-500">{event.time}</div>
-                    </div>
+                    <Button variant="ghost" size="sm">
+                      <Eye className="w-4 h-4" />
+                    </Button>
                   </div>
                 ))
               )}
@@ -276,32 +432,26 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Leads Recentes */}
+        {/* Atividades Recentes */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
-              <TrendingUp className="w-5 h-5 mr-2" />
-              Leads Recentes
+              <Clock className="w-5 h-5 mr-2" />
+              Atividades Recentes
             </CardTitle>
+            <p className="text-sm text-slate-600">Últimas ações do sistema</p>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {recentLeads.length === 0 ? (
-                <p className="text-sm text-slate-500">Nenhum lead cadastrado</p>
+              {recentActivities.length === 0 ? (
+                <p className="text-sm text-slate-500">Nenhuma atividade recente</p>
               ) : (
-                recentLeads.map((lead) => (
-                  <div key={lead.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                recentActivities.map((activity) => (
+                  <div key={activity.id} className="flex items-start space-x-3 p-3 bg-slate-50 rounded-lg">
+                    <div className="w-2 h-2 bg-green-500 rounded-full mt-2 flex-shrink-0" />
                     <div className="flex-1">
-                      <div className="font-medium text-sm">{lead.name}</div>
-                      <div className="text-xs text-slate-500">{lead.company}</div>
-                    </div>
-                    <div className="text-right">
-                      <Badge variant="outline" className="text-xs">
-                        {lead.pipeline_stage}
-                      </Badge>
-                      <div className="text-xs text-slate-500 mt-1">
-                        {format(parseISO(lead.created_at), 'dd/MM', { locale: ptBR })}
-                      </div>
+                      <div className="text-sm">{activity.text}</div>
+                      <div className="text-xs text-slate-500 mt-1">{activity.date}</div>
                     </div>
                   </div>
                 ))
