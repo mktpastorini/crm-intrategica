@@ -157,10 +157,20 @@ export default function Pipeline() {
 
   const handleDrop = (e: React.DragEvent, newStage: string) => {
     e.preventDefault();
-    const leadId = e.dataTransfer.getData('leadId');
+    const leadId = e.dataTransfer.getData('leadId') || e.dataTransfer.getData('text/plain');
     const lead = leads.find(l => l.id === leadId);
     
-    if (!lead) return;
+    console.log('Drop executado - leadId:', leadId, 'lead encontrado:', lead?.name);
+    
+    if (!lead) {
+      console.error('Lead não encontrado no handleDrop:', leadId);
+      toast({
+        title: "Erro",
+        description: "Lead não encontrado durante a movimentação",
+        variant: "destructive",
+      });
+      return;
+    }
 
     // Para estágio de reunião, abrir modal
     if (reuniaoStageId && newStage === reuniaoStageId) {
@@ -294,9 +304,9 @@ export default function Pipeline() {
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
                 onDragStart={handleDragStart}
+                allLeads={leads} // Passar todos os leads para busca
               />
             ))}
-            {/* UnknownStageColumn removido */}
           </div>
         </div>
       </div>

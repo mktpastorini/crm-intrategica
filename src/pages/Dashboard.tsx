@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -62,6 +63,7 @@ export default function Dashboard() {
     pipelineDistribution: {} as Record<string, number>,
     proposalsSent: { count: 0, totalValue: 0 },
     contractsSigned: { count: 0, revenue: 0 },
+    expectedRevenue: 0, // Nova métrica para previsão de faturamento
     topPerformers: [] as Array<{ user: User; dealCount: number; totalRevenue: number; }>
   });
 
@@ -131,7 +133,7 @@ export default function Dashboard() {
       pipelineDistribution[stage] = (pipelineDistribution[stage] || 0) + 1;
     });
 
-    // Métricas de propostas enviadas
+    // Métricas de propostas enviadas (apenas leads em estágio de proposta enviada)
     const proposalsSentLeads = leads.filter(lead => 
       lead.pipeline_stage?.toLowerCase().includes('proposta') && 
       lead.pipeline_stage?.toLowerCase().includes('enviada')
@@ -148,7 +150,10 @@ export default function Dashboard() {
       return acc;
     }, { count: 0, totalValue: 0 });
 
-    // Métricas de contratos assinados
+    // Previsão de faturamento (propostas enviadas que ainda não foram assinadas)
+    const expectedRevenue = proposalMetrics.totalValue;
+
+    // Métricas de contratos assinados (apenas receita real)
     const contractsSignedLeads = leads.filter(lead =>
       lead.pipeline_stage?.toLowerCase().includes('contrato') ||
       lead.pipeline_stage?.toLowerCase().includes('fechado') ||
@@ -222,6 +227,7 @@ export default function Dashboard() {
       pipelineDistribution,
       proposalsSent: proposalMetrics,
       contractsSigned: contractMetrics,
+      expectedRevenue, // Nova métrica
       topPerformers
     });
   }, [leads, events, proposals, users]);
@@ -308,9 +314,13 @@ export default function Dashboard() {
         </div>
         <div className="text-right">
           <div className="text-2xl font-bold text-green-600">
-            R$ {(stats.contractsSigned.revenue + stats.proposalsSent.totalValue).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            R$ {stats.contractsSigned.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </div>
-          <div className="text-sm text-slate-500">Pipeline Total</div>
+          <div className="text-sm text-slate-500">Receita Confirmada</div>
+          <div className="text-lg font-semibold text-blue-600 mt-1">
+            R$ {stats.expectedRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          </div>
+          <div className="text-xs text-slate-500">Previsão de Faturamento</div>
         </div>
       </div>
 

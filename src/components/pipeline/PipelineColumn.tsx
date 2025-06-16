@@ -18,6 +18,7 @@ interface Props {
   onDrop: (e: React.DragEvent, stageId: string) => void;
   onDragStart: (e: React.DragEvent, leadId: string) => void;
   onLeadUpdate?: (leadId: string, updates: Partial<Lead>) => void;
+  allLeads?: Lead[]; // Adicionar todos os leads para busca
 }
 
 export default function PipelineColumn({
@@ -27,6 +28,7 @@ export default function PipelineColumn({
   onDrop,
   onDragStart,
   onLeadUpdate,
+  allLeads = [],
 }: Props) {
   const [showProposalDialog, setShowProposalDialog] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
@@ -46,60 +48,34 @@ export default function PipelineColumn({
     
     if (isPropostaEnviadaStage) {
       e.preventDefault();
-      const leadId = e.dataTransfer.getData('text/plain');
+      const leadId = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('leadId');
       
-      // Buscar o lead pelos leads fornecidos na props
-      const lead = leads.find(l => l.id === leadId);
+      console.log('Tentando mover lead para Proposta Enviada:', leadId);
       
+      // Buscar lead primeiro nos leads desta coluna, depois em todos os leads
+      let lead = leads.find(l => l.id === leadId);
+      
+      if (!lead && allLeads.length > 0) {
+        lead = allLeads.find(l => l.id === leadId);
+        console.log('Lead encontrado em allLeads:', lead?.name);
+      }
+
       if (!lead) {
-        // Se não encontrou nos leads desta coluna, buscar em todas as colunas
-        const allLeads = document.querySelectorAll('[data-lead-id]');
-        let foundLead = null;
-        
-        allLeads.forEach(element => {
-          const elementLeadId = element.getAttribute('data-lead-id');
-          if (elementLeadId === leadId) {
-            const leadName = element.querySelector('.lead-name')?.textContent || '';
-            const leadCompany = element.querySelector('.lead-company')?.textContent || '';
-            const leadPhone = element.querySelector('.lead-phone')?.textContent || '';
-            const leadEmail = element.querySelector('.lead-email')?.textContent || '';
-            
-            foundLead = {
-              id: leadId,
-              name: leadName,
-              company: leadCompany,
-              phone: leadPhone,
-              email: leadEmail,
-              niche: '',
-              responsible_id: '',
-              created_at: '',
-              pipeline_stage: ''
-            } as Lead;
-          }
+        console.error('Lead não encontrado com ID:', leadId);
+        toast({
+          title: "Erro",
+          description: "Lead não encontrado. Verifique se o lead ainda existe no sistema.",
+          variant: "destructive",
         });
+        return;
+      }
 
-        if (!foundLead) {
-          toast({
-            title: "Erro",
-            description: "Lead não encontrado. Tente recarregar a página.",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        // Se o lead não tem proposta vinculada, mostrar dialog
-        if (!foundLead.proposal_id) {
-          setSelectedLead(foundLead);
-          setShowProposalDialog(true);
-          return;
-        }
-      } else {
-        // Se o lead não tem proposta vinculada, mostrar dialog
-        if (!lead.proposal_id) {
-          setSelectedLead(lead);
-          setShowProposalDialog(true);
-          return;
-        }
+      // Se o lead não tem proposta vinculada, mostrar dialog
+      if (!lead.proposal_id) {
+        console.log('Lead sem proposta vinculada, mostrando dialog:', lead.name);
+        setSelectedLead(lead);
+        setShowProposalDialog(true);
+        return;
       }
     }
     
@@ -146,6 +122,7 @@ export default function PipelineColumn({
       setSelectedProposalId('');
       setShowProposalDialog(false);
     } catch (error) {
+      console.error('Erro ao vincular proposta:', error);
       toast({
         title: "Erro",
         description: "Erro ao vincular proposta",
@@ -217,7 +194,7 @@ export default function PipelineColumn({
                     </div>
                     <div className="flex items-center text-xs font-medium text-green-800">
                       <DollarSign className="w-3 h-3 mr-1" />
-                      R$ {getProposalValue(lead.proposal_id).toFixed(2)}
+                      R$ {getProposalValue(lead.proposal_id).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </div>
                   </div>
                 )}
@@ -270,7 +247,7 @@ export default function PipelineColumn({
                 <SelectContent>
                   {proposals.map((proposal) => (
                     <SelectItem key={proposal.id} value={proposal.id}>
-                      {proposal.title} - R$ {proposal.total_value.toFixed(2)}
+                      {proposal.title} - R$ {proposal.total_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </SelectItem>
                   ))}
                 </SelectContent>
