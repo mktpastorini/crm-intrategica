@@ -11,20 +11,22 @@ import { supabase } from '@/integrations/supabase/client';
 export default function Dashboard() {
   const { leads, events } = useCrm();
   const { user, profile } = useAuth();
-  const meetingMetrics = useMeetingMetrics(events); // Pass events as argument
+  const meetingMetrics = useMeetingMetrics(events);
   const [proposalValue, setProposalValue] = useState(0);
+  const [proposalCount, setProposalCount] = useState(0);
 
   useEffect(() => {
-    calculateProposalValue();
+    calculateProposalMetrics();
   }, [leads]);
 
-  const calculateProposalValue = async () => {
+  const calculateProposalMetrics = async () => {
     try {
-      // Buscar leads no estágio "proposta_enviada" e estágios superiores
-      const proposalStages = ['proposta_enviada', 'contrato_assinado', 'perdido'];
+      // Buscar leads no estágio "proposta_enviada"
       const leadsWithProposals = leads.filter(lead => 
-        proposalStages.includes(lead.pipeline_stage) && (lead as any).proposal_id
+        lead.pipeline_stage === 'proposta_enviada' && lead.proposal_id
       );
+
+      setProposalCount(leadsWithProposals.length);
 
       if (leadsWithProposals.length === 0) {
         setProposalValue(0);
@@ -32,7 +34,7 @@ export default function Dashboard() {
       }
 
       // Buscar as propostas vinculadas
-      const proposalIds = leadsWithProposals.map(lead => (lead as any).proposal_id).filter(Boolean);
+      const proposalIds = leadsWithProposals.map(lead => lead.proposal_id).filter(Boolean);
       
       const { data: proposals, error } = await supabase
         .from('proposals')
@@ -44,8 +46,18 @@ export default function Dashboard() {
       const total = proposals?.reduce((sum, proposal) => sum + proposal.total_value, 0) || 0;
       setProposalValue(total);
     } catch (error) {
-      console.error('Erro ao calcular valor das propostas:', error);
+      console.error('Erro ao calcular métricas das propostas:', error);
     }
+  };
+
+  // Estatísticas por estágio
+  const stageStats = {
+    novo: leads.filter(lead => lead.pipeline_stage === 'novo' || lead.pipeline_stage === 'prospeccao').length,
+    contato: leads.filter(lead => lead.pipeline_stage === 'aguardando_contato').length,
+    reuniao: leads.filter(lead => lead.pipeline_stage === 'reuniao').length,
+    proposta: leads.filter(lead => lead.pipeline_stage === 'proposta_enviada').length,
+    contrato: leads.filter(lead => lead.pipeline_stage === 'contrato_assinado').length,
+    perdido: leads.filter(lead => lead.pipeline_stage === 'perdido').length
   };
 
   return (
@@ -55,7 +67,7 @@ export default function Dashboard() {
         <p className="text-slate-600">Bem-vindo ao sistema de CRM</p>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards Principais */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
           <CardContent className="p-6">
@@ -87,7 +99,10 @@ export default function Dashboard() {
               <div>
                 <p className="text-purple-100 text-sm font-medium">Propostas Enviadas</p>
                 <p className="text-2xl font-bold">
-                  R$ {proposalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  {proposalCount} ({proposalValue.toLocaleString('pt-BR', { 
+                    style: 'currency', 
+                    currency: 'BRL' 
+                  })})
                 </p>
               </div>
               <DollarSign className="h-8 w-8 text-purple-200" />
@@ -107,6 +122,41 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Estatísticas por Estágio */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg font-medium">Pipeline - Distribuição por Estágio</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="text-center p-4 bg-slate-50 rounded-lg">
+              <div className="text-2xl font-bold text-slate-700">{stageStats.novo}</div>
+              <div className="text-sm text-slate-600">Novos</div>
+            </div>
+            <div className="text-center p-4 bg-blue-50 rounded-lg">
+              <div className="text-2xl font-bold text-blue-700">{stageStats.contato}</div>
+              <div className="text-sm text-blue-600">Aguardando Contato</div>
+            </div>
+            <div className="text-center p-4 bg-yellow-50 rounded-lg">
+              <div className="text-2xl font-bold text-yellow-700">{stageStats.reuniao}</div>
+              <div className="text-sm text-yellow-600">Reunião</div>
+            </div>
+            <div className="text-center p-4 bg-purple-50 rounded-lg">
+              <div className="text-2xl font-bold text-purple-700">{stageStats.proposta}</div>
+              <div className="text-sm text-purple-600">Proposta Enviada</div>
+            </div>
+            <div className="text-center p-4 bg-green-50 rounded-lg">
+              <div className="text-2xl font-bold text-green-700">{stageStats.contrato}</div>
+              <div className="text-sm text-green-600">Contrato Assinado</div>
+            </div>
+            <div className="text-center p-4 bg-red-50 rounded-lg">
+              <div className="text-2xl font-bold text-red-700">{stageStats.perdido}</div>
+              <div className="text-sm text-red-600">Perdidos</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Recent Activities */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

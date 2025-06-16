@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -18,8 +19,6 @@ import { DollarSign, FileText } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 export default function Pipeline() {
-  // Inicializar o rastreador de atividades
-  
   // Fix: Explicitly cast leads and pipelineStages with the canonical types
   const context = useCrm();
   const leads = context.leads as Lead[];
@@ -43,26 +42,15 @@ export default function Pipeline() {
 
   // Adicionando logs para depuração dos leads recebidos
   useEffect(() => {
-    // Log dos estágios cadastrados para debug
     console.log('[DEPURAÇÃO PIPELINE] pipelineStages:', pipelineStages);
-    // Log todos os leads recebidos e estágio atual:
     leads.forEach((lead) => {
       console.log(`[DEPURAÇÃO PIPELINE] Lead ${lead.name} (${lead.id}) - estágio: ${lead.pipeline_stage}`);
     });
   }, [leads, pipelineStages]);
 
-  // -- IDs fixos para estágios principais
-  // O primeiro estágio precisa sempre ser o "Aguardando Início" ('aguardando_contato')
-  // O estágio de reunião precisa sempre ser "Reunião" ('reuniao')
-  // Caso não exista no pipelineStages, exibir aviso (ou criar fallback)
-
-  // Encontrar ids dos estágios:
   const pipelineStageIds = pipelineStages.map(s => s.id);
-
   const primeiroStageId = pipelineStages.find(s => s.id === "aguardando_contato")?.id || pipelineStages[0]?.id;
   const reuniaoStageId = pipelineStages.find(s => s.id === "reuniao")?.id || null;
-
-  const leadsComStageDesconhecido = []; // Agora nunca deve existir, já que já migramos esses leads no backend!
 
   const handleDragStart = (e: React.DragEvent, leadId: string) => {
     e.dataTransfer.setData('leadId', leadId);
@@ -114,7 +102,6 @@ export default function Pipeline() {
 
       const scheduled_for = new Date(scheduled_for_base.getTime() + delayMs).toISOString();
 
-      // Tentar usar o webhook configurado no sistema, na mensagem ou manter null
       const webhook_url = msg.webhookUrl || msg.webhook_url || null;
 
       if (!webhook_url) {
@@ -136,7 +123,7 @@ export default function Pipeline() {
           message_type: msg.type,
           media_url: msg.mediaUrl,
           scheduled_for,
-          webhook_url, // agora tenta pegar de msg ou deixa como null
+          webhook_url,
         });
         countSuccess++;
         console.log(
@@ -173,17 +160,18 @@ export default function Pipeline() {
       return;
     }
 
-    // Para estágio de "Proposta Enviada", verificar se tem proposta vinculada
+    // Para estágio de "Proposta Enviada", SEMPRE verificar se tem proposta vinculada
     if (newStage === 'proposta_enviada') {
       // Verificar se o lead já tem uma proposta vinculada
       if (!lead.proposal_id) {
-        // Mostrar modal para selecionar proposta
+        // Mostrar modal para selecionar proposta - OBRIGATÓRIO
         setSelectedLead(leadId);
         setShowProposalSelection(true);
         return;
       }
     }
 
+    // Só move o lead se não for para "proposta_enviada" ou se já tiver proposta vinculada
     if (lead.pipeline_stage !== newStage) {
       console.log(`Movendo lead ${lead.name} de ${lead.pipeline_stage} para ${newStage}`);
 
@@ -193,7 +181,7 @@ export default function Pipeline() {
         description: `${lead.name} foi movido para ${pipelineStages.find(s => s.id === newStage)?.name}`,
       });
 
-      // NOVO: Agendamento de mensagens da jornada
+      // Agendamento de mensagens da jornada
       scheduleJourneyMessages(lead, newStage);
     }
   };
@@ -252,7 +240,6 @@ export default function Pipeline() {
   };
 
   // Retorna leads para um determinado stageId
-  // Importante: usa exatamente o id do estágio em pipelineStages para o filtro!
   const getLeadsByStage = (stageId: string) => {
     const leadsEmStage = leads
       .filter(lead => lead.pipeline_stage === stageId)
@@ -369,7 +356,6 @@ export default function Pipeline() {
                 onDragStart={handleDragStart}
               />
             ))}
-            {/* UnknownStageColumn removido */}
           </div>
         </div>
       </div>
@@ -454,9 +440,9 @@ export default function Pipeline() {
       <Dialog open={showProposalSelection} onOpenChange={setShowProposalSelection}>
         <DialogContent className="max-w-2xl max-h-[600px] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Selecionar Proposta</DialogTitle>
+            <DialogTitle>Vincular Proposta - OBRIGATÓRIO</DialogTitle>
             <DialogDescription>
-              Para mover este lead para "Proposta Enviada", você precisa vincular uma proposta.
+              Para mover este lead para "Proposta Enviada", você DEVE vincular uma proposta. O lead não será movido sem vincular uma proposta.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -495,7 +481,7 @@ export default function Pipeline() {
               </div>
             )}
             <Button variant="outline" onClick={() => setShowProposalSelection(false)} className="w-full">
-              Cancelar
+              Cancelar - Lead não será movido
             </Button>
           </div>
         </DialogContent>
