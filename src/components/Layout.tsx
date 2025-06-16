@@ -1,3 +1,4 @@
+
 import {
   BarChart3,
   Calendar,
@@ -10,6 +11,7 @@ import {
   Users,
   AlertTriangle,
   HelpCircle,
+  Menu,
 } from 'lucide-react';
 import {
   Sheet,
@@ -21,14 +23,12 @@ import {
 } from "@/components/ui/sheet"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { MainNav } from "@/components/main-nav"
 import { Button } from "@/components/ui/button"
 import { Link } from "react-router-dom";
 import { useAuth } from '@/contexts/AuthContext';
 import { useEffect } from 'react';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { ModeToggle } from '@/components/ModeToggle';
 
 const sidebarItems = [
   { name: 'Dashboard', href: '/', icon: BarChart3 },
@@ -40,7 +40,7 @@ const sidebarItems = [
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-  const { user, profile, logout } = useAuth();
+  const { user, profile, signOut } = useAuth();
 
   useEffect(() => {
     console.log('Layout - Auth State:', { user, profile });
@@ -110,10 +110,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               )}
             </div>
           </ScrollArea>
-          <Separator />
-          <div className="p-4">
-            <ModeToggle />
-          </div>
         </div>
       </aside>
 
@@ -121,7 +117,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <Sheet>
         <SheetTrigger asChild>
           <Button variant="ghost" size="sm" className="md:hidden fixed top-4 left-4 z-50">
-            Menu
+            <Menu className="h-4 w-4" />
           </Button>
         </SheetTrigger>
         <SheetContent side="left" className="w-64">
@@ -190,7 +186,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <div className="flex flex-col flex-1 overflow-hidden">
         {/* Header */}
         <header className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-4">
-          <MainNav className="mx-6"/>
+          <div className="flex items-center">
+            <h1 className="text-lg font-semibold">CRM System</h1>
+          </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="h-8 w-8 p-0 lg:h-10 lg:w-10 rounded-full">
@@ -206,7 +204,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <Link to="/profile">Perfil</Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => logout()}>
+              <DropdownMenuItem onClick={() => signOut()}>
                 Sair
               </DropdownMenuItem>
             </DropdownMenuContent>

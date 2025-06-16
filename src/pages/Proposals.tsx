@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Plus, FileText, DollarSign, User, Building, Phone, MapPin } from 'lucide-react';
 import ProposalEditor from '@/components/proposals/ProposalEditor';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Proposal {
   id: string;
@@ -34,7 +35,8 @@ interface Product {
 }
 
 export default function Proposals() {
-  const { leads, toast } = useCrm();
+  const { leads } = useCrm();
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<'proposals' | 'products'>('proposals');
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [products, setProducts] = useState<Product[]>([]);

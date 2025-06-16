@@ -15,7 +15,7 @@ import UnknownStageColumn from '@/components/pipeline/UnknownStageColumn';
 import type { Lead, PipelineStage } from '@/components/pipeline/types';
 import { createJourneySchedule } from "@/utils/journeyScheduleService";
 import { DollarSign, FileText } from 'lucide-react';
-import { supabase } from '@/utils/supabase';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function Pipeline() {
   // Inicializar o rastreador de atividades
