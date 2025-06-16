@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSystemSettingsDB } from '@/hooks/useSystemSettingsDB';
 import { useNavigate } from 'react-router-dom';
@@ -12,7 +12,7 @@ import { Loader2, LogIn } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export default function Login() {
-  const { login, user } = useAuth();
+  const { signIn } = useAuth();
   const { settings } = useSystemSettingsDB();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -20,13 +20,6 @@ export default function Login() {
   const [password, setPassword] = useState('admin123');
   const [error, setError] = useState('');
   const [isLogging, setIsLogging] = useState(false);
-
-  // Se usuário já está logado, redirecionar para dashboard
-  useEffect(() => {
-    if (user) {
-      navigate('/dashboard', { replace: true });
-    }
-  }, [user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,7 +29,7 @@ export default function Login() {
     console.log('Iniciando processo de login...');
 
     try {
-      await login(email, password);
+      await signIn(email, password);
       console.log('Login realizado com sucesso');
       
       toast({
@@ -44,7 +37,10 @@ export default function Login() {
         description: "Bem-vindo ao sistema!",
       });
       
-      // Não precisa de setTimeout aqui, o useEffect cuidará do redirecionamento
+      // Aguardar um pouco antes de redirecionar
+      setTimeout(() => {
+        navigate('/', { replace: true });
+      }, 1000);
       
     } catch (err: any) {
       console.error('Erro no login:', err);
@@ -123,6 +119,8 @@ export default function Login() {
               {isLogging ? 'Entrando...' : 'Entrar'}
             </Button>
           </form>
+          
+         
         </CardContent>
       </Card>
     </div>

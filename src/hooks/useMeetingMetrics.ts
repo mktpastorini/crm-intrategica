@@ -8,11 +8,9 @@ interface MeetingMetrics {
   today: number;
   thisWeek: number;
   thisMonth: number;
-  completionRate: number;
-  averageDuration: number;
 }
 
-export function useMeetingMetrics(events: Event[] = []) {
+export function useMeetingMetrics(events: Event[]) {
   return useMemo(() => {
     const now = new Date();
     const todayStart = startOfDay(now);
@@ -23,15 +21,12 @@ export function useMeetingMetrics(events: Event[] = []) {
     const monthEnd = endOfMonth(now);
 
     const completedEvents = events.filter(event => event.completed === true);
-    const totalEvents = events.length;
 
     const metrics: MeetingMetrics = {
       total: completedEvents.length,
       today: 0,
       thisWeek: 0,
-      thisMonth: 0,
-      completionRate: totalEvents > 0 ? Math.round((completedEvents.length / totalEvents) * 100) : 0,
-      averageDuration: 60 // Default duration in minutes
+      thisMonth: 0
     };
 
     completedEvents.forEach(event => {

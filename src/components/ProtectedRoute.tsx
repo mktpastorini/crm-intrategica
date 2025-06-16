@@ -16,8 +16,7 @@ export default function ProtectedRoute({ children, requiredRole }: ProtectedRout
     user: !!user, 
     profile: !!profile, 
     loading,
-    userRole: profile?.role,
-    currentPath: window.location.pathname
+    userRole: profile?.role
   });
 
   // Se ainda está carregando, mostrar loading
@@ -35,16 +34,16 @@ export default function ProtectedRoute({ children, requiredRole }: ProtectedRout
     return <Navigate to="/login" replace />;
   }
 
-  // Verificar permissões de role se necessário e se há perfil
+  // Verificar permissões de role se necessário
   if (requiredRole && profile && !requiredRole.includes(profile.role || '')) {
     console.log('Usuário sem permissão para esta rota, redirecionando');
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/" replace />;
   }
 
-  // Verificação específica para supervisão
+  // Usuários comerciais não podem acessar a página de Supervisão
   if (window.location.pathname === '/supervision' && profile?.role === 'comercial') {
     console.log('Usuário comercial tentou acessar supervisão, redirecionando');
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/" replace />;
   }
 
   console.log('Usuário autenticado, renderizando conteúdo');
