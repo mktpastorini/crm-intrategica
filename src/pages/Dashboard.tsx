@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -26,6 +25,7 @@ import { format, parseISO, isToday, isTomorrow, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import UserDetailsModal from '@/components/dashboard/UserDetailsModal';
+import type { Event } from '@/types/event';
 
 interface Lead {
   id: string;
@@ -38,17 +38,6 @@ interface Lead {
   created_at: string;
   pipeline_stage: string;
   proposal_id?: string;
-}
-
-interface Event {
-  id: string;
-  title: string;
-  date: string;
-  time: string;
-  type: string;
-  completed: boolean;
-  lead_name?: string;
-  company?: string;
 }
 
 interface User {
@@ -152,7 +141,7 @@ export default function Dashboard() {
       acc.count += 1;
       if (lead.proposal_id) {
         const proposal = proposals.find(p => p.id === lead.proposal_id);
-        if (proposal) {
+        if (proposal && typeof proposal.total_value === 'number') {
           acc.totalValue += proposal.total_value;
         }
       }
@@ -170,7 +159,7 @@ export default function Dashboard() {
       acc.count += 1;
       if (lead.proposal_id) {
         const proposal = proposals.find(p => p.id === lead.proposal_id);
-        if (proposal) {
+        if (proposal && typeof proposal.total_value === 'number') {
           acc.revenue += proposal.total_value;
         }
       }
@@ -205,7 +194,7 @@ export default function Dashboard() {
         
         if (lead.proposal_id) {
           const proposal = proposals.find(p => p.id === lead.proposal_id);
-          if (proposal) {
+          if (proposal && typeof proposal.total_value === 'number') {
             current.revenue += proposal.total_value;
           }
         }
@@ -468,7 +457,7 @@ export default function Dashboard() {
                 <YAxis />
                 <Tooltip 
                   formatter={(value, name) => [
-                    name === 'revenue' ? `R$ ${(value * 1000).toLocaleString('pt-BR')}` : value,
+                    name === 'revenue' ? `R$ ${(Number(value) * 1000).toLocaleString('pt-BR')}` : value,
                     name === 'revenue' ? 'Receita' : 'Negócios'
                   ]}
                 />
