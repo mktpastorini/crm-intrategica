@@ -35,11 +35,10 @@ export default function ProtectedRoute({ children, requiredRole }: ProtectedRout
     return <Navigate to="/login" replace />;
   }
 
-  // Se há usuário mas não há perfil, ainda tentar renderizar (perfil pode não ser obrigatório)
-  // Só verificar role se há perfil
+  // Verificar permissões de role se necessário e se há perfil
   if (requiredRole && profile && !requiredRole.includes(profile.role || '')) {
     console.log('Usuário sem permissão para esta rota, redirecionando');
-    return <Navigate to="/" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   // Verificação específica para supervisão

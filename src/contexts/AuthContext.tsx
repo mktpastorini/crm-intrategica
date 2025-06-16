@@ -30,44 +30,72 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
+
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('Sessão inicial:', !!session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        loadProfile(session.user.id);
-      } else {
-        setLoading(false);
+    const initializeAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (!mounted) return;
+        
+        console.log('Sessão inicial:', !!session);
+        
+        if (session?.user) {
+          setUser(session.user);
+          await loadProfile(session.user.id);
+        } else {
+          setUser(null);
+          setProfile(null);
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('Erro ao inicializar auth:', error);
+        if (mounted) {
+          setUser(null);
+          setProfile(null);
+          setLoading(false);
+        }
       }
-    });
+    };
+
+    initializeAuth();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        if (!mounted) return;
+        
         console.log('Auth event:', event, !!session);
-        setUser(session?.user ?? null);
+        
         if (session?.user) {
+          setUser(session.user);
           await loadProfile(session.user.id);
         } else {
+          setUser(null);
           setProfile(null);
           setLoading(false);
         }
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const loadProfile = async (userId: string) => {
     try {
       console.log('Carregando perfil para usuário:', userId);
+      
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle(); // Use maybeSingle instead of single to avoid errors when no profile exists
 
-      if (error) {
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned"
         console.error('Erro ao carregar perfil:', error);
         throw error;
       }
@@ -76,7 +104,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setProfile(data);
     } catch (error) {
       console.error('Error loading profile:', error);
-      setProfile(null);
+      // Create a default profile if none exists
+      if (user) {
+        const defaultProfile: Profile = {
+          id: userId,
+          name: user.email?.split('@')[0] || 'Usuário',
+          email: user.email || '',
+          role: 'comercial',
+          status: 'active'
+        };
+        setProfile(defaultProfile);
+      } else {
+        setProfile(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -84,11 +124,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string) => {
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (error) {
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) throw error;
+      // Don't set loading to false here - let the auth state change handle it
+    } catch (error) {
       setLoading(false);
       throw error;
     }
