@@ -34,25 +34,25 @@ const App = () => (
         <AuthProvider>
           <CrmProvider>
             <Routes>
-              {/* Rota principal que gerencia redirecionamento */}
+              {/* Página inicial */}
               <Route path="/" element={<Index />} />
               
               {/* Rota de login - pública */}
               <Route path="/login" element={<Login />} />
               
-              {/* Rotas protegidas */}
-              <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-                <Route path="dashboard" element={<Dashboard />} />
-                <Route path="leads" element={<Leads />} />
-                <Route path="calendar" element={<Calendar />} />
-                <Route path="pipeline" element={<Pipeline />} />
-                <Route path="customer-journey" element={<CustomerJourney />} />
-                <Route path="messages" element={<Messages />} />
-                <Route path="proposals-values" element={<ProposalsAndValues />} />
-                <Route path="settings" element={<Settings />} />
-                <Route path="profile" element={<Profile />} />
-                <Route path="users" element={<Users />} />
-                <Route path="supervision" element={<Supervision />} />
+              {/* Rotas protegidas com Layout */}
+              <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/leads" element={<Leads />} />
+                <Route path="/calendar" element={<Calendar />} />
+                <Route path="/pipeline" element={<Pipeline />} />
+                <Route path="/customer-journey" element={<CustomerJourney />} />
+                <Route path="/messages" element={<Messages />} />
+                <Route path="/proposals-values" element={<ProposalsAndValues />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/users" element={<Users />} />
+                <Route path="/supervision" element={<Supervision />} />
               </Route>
               
               {/* Rota 404 */}
