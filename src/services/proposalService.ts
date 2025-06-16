@@ -63,7 +63,11 @@ export const productServiceService = {
       .order('created_at', { ascending: false });
     
     if (error) throw error;
-    return data || [];
+    // Type cast the data to ensure proper typing
+    return (data || []).map(item => ({
+      ...item,
+      type: item.type as 'product' | 'service'
+    }));
   },
 
   async create(item: Omit<ProductService, 'id' | 'created_at' | 'updated_at'>): Promise<ProductService> {
@@ -74,7 +78,11 @@ export const productServiceService = {
       .single();
     
     if (error) throw error;
-    return data;
+    // Type cast the data to ensure proper typing
+    return {
+      ...data,
+      type: data.type as 'product' | 'service'
+    };
   },
 
   async update(id: string, updates: Partial<ProductService>): Promise<ProductService> {
@@ -86,7 +94,11 @@ export const productServiceService = {
       .single();
     
     if (error) throw error;
-    return data;
+    // Type cast the data to ensure proper typing
+    return {
+      ...data,
+      type: data.type as 'product' | 'service'
+    };
   },
 
   async delete(id: string): Promise<void> {
