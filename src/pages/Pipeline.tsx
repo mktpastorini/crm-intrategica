@@ -1,391 +1,202 @@
+
 import { useState, useEffect } from 'react';
-import { useCrm } from '@/contexts/CrmContext';
-import { useAuth } from '@/contexts/AuthContext';
+import { DragDropContext, DropResult } from '@hello-pangea/dnd';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Plus, Filter, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { Phone, Mail, Calendar, User, Building, Archive } from 'lucide-react';
+import { useCrm } from '@/contexts/CrmContext';
 import PipelineColumn from '@/components/pipeline/PipelineColumn';
 import UnknownStageColumn from '@/components/pipeline/UnknownStageColumn';
-import type { Lead, PipelineStage } from '@/components/pipeline/types';
-import { createJourneySchedule } from "@/utils/journeyScheduleService";
+import { Lead } from '@/components/pipeline/types';
+import { triggerJourneyMessages } from '@/utils/journeyTriggerService';
 
 export default function Pipeline() {
-  // Inicializar o rastreador de atividades
-  
-  // Fix: Explicitly cast leads and pipelineStages with the canonical types
-  const context = useCrm();
-  const leads = context.leads as Lead[];
-  const pipelineStages = context.pipelineStages as PipelineStage[];
-  const moveLead = context.moveLead;
-  const addEvent = context.addEvent;
-  const users = context.users;
-
-  const { user, profile } = useAuth();
+  const { 
+    leads, 
+    pipelineStages, 
+    updateLead, 
+    addLead,
+    deleteLead
+  } = useCrm();
   const { toast } = useToast();
-  const [showEventDialog, setShowEventDialog] = useState(false);
-  const [selectedLead, setSelectedLead] = useState<string | null>(null);
-  const [eventData, setEventData] = useState({
-    type: 'reunion' as 'reunion' | 'call' | 'whatsapp' | 'email',
-    date: '',
-    time: '',
-    responsible_id: user?.id || ''
-  });
+  const [filter, setFilter] = useState('');
 
-  // Adicionando logs para depuração dos leads recebidos
-  useEffect(() => {
-    // Log dos estágios cadastrados para debug
-    console.log('[DEPURAÇÃO PIPELINE] pipelineStages:', pipelineStages);
-    // Log todos os leads recebidos e estágio atual:
-    leads.forEach((lead) => {
-      console.log(`[DEPURAÇÃO PIPELINE] Lead ${lead.name} (${lead.id}) - estágio: ${lead.pipeline_stage}`);
-    });
-  }, [leads, pipelineStages]);
+  const filteredLeads = leads.filter(lead => 
+    lead.name.toLowerCase().includes(filter.toLowerCase()) ||
+    lead.company.toLowerCase().includes(filter.toLowerCase()) ||
+    lead.email?.toLowerCase().includes(filter.toLowerCase()) ||
+    lead.phone.includes(filter)
+  );
 
-  // -- IDs fixos para estágios principais
-  // O primeiro estágio precisa sempre ser o "Aguardando Início" ('aguardando_contato')
-  // O estágio de reunião precisa sempre ser "Reunião" ('reuniao')
-  // Caso não exista no pipelineStages, exibir aviso (ou criar fallback)
-
-  // Encontrar ids dos estágios:
-  const pipelineStageIds = pipelineStages.map(s => s.id);
-
-  const primeiroStageId = pipelineStages.find(s => s.id === "aguardando_contato")?.id || pipelineStages[0]?.id;
-  const reuniaoStageId = pipelineStages.find(s => s.id === "reuniao")?.id || null;
-
-  const leadsComStageDesconhecido = []; // Agora nunca deve existir, já que já migramos esses leads no backend!
-
-  const handleDragStart = (e: React.DragEvent, leadId: string) => {
-    e.dataTransfer.setData('leadId', leadId);
+  const getLeadsByStage = (stageId: string) => {
+    return filteredLeads.filter(lead => lead.pipeline_stage === stageId);
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
+  const getUnknownStageLeads = () => {
+    const knownStageIds = pipelineStages.map(stage => stage.id);
+    return filteredLeads.filter(lead => !knownStageIds.includes(lead.pipeline_stage));
   };
 
-  // Função auxiliar: carrega mensagens da jornada do localStorage
-  const getJourneyMessages = () => {
-    const saved = localStorage.getItem("journeyMessages");
-    if (!saved) return [];
+  const onDragEnd = async (result: DropResult) => {
+    const { destination, source, draggableId } = result;
+
+    if (!destination) return;
+
+    if (
+      destination.droppableId === source.droppableId &&
+      destination.index === source.index
+    ) {
+      return;
+    }
+
+    const leadId = draggableId;
+    const newStage = destination.droppableId;
+    const oldStage = source.droppableId;
+
+    console.log(`Movendo lead ${leadId} de ${oldStage} para ${newStage}`);
+
     try {
-      return JSON.parse(saved) || [];
-    } catch {
-      return [];
-    }
-  };
-
-  // Adiciona schedules para as mensagens da jornada ao mover o lead
-  const scheduleJourneyMessages = async (lead, newStage) => {
-    const journeyMessages = getJourneyMessages();
-    const messagesForStage = journeyMessages.filter((m) => m.stage === newStage);
-
-    console.log("[Jornada] Mensagens configuradas para o estágio:", newStage, messagesForStage);
-
-    if (!messagesForStage.length) {
-      toast({
-        title: "Nenhuma mensagem de jornada encontrada",
-        description: `Nenhuma mensagem automática configurada para o estágio ${newStage}`,
-        variant: "default",
-      });
-      return;
-    }
-
-    const scheduled_for_base = new Date();
-    let countSuccess = 0;
-    let countError = 0;
-    let countNoWebhook = 0;
-
-    for (const msg of messagesForStage) {
-      const delayMs =
-        msg.delayUnit === "days"
-          ? msg.delay * 24 * 60 * 60 * 1000
-          : msg.delayUnit === "hours"
-          ? msg.delay * 60 * 60 * 1000
-          : msg.delay * 60 * 1000;
-
-      const scheduled_for = new Date(scheduled_for_base.getTime() + delayMs).toISOString();
-
-      // Tentar usar o webhook configurado no sistema, na mensagem ou manter null
-      const webhook_url = msg.webhookUrl || msg.webhook_url || null;
-
-      if (!webhook_url) {
-        countNoWebhook++;
-        console.warn(
-          `[Jornada] Nenhum webhook_url definido para mensagem "${msg.title}" (lead: ${lead.name}). Mensagem NÃO será disparada automaticamente!`
-        );
-      }
-
-      try {
-        await createJourneySchedule({
-          lead_id: lead.id,
-          lead_name: lead.name,
-          lead_phone: lead.phone,
-          lead_email: lead.email,
-          stage: newStage,
-          message_title: msg.title,
-          message_content: msg.content,
-          message_type: msg.type,
-          media_url: msg.mediaUrl,
-          scheduled_for,
-          webhook_url, // agora tenta pegar de msg ou deixa como null
+      const lead = leads.find(l => l.id === leadId);
+      if (!lead) {
+        console.error('Lead não encontrado:', leadId);
+        toast({
+          title: "Erro",
+          description: "Lead não encontrado. Tente recarregar a página.",
+          variant: "destructive",
         });
-        countSuccess++;
-        console.log(
-          `[Jornada] Agendamento criado para "${lead.name}", estágio ${newStage}, mensagem "${msg.title}", webhook: ${webhook_url || "NULO"}`
-        );
-      } catch (err) {
-        countError++;
-        console.error("[Jornada] Erro ao agendar mensagem:", err, msg, lead);
+        return;
       }
-    }
 
-    let extra = "";
-    if (countNoWebhook)
-      extra += ` (${countNoWebhook} mensagem(ns) sem webhook, não serão disparadas)`; 
+      // Atualizar o lead
+      await updateLead(leadId, { pipeline_stage: newStage });
 
-    toast({
-      title: "Agendamento da Jornada",
-      description: `Foram agendadas ${countSuccess} mensagem(ns)${extra}${countError ? `. ${countError} falharam` : ""}`,
-      variant: countError > 0 ? "destructive" : "default",
-    });
-  };
+      // Disparar mensagens da jornada do cliente
+      await triggerJourneyMessages({
+        id: lead.id,
+        name: lead.name,
+        phone: lead.phone,
+        email: lead.email,
+        pipeline_stage: newStage
+      }, newStage);
 
-  const handleDrop = (e: React.DragEvent, newStage: string) => {
-    e.preventDefault();
-    const leadId = e.dataTransfer.getData('leadId') || e.dataTransfer.getData('text/plain');
-    const lead = leads.find(l => l.id === leadId);
-    
-    console.log('Drop executado - leadId:', leadId, 'lead encontrado:', lead?.name);
-    
-    if (!lead) {
-      console.error('Lead não encontrado no handleDrop:', leadId);
-      toast({
-        title: "Erro",
-        description: "Lead não encontrado durante a movimentação",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Para estágio de reunião, abrir modal
-    if (reuniaoStageId && newStage === reuniaoStageId) {
-      setSelectedLead(leadId);
-      setShowEventDialog(true);
-      return;
-    }
-
-    if (lead.pipeline_stage !== newStage) {
-      console.log(`Movendo lead ${lead.name} de ${lead.pipeline_stage} para ${newStage}`);
-
-      moveLead(leadId, newStage);
+      const stageName = pipelineStages.find(s => s.id === newStage)?.name || newStage;
+      
       toast({
         title: "Lead movido",
-        description: `${lead.name} foi movido para ${pipelineStages.find(s => s.id === newStage)?.name}`,
+        description: `${lead.name} foi movido para ${stageName}`,
       });
-
-      // NOVO: Agendamento de mensagens da jornada
-      scheduleJourneyMessages(lead, newStage);
-    }
-  };
-
-  const handleScheduleEvent = () => {
-    if (!selectedLead || !eventData.date || !eventData.time || !eventData.responsible_id) {
+    } catch (error) {
+      console.error('Erro ao mover lead:', error);
       toast({
-        title: "Campos obrigatórios",
-        description: "Preencha todos os campos para agendar o evento",
+        title: "Erro ao mover lead",
+        description: "Tente novamente",
         variant: "destructive",
       });
-      return;
     }
+  };
 
-    const lead = leads.find(l => l.id === selectedLead);
-    if (!lead) return;
+  const handleAddLead = () => {
+    const newLead: Omit<Lead, 'id' | 'created_at' | 'updated_at'> = {
+      name: 'Novo Lead',
+      email: '',
+      phone: '',
+      company: '',
+      niche: '',
+      status: 'novo',
+      pipeline_stage: pipelineStages[0]?.id || 'prospeccao',
+      responsible_id: '',
+      address: '',
+      whatsapp: '',
+      instagram: '',
+      website: '',
+      place_id: '',
+      rating: null,
+      proposal_id: null
+    };
 
-    // Agendar evento para o lead
-    const startTime = `${eventData.date}T${eventData.time}`;
-    addEvent({
-      title: `${eventData.type === 'reunion' ? 'Reunião' : 
-        eventData.type === 'call' ? 'Telefonema' :
-        eventData.type === 'whatsapp' ? 'WhatsApp' : 'E-mail'} - ${lead.name}`,
-      description: lead.name,
-      start_time: startTime,
-      end_time: startTime,
-      location: lead.company || '',
-      lead_id: selectedLead,
-      user_id: eventData.responsible_id,
-      type: eventData.type,
-      date: eventData.date,
-      time: eventData.time,
-      company: lead.company,
-      lead_name: lead.name,
-      responsible_id: eventData.responsible_id
-    });
-
-    // Após agendar, move para reunião
-    if (reuniaoStageId) {
-      moveLead(selectedLead, reuniaoStageId);
-    }
-
-    setEventData({
-      type: 'reunion',
-      date: '',
-      time: '',
-      responsible_id: user?.id || ''
-    });
-    setSelectedLead(null);
-    setShowEventDialog(false);
-
+    addLead(newLead);
+    
     toast({
-      title: "Evento agendado",
-      description: "O evento foi criado e o lead foi movido para o estágio Reunião",
+      title: "Lead criado",
+      description: "Um novo lead foi adicionado ao pipeline",
     });
   };
 
-  // Retorna leads para um determinado stageId
-  // Importante: usa exatamente o id do estágio em pipelineStages para o filtro!
-  const getLeadsByStage = (stageId: string) => {
-    const leadsEmStage = leads
-      .filter(lead => lead.pipeline_stage === stageId)
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    console.log(`[DEPURAÇÃO PIPELINE] Leads no estágio '${stageId}':`, leadsEmStage.map(l => l.name));
-    return leadsEmStage;
+  const handleDeleteLead = async (leadId: string) => {
+    if (!confirm('Tem certeza que deseja excluir este lead?')) return;
+    
+    try {
+      await deleteLead(leadId);
+      toast({
+        title: "Lead excluído",
+        description: "Lead foi removido com sucesso",
+      });
+    } catch (error) {
+      toast({
+        title: "Erro ao excluir lead",
+        description: "Tente novamente",
+        variant: "destructive",
+      });
+    }
   };
-
-  const eventTypes = [
-    { value: 'reunion', label: 'Reunião' },
-    { value: 'call', label: 'Telefonema' },
-    { value: 'whatsapp', label: 'Conversa no WhatsApp' },
-    { value: 'email', label: 'E-mail' }
-  ];
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
-      {/* Header fixo - não move com scroll */}
-      <div className="flex-shrink-0 bg-white border-b border-slate-200 z-10">
-        <div className="px-6 py-4">
-          <div className="mb-4">
-            <h2 className="text-2xl font-bold text-slate-900">Pipeline de Atendimento</h2>
-            <p className="text-slate-600">Gerencie o fluxo de leads através do processo de vendas</p>
+    <div className="h-full flex flex-col bg-slate-50">
+      <div className="flex-shrink-0 p-6 bg-white border-b shadow-sm">
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900">Pipeline de Vendas</h2>
+            <p className="text-slate-600">Gerencie seus leads através do funil de vendas</p>
           </div>
-
-          {/* Stats - também fixas */}
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-            {pipelineStages.map(stage => {
-              const leadsInStage = getLeadsByStage(stage.id);
-              return (
-                <Card key={stage.id} className="bg-white shadow-sm border-l-4" style={{ borderLeftColor: stage.color }}>
-                  <CardContent className="p-3">
-                    <div className="text-xl font-bold" style={{ color: stage.color }}>
-                      {leadsInStage.length}
-                    </div>
-                    <div className="text-xs text-slate-600 mt-1">{stage.name}</div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+          <Button onClick={handleAddLead} className="shadow-sm">
+            <Plus className="w-4 h-4 mr-2" />
+            Novo Lead
+          </Button>
+        </div>
+        
+        <div className="flex gap-4 items-center">
+          <div className="relative flex-1 max-w-md">
+            <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Filtrar leads..."
+              className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+            />
+          </div>
+          <div className="flex items-center gap-2 text-sm text-slate-600">
+            <Users className="w-4 h-4" />
+            <span>{filteredLeads.length} leads</span>
           </div>
         </div>
       </div>
 
-      {/* Pipeline Kanban */}
-      <div className="flex-1 overflow-hidden bg-slate-50">
-        <div className="h-full overflow-x-auto overflow-y-hidden">
-          <div className="flex gap-4 p-6 h-full" style={{ minWidth: `${(pipelineStages.length) * 320}px` }}>
-            {pipelineStages.map(stage => (
-              <PipelineColumn
-                key={stage.id}
-                stage={stage}
-                leads={getLeadsByStage(stage.id)}
-                onDragOver={handleDragOver}
-                onDrop={handleDrop}
-                onDragStart={handleDragStart}
-                allLeads={leads} // Passar todos os leads para busca
-              />
-            ))}
+      <div className="flex-1 overflow-hidden">
+        <DragDropContext onDragEnd={onDragEnd}>
+          <div className="h-full overflow-x-auto">
+            <div className="flex gap-6 px-6 py-6 min-h-full">
+              {pipelineStages.map((stage) => (
+                <PipelineColumn
+                  key={stage.id}
+                  stage={stage}
+                  leads={getLeadsByStage(stage.id)}
+                  onDeleteLead={handleDeleteLead}
+                />
+              ))}
+              
+              {getUnknownStageLeads().length > 0 && (
+                <UnknownStageColumn
+                  leads={getUnknownStageLeads()}
+                  pipelineStages={pipelineStages}
+                  onDeleteLead={handleDeleteLead}
+                />
+              )}
+            </div>
           </div>
-        </div>
+        </DragDropContext>
       </div>
-
-      {/* Event Scheduling Dialog */}
-      <Dialog open={showEventDialog} onOpenChange={setShowEventDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Agendar Compromisso</DialogTitle>
-            <DialogDescription>
-              Agende um compromisso para este lead antes de movê-lo para o estágio Reunião
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="event-type">Tipo de Evento</Label>
-              <Select value={eventData.type} onValueChange={(value: any) => setEventData(prev => ({ ...prev, type: value }))}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {eventTypes.map(type => (
-                    <SelectItem key={type.value} value={type.value}>
-                      {type.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="event-date">Data</Label>
-              <Input
-                id="event-date"
-                type="date"
-                value={eventData.date}
-                onChange={(e) => setEventData(prev => ({ ...prev, date: e.target.value }))}
-              />
-            </div>
-            <div>
-              <Label htmlFor="event-time">Horário</Label>
-              <Input
-                id="event-time"
-                type="time"
-                value={eventData.time}
-                onChange={(e) => setEventData(prev => ({ ...prev, time: e.target.value }))}
-              />
-            </div>
-            <div>
-              <Label htmlFor="event-responsible">Responsável</Label>
-              <Select value={eventData.responsible_id} onValueChange={(value) => {
-                setEventData(prev => ({ 
-                  ...prev, 
-                  responsible_id: value
-                }));
-              }}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o responsável" />
-                </SelectTrigger>
-                <SelectContent>
-                  {users.map(user => (
-                    <SelectItem key={user.id} value={user.id}>
-                      {user.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex gap-2 pt-4">
-              <Button variant="outline" onClick={() => setShowEventDialog(false)} className="flex-1">
-                Cancelar
-              </Button>
-              <Button onClick={handleScheduleEvent} className="flex-1">
-                <Calendar className="w-4 h-4 mr-2" />
-                Agendar
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

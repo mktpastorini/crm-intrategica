@@ -339,7 +339,7 @@ export default function CustomerJourney() {
           }`}
           onClick={() => setSelectedStage("")}
         >
-          Kanban
+          Jornada
         </button>
         <button
           className={`py-2 px-4 rounded-t font-semibold ${

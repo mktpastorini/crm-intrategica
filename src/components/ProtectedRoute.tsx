@@ -46,6 +46,12 @@ export default function ProtectedRoute({ children, requiredRole }: ProtectedRout
     return <Navigate to="/" replace />;
   }
 
+  // Pipeline é liberado para todos os usuários autenticados
+  if (window.location.pathname === '/pipeline') {
+    console.log('Acesso ao pipeline liberado para todos os usuários');
+    return <>{children}</>;
+  }
+
   console.log('Usuário autenticado, renderizando conteúdo');
   return <>{children}</>;
 }
