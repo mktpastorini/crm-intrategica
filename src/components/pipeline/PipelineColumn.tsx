@@ -4,9 +4,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Archive, Building, Phone, Mail, User } from 'lucide-react';
 import type { Lead, PipelineStage } from './types';
-import { DollarSign } from 'lucide-react';
-import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 
 interface Props {
   stage: PipelineStage;
@@ -23,40 +20,6 @@ export default function PipelineColumn({
   onDrop,
   onDragStart,
 }: Props) {
-  const [proposalValues, setProposalValues] = useState<Record<string, number>>({});
-
-  useEffect(() => {
-    loadProposalValues();
-  }, [leads]);
-
-  const loadProposalValues = async () => {
-    const leadsWithProposals = leads.filter(lead => (lead as any).proposal_id);
-    if (leadsWithProposals.length === 0) return;
-
-    try {
-      const proposalIds = leadsWithProposals.map(lead => (lead as any).proposal_id).filter(Boolean);
-      
-      const { data: proposals, error } = await supabase
-        .from('proposals')
-        .select('id, total_value')
-        .in('id', proposalIds);
-
-      if (error) throw error;
-
-      const valueMap: Record<string, number> = {};
-      proposals?.forEach(proposal => {
-        const lead = leadsWithProposals.find(l => (l as any).proposal_id === proposal.id);
-        if (lead) {
-          valueMap[lead.id] = proposal.total_value;
-        }
-      });
-
-      setProposalValues(valueMap);
-    } catch (error) {
-      console.error('Erro ao carregar valores das propostas:', error);
-    }
-  };
-
   return (
     <div
       className="flex-shrink-0 w-80 bg-white rounded-lg shadow-sm border border-slate-200 flex flex-col h-full"
@@ -98,17 +61,6 @@ export default function PipelineColumn({
                   {lead.email}
                 </div>
               )}
-              
-              {/* Mostrar valor da proposta se existe */}
-              {proposalValues[lead.id] && (
-                <div className="flex items-center justify-center p-2 bg-green-50 rounded-md border border-green-200">
-                  <Badge variant="secondary" className="bg-green-100 text-green-800 font-semibold">
-                    <DollarSign className="w-3 h-3 mr-1" />
-                    R$ {proposalValues[lead.id].toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </Badge>
-                </div>
-              )}
-
               <div className="flex items-center justify-between pt-2">
                 <Badge variant="outline" className="text-xs">
                   {lead.niche}

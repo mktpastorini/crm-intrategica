@@ -10,7 +10,6 @@ import { useFavicon } from "./hooks/useFavicon";
 import Dashboard from "./pages/Dashboard";
 import Leads from "./pages/Leads";
 import Pipeline from "./pages/Pipeline";
-import Proposals from "./pages/Proposals";
 import Messages from "./pages/Messages";
 import Calendar from "./pages/Calendar";
 import Supervision from "./pages/Supervision";
@@ -61,7 +60,6 @@ function App() {
                 <Route index element={<Dashboard />} />
                 <Route path="leads" element={<Leads />} />
                 <Route path="pipeline" element={<Pipeline />} />
-                <Route path="proposals" element={<Proposals />} />
                 <Route path="messages" element={<Messages />} />
                 <Route path="calendar" element={<Calendar />} />
                 <Route path="profile" element={<Profile />} />

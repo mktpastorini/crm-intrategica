@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useCrm } from '@/contexts/CrmContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -15,10 +14,10 @@ import PipelineColumn from '@/components/pipeline/PipelineColumn';
 import UnknownStageColumn from '@/components/pipeline/UnknownStageColumn';
 import type { Lead, PipelineStage } from '@/components/pipeline/types';
 import { createJourneySchedule } from "@/utils/journeyScheduleService";
-import { DollarSign, FileText } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
 
 export default function Pipeline() {
+  // Inicializar o rastreador de atividades
+  
   // Fix: Explicitly cast leads and pipelineStages with the canonical types
   const context = useCrm();
   const leads = context.leads as Lead[];
@@ -37,20 +36,29 @@ export default function Pipeline() {
     time: '',
     responsible_id: user?.id || ''
   });
-  const [showProposalSelection, setShowProposalSelection] = useState(false);
-  const [proposals, setProposals] = useState([]);
 
   // Adicionando logs para depuração dos leads recebidos
   useEffect(() => {
+    // Log dos estágios cadastrados para debug
     console.log('[DEPURAÇÃO PIPELINE] pipelineStages:', pipelineStages);
+    // Log todos os leads recebidos e estágio atual:
     leads.forEach((lead) => {
       console.log(`[DEPURAÇÃO PIPELINE] Lead ${lead.name} (${lead.id}) - estágio: ${lead.pipeline_stage}`);
     });
   }, [leads, pipelineStages]);
 
+  // -- IDs fixos para estágios principais
+  // O primeiro estágio precisa sempre ser o "Aguardando Início" ('aguardando_contato')
+  // O estágio de reunião precisa sempre ser "Reunião" ('reuniao')
+  // Caso não exista no pipelineStages, exibir aviso (ou criar fallback)
+
+  // Encontrar ids dos estágios:
   const pipelineStageIds = pipelineStages.map(s => s.id);
+
   const primeiroStageId = pipelineStages.find(s => s.id === "aguardando_contato")?.id || pipelineStages[0]?.id;
   const reuniaoStageId = pipelineStages.find(s => s.id === "reuniao")?.id || null;
+
+  const leadsComStageDesconhecido = []; // Agora nunca deve existir, já que já migramos esses leads no backend!
 
   const handleDragStart = (e: React.DragEvent, leadId: string) => {
     e.dataTransfer.setData('leadId', leadId);
@@ -102,6 +110,7 @@ export default function Pipeline() {
 
       const scheduled_for = new Date(scheduled_for_base.getTime() + delayMs).toISOString();
 
+      // Tentar usar o webhook configurado no sistema, na mensagem ou manter null
       const webhook_url = msg.webhookUrl || msg.webhook_url || null;
 
       if (!webhook_url) {
@@ -123,7 +132,7 @@ export default function Pipeline() {
           message_type: msg.type,
           media_url: msg.mediaUrl,
           scheduled_for,
-          webhook_url,
+          webhook_url, // agora tenta pegar de msg ou deixa como null
         });
         countSuccess++;
         console.log(
@@ -160,18 +169,6 @@ export default function Pipeline() {
       return;
     }
 
-    // Para estágio de "Proposta Enviada", SEMPRE verificar se tem proposta vinculada
-    if (newStage === 'proposta_enviada') {
-      // Verificar se o lead já tem uma proposta vinculada
-      if (!lead.proposal_id) {
-        // Mostrar modal para selecionar proposta - OBRIGATÓRIO
-        setSelectedLead(leadId);
-        setShowProposalSelection(true);
-        return;
-      }
-    }
-
-    // Só move o lead se não for para "proposta_enviada" ou se já tiver proposta vinculada
     if (lead.pipeline_stage !== newStage) {
       console.log(`Movendo lead ${lead.name} de ${lead.pipeline_stage} para ${newStage}`);
 
@@ -181,7 +178,7 @@ export default function Pipeline() {
         description: `${lead.name} foi movido para ${pipelineStages.find(s => s.id === newStage)?.name}`,
       });
 
-      // Agendamento de mensagens da jornada
+      // NOVO: Agendamento de mensagens da jornada
       scheduleJourneyMessages(lead, newStage);
     }
   };
@@ -240,6 +237,7 @@ export default function Pipeline() {
   };
 
   // Retorna leads para um determinado stageId
+  // Importante: usa exatamente o id do estágio em pipelineStages para o filtro!
   const getLeadsByStage = (stageId: string) => {
     const leadsEmStage = leads
       .filter(lead => lead.pipeline_stage === stageId)
@@ -254,64 +252,6 @@ export default function Pipeline() {
     { value: 'whatsapp', label: 'Conversa no WhatsApp' },
     { value: 'email', label: 'E-mail' }
   ];
-
-  useEffect(() => {
-    loadProposals();
-  }, []);
-
-  const loadProposals = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('proposals')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      if (data) setProposals(data);
-    } catch (error) {
-      console.error('Erro ao carregar propostas:', error);
-    }
-  };
-
-  const linkProposalAndMove = async (proposalId: string) => {
-    if (!selectedLead) return;
-
-    try {
-      // Vincular proposta ao lead
-      const { error: updateLeadError } = await supabase
-        .from('leads')
-        .update({ proposal_id: proposalId })
-        .eq('id', selectedLead);
-
-      if (updateLeadError) throw updateLeadError;
-
-      // Vincular lead à proposta
-      const { error: updateProposalError } = await supabase
-        .from('proposals')
-        .update({ lead_id: selectedLead })
-        .eq('id', proposalId);
-
-      if (updateProposalError) throw updateProposalError;
-
-      // Mover para o estágio de proposta enviada
-      moveLead(selectedLead, 'proposta_enviada');
-
-      setShowProposalSelection(false);
-      setSelectedLead(null);
-
-      toast({
-        title: "Proposta vinculada e lead movido",
-        description: "Lead foi movido para Proposta Enviada com sucesso"
-      });
-    } catch (error) {
-      console.error('Erro ao vincular proposta:', error);
-      toast({
-        title: "Erro",
-        description: "Erro ao vincular proposta ao lead",
-        variant: "destructive"
-      });
-    }
-  };
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
@@ -356,6 +296,7 @@ export default function Pipeline() {
                 onDragStart={handleDragStart}
               />
             ))}
+            {/* UnknownStageColumn removido */}
           </div>
         </div>
       </div>
@@ -432,57 +373,6 @@ export default function Pipeline() {
                 Agendar
               </Button>
             </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Proposal Selection Dialog */}
-      <Dialog open={showProposalSelection} onOpenChange={setShowProposalSelection}>
-        <DialogContent className="max-w-2xl max-h-[600px] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Vincular Proposta - OBRIGATÓRIO</DialogTitle>
-            <DialogDescription>
-              Para mover este lead para "Proposta Enviada", você DEVE vincular uma proposta. O lead não será movido sem vincular uma proposta.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            {proposals.length > 0 ? (
-              <div className="grid grid-cols-1 gap-4">
-                {proposals.map((proposal) => (
-                  <Card 
-                    key={proposal.id} 
-                    className="cursor-pointer hover:bg-slate-50 transition-colors"
-                    onClick={() => linkProposalAndMove(proposal.id)}
-                  >
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-lg font-medium">
-                        {proposal.title}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      <div className="flex items-center justify-between">
-                        <Badge variant="outline" className="font-semibold">
-                          <DollarSign className="w-3 h-3 mr-1" />
-                          R$ {proposal.total_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </Badge>
-                        <span className="text-xs text-slate-500">
-                          {new Date(proposal.created_at).toLocaleDateString('pt-BR')}
-                        </span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-slate-500">
-                <FileText className="w-12 h-12 mx-auto mb-3 text-slate-300" />
-                <p>Nenhuma proposta criada ainda</p>
-                <p className="text-sm">Crie uma proposta na seção Propostas primeiro</p>
-              </div>
-            )}
-            <Button variant="outline" onClick={() => setShowProposalSelection(false)} className="w-full">
-              Cancelar - Lead não será movido
-            </Button>
           </div>
         </DialogContent>
       </Dialog>
