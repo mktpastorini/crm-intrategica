@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Users, Calendar, DollarSign, CalendarDays } from 'lucide-react';
 import { useMeetingMetrics } from '@/hooks/useMeetingMetrics';
 import { supabase } from '@/integrations/supabase/client';
+import type { Lead } from '@/components/pipeline/types';
 
 export default function Dashboard() {
   const { leads, events } = useCrm();
@@ -22,7 +23,7 @@ export default function Dashboard() {
   const calculateProposalMetrics = async () => {
     try {
       // Buscar leads no estágio "proposta_enviada"
-      const leadsWithProposals = leads.filter(lead => 
+      const leadsWithProposals = (leads as Lead[]).filter(lead => 
         lead.pipeline_stage === 'proposta_enviada' && lead.proposal_id
       );
 
