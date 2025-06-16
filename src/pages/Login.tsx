@@ -12,7 +12,7 @@ import { Loader2, LogIn } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export default function Login() {
-  const { signIn } = useAuth();
+  const { login } = useAuth(); // Changed from signIn to login
   const { settings } = useSystemSettingsDB();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -29,7 +29,7 @@ export default function Login() {
     console.log('Iniciando processo de login...');
 
     try {
-      await signIn(email, password);
+      await login(email, password); // Changed from signIn to login
       console.log('Login realizado com sucesso');
       
       toast({

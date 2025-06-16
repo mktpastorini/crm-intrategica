@@ -1,4 +1,3 @@
-
 import { useAuth } from '@/contexts/AuthContext';
 import { useCrm } from '@/contexts/CrmContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,7 +17,7 @@ import { useMeetingMetrics } from '@/hooks/useMeetingMetrics';
 export default function Dashboard() {
   const { profile } = useAuth();
   const { leads, events, pipelineStages, proposals } = useCrm();
-  const { completionRate, averageDuration } = useMeetingMetrics();
+  const { completionRate, averageDuration } = useMeetingMetrics(events);
 
   // Calcular estatísticas
   const totalLeads = leads.length;

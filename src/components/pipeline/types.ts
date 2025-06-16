@@ -9,6 +9,8 @@ export interface Lead {
   responsible_id: string;
   created_at: string;
   pipeline_stage: string; // required everywhere
+  status?: string; // Added status property
+  proposal_id?: string; // Added proposal_id property
 }
 
 export interface PipelineStage {
