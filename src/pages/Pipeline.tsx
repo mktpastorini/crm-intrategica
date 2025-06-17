@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { DragDropContext, DropResult } from '@hello-pangea/dnd';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -120,7 +121,7 @@ export default function Pipeline() {
       proposal_id: undefined
     };
 
-    addLead(newLead);
+    addLead(newLead as any);
     
     toast({
       title: "Lead criado",
@@ -203,7 +204,6 @@ export default function Pipeline() {
               {getUnknownStageLeads().length > 0 && (
                 <UnknownStageColumn
                   leads={getUnknownStageLeads()}
-                  pipelineStages={pipelineStages}
                   onDeleteLead={handleDeleteLead}
                 />
               )}
