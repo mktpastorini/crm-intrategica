@@ -10,7 +10,7 @@ export interface Lead {
   created_at: string;
   updated_at: string;
   pipeline_stage: string; // required everywhere
-  status: string; // Adicionando status que estava faltando
+  status: string;
   proposal_id?: string;
   // Campos adicionais do Google Maps
   website?: string;

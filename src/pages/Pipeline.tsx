@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { DragDropContext, DropResult } from '@hello-pangea/dnd';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,7 +21,13 @@ export default function Pipeline() {
   const { toast } = useToast();
   const [filter, setFilter] = useState('');
 
-  const filteredLeads = leads.filter(lead => 
+  // Convert CRM leads to pipeline leads format
+  const pipelineLeads: Lead[] = leads.map(lead => ({
+    ...lead,
+    pipeline_stage: lead.pipeline_stage || 'prospeccao' // Ensure pipeline_stage is always defined
+  }));
+
+  const filteredLeads = pipelineLeads.filter(lead => 
     lead.name.toLowerCase().includes(filter.toLowerCase()) ||
     lead.company.toLowerCase().includes(filter.toLowerCase()) ||
     lead.email?.toLowerCase().includes(filter.toLowerCase()) ||
@@ -57,7 +62,7 @@ export default function Pipeline() {
     console.log(`Movendo lead ${leadId} de ${oldStage} para ${newStage}`);
 
     try {
-      const lead = leads.find(l => l.id === leadId);
+      const lead = pipelineLeads.find(l => l.id === leadId);
       if (!lead) {
         console.error('Lead não encontrado:', leadId);
         toast({
@@ -191,7 +196,7 @@ export default function Pipeline() {
                   onDragStart={(e, leadId) => {
                     e.dataTransfer.setData('text/plain', leadId);
                   }}
-                  allLeads={leads}
+                  allLeads={pipelineLeads}
                 />
               ))}
               

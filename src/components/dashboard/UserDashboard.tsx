@@ -1,10 +1,31 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Users, TrendingUp, FileText, Calendar, Target, Award } from 'lucide-react';
 import { useCrm } from '@/contexts/CrmContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMemo } from 'react';
+
+// Use the Lead type from CrmContext to ensure compatibility
+type CrmLead = {
+  id: string;
+  name: string;
+  company: string;
+  phone: string;
+  email?: string;
+  niche: string;
+  responsible_id: string;
+  created_at: string;
+  updated_at: string;
+  pipeline_stage?: string;
+  status: string;
+  proposal_id?: string;
+  website?: string;
+  address?: string;
+  rating?: number;
+  place_id?: string;
+  whatsapp?: string;
+  instagram?: string;
+};
 
 export default function UserDashboard() {
   const { leads, events, pipelineStages } = useCrm();
@@ -40,7 +61,7 @@ export default function UserDashboard() {
     const todayEvents = userEvents.filter(event => event.date === today);
     
     // Propostas do usuário (leads com proposta vinculada)
-    const leadsWithProposals = userLeads.filter(lead => lead.proposal_id);
+    const leadsWithProposals = userLeads.filter((lead: CrmLead) => lead.proposal_id);
 
     return {
       totalLeads,

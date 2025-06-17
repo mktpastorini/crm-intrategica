@@ -1,4 +1,3 @@
-
 import { useAuth } from '@/contexts/AuthContext';
 import UserDashboard from '@/components/dashboard/UserDashboard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,6 +8,28 @@ import { useCrm } from '@/contexts/CrmContext';
 import { useQuery } from '@tanstack/react-query';
 import { proposalService } from '@/services/proposalService';
 import { useMemo } from 'react';
+
+// Use a compatible Lead type for dashboard calculations
+type DashboardLead = {
+  id: string;
+  name: string;
+  company: string;
+  phone: string;
+  email?: string;
+  niche: string;
+  responsible_id: string;
+  created_at: string;
+  updated_at: string;
+  pipeline_stage?: string;
+  status: string;
+  proposal_id?: string;
+  website?: string;
+  address?: string;
+  rating?: number;
+  place_id?: string;
+  whatsapp?: string;
+  instagram?: string;
+};
 
 export default function Dashboard() {
   const { profile } = useAuth();
@@ -62,7 +83,7 @@ export default function Dashboard() {
     const performerStats = users.map(user => {
       const userLeads = leads.filter(lead => lead.responsible_id === user.id);
       const userEvents = events.filter(event => event.responsible_id === user.id);
-      const userProposals = userLeads.filter(lead => lead.proposal_id).length;
+      const userProposals = userLeads.filter((lead: DashboardLead) => lead.proposal_id).length;
       
       return {
         id: user.id,
