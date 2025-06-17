@@ -8,8 +8,17 @@ export interface Lead {
   niche: string;
   responsible_id: string;
   created_at: string;
+  updated_at: string;
   pipeline_stage: string; // required everywhere
-  proposal_id?: string; // Nova propriedade
+  status: string; // Adicionando status que estava faltando
+  proposal_id?: string;
+  // Campos adicionais do Google Maps
+  website?: string;
+  address?: string;
+  rating?: number;
+  place_id?: string;
+  whatsapp?: string;
+  instagram?: string;
 }
 
 export interface PipelineStage {

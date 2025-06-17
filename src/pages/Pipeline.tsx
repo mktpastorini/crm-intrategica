@@ -111,8 +111,8 @@ export default function Pipeline() {
       instagram: '',
       website: '',
       place_id: '',
-      rating: null,
-      proposal_id: null
+      rating: undefined,
+      proposal_id: undefined
     };
 
     addLead(newLead);
@@ -183,6 +183,15 @@ export default function Pipeline() {
                   stage={stage}
                   leads={getLeadsByStage(stage.id)}
                   onDeleteLead={handleDeleteLead}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e, stageId) => {
+                    e.preventDefault();
+                    // Drag handling is managed by DragDropContext
+                  }}
+                  onDragStart={(e, leadId) => {
+                    e.dataTransfer.setData('text/plain', leadId);
+                  }}
+                  allLeads={leads}
                 />
               ))}
               
