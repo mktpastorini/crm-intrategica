@@ -14,226 +14,156 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+    );
 
-    console.log('Iniciando geração do relatório diário...');
+    // Pegar a data atual (hoje)
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
+    
+    console.log(`Gerando relatório para a data: ${todayStr}`);
 
     // Buscar configurações do sistema
     const { data: settings } = await supabase
       .from('system_settings')
       .select('*')
-      .limit(1)
-      .maybeSingle();
+      .single();
 
-    if (!settings?.report_webhook_enabled || !settings?.report_webhook_url) {
-      console.log('Relatório diário não está habilitado ou URL não configurada');
+    if (!settings?.report_webhook_url) {
+      console.log('Webhook do relatório não configurado');
       return new Response(
-        JSON.stringify({ message: 'Relatório não habilitado' }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'Webhook do relatório não configurado' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const now = new Date();
-    const today = now.toISOString().split('T')[0];
-    
-    // Definir janela de tempo do dia (00:00 até agora)
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-    const endOfDay = now;
-
-    console.log(`Coletando dados do período: ${startOfDay.toISOString()} até ${endOfDay.toISOString()}`);
-
-    // 1. Leads adicionados hoje
-    const { data: leadsToday, error: leadsError } = await supabase
-      .from('leads')
-      .select('id, pipeline_stage, created_at')
-      .gte('created_at', startOfDay.toISOString())
-      .lt('created_at', endOfDay.toISOString());
-
-    if (leadsError) {
-      console.error('Erro ao buscar leads:', leadsError);
-    }
-
-    // 2. Eventos criados hoje
-    const { data: eventsToday, error: eventsError } = await supabase
-      .from('events')
-      .select('id, completed, created_at')
-      .gte('created_at', startOfDay.toISOString())
-      .lt('created_at', endOfDay.toISOString());
-
-    if (eventsError) {
-      console.error('Erro ao buscar eventos:', eventsError);
-    }
-
-    // 3. Eventos concluídos hoje
-    const { data: completedEvents, error: completedError } = await supabase
-      .from('events')
-      .select('id, completed, title, type')
-      .eq('completed', true)
-      .gte('created_at', startOfDay.toISOString())
-      .lt('created_at', endOfDay.toISOString());
-
-    if (completedError) {
-      console.error('Erro ao buscar eventos concluídos:', completedError);
-    }
-
-    // 4. Buscar dados de atividades diárias rastreadas
-    const { data: dailyActivity } = await supabase
+    // Buscar atividades do dia atual
+    const { data: dailyActivity, error: activityError } = await supabase
       .from('daily_activities')
       .select('*')
-      .eq('date', today)
-      .maybeSingle();
+      .eq('date', todayStr)
+      .single();
 
-    // Processar dados coletados
-    const leadsAdded = leadsToday?.length || 0;
-    const eventsCreated = eventsToday?.length || 0;
-    const eventsCompleted = completedEvents?.length || 0;
-    const messagesSent = dailyActivity?.messages_sent || 0;
-    
-    // Organizar dados de leads movidos de forma mais clara
-    const leadsMovedData = dailyActivity?.leads_moved || {};
-    const totalLeadsMoved = Object.values(leadsMovedData)
-      .reduce((sum, count) => sum + (typeof count === 'number' ? count : 0), 0);
-    
-    // Estatísticas dos leads criados hoje por estágio
-    const newLeadsByStage: Record<string, number> = {};
-    if (leadsToday) {
-      leadsToday.forEach(lead => {
-        const stage = lead.pipeline_stage || 'Sem estágio';
-        newLeadsByStage[stage] = (newLeadsByStage[stage] || 0) + 1;
-      });
+    if (activityError && activityError.code !== 'PGRST116') {
+      console.error('Erro ao buscar atividades diárias:', activityError);
+      throw activityError;
     }
 
-    // Detalhes dos eventos concluídos
-    const completedEventsDetails = completedEvents?.map(event => ({
-      title: event.title,
-      type: event.type
-    })) || [];
+    // Buscar dados atuais do sistema para o relatório
+    const { data: leads } = await supabase
+      .from('leads')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-    // Preparar dados do relatório reorganizado
+    const { data: events } = await supabase
+      .from('events')
+      .select('*')
+      .eq('date', todayStr);
+
+    const { data: proposals } = await supabase
+      .from('proposals')
+      .select('*');
+
+    // Calcular estatísticas atuais
+    const totalLeads = leads?.length || 0;
+    const newLeadsToday = leads?.filter(lead => 
+      lead.created_at.startsWith(todayStr)
+    ).length || 0;
+    
+    const eventsToday = events?.length || 0;
+    const proposalsTotal = proposals?.length || 0;
+
+    // Contar leads por estágio
+    const leadsByStage = leads?.reduce((acc, lead) => {
+      acc[lead.pipeline_stage] = (acc[lead.pipeline_stage] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>) || {};
+
+    // Calcular leads movidos hoje (do daily_activities se existir)
+    const leadsMovedData = dailyActivity?.leads_moved || {};
+    const totalLeadsMovedToday = Object.values(leadsMovedData).reduce((sum: number, count: any) => sum + (count || 0), 0);
+
+    // Estruturar dados do relatório
     const reportData = {
-      // Informações básicas do relatório
-      relatorio: {
-        data: today,
-        sistema: settings.system_name || "Sistema CRM",
-        whatsapp_contact: settings.report_whatsapp_number || '',
-        horario_programado: settings.report_webhook_time || '18:00',
-        periodo_analisado: {
-          inicio: startOfDay.toISOString(),
-          fim: endOfDay.toISOString(),
-          gerado_em: now.toISOString()
-        }
+      date: todayStr,
+      timestamp: new Date().toISOString(),
+      summary: {
+        total_leads: totalLeads,
+        new_leads_today: newLeadsToday,
+        leads_moved_today: totalLeadsMovedToday,
+        events_today: eventsToday,
+        total_proposals: proposalsTotal,
+        messages_sent_today: dailyActivity?.messages_sent || 0
       },
-
-      // Resumo das atividades do dia
-      resumo_do_dia: {
-        total_atividades: leadsAdded + totalLeadsMoved + messagesSent + eventsCreated + eventsCompleted,
-        novos_leads_criados: leadsAdded,
-        leads_movimentados_entre_estagios: totalLeadsMoved,
-        mensagens_enviadas: messagesSent,
-        eventos_agendados: eventsCreated,
-        eventos_concluidos: eventsCompleted
+      leads_by_stage: leadsByStage,
+      recent_activities: {
+        leads_moved: leadsMovedData,
+        events_created: dailyActivity?.events_created || 0,
+        leads_added: dailyActivity?.leads_added || 0
       },
-
-      // Detalhamento por categoria
-      detalhamento: {
-        // Novos leads criados hoje (não movidos, apenas criados)
-        novos_leads_por_estagio: newLeadsByStage,
-        
-        // Movimentação de leads entre estágios (rastreamento de pipeline)
-        movimentacao_pipeline: Object.entries(leadsMovedData)
-          .filter(([_, count]) => (count as number) > 0)
-          .reduce((acc, [stage, count]) => {
-            acc[stage] = {
-              quantidade: count,
-              descricao: `${count} lead${(count as number) > 1 ? 's' : ''} movido${(count as number) > 1 ? 's' : ''} para ${stage}`
-            };
-            return acc;
-          }, {} as Record<string, any>),
-
-        // Eventos da agenda concluídos
-        eventos_concluidos: completedEventsDetails.length > 0 ? completedEventsDetails : [],
-
-        // Status dos dados coletados
-        qualidade_dos_dados: {
-          dados_leads: leadsToday ? 'completos' : 'indisponíveis',
-          dados_eventos: eventsToday ? 'completos' : 'indisponíveis',
-          dados_mensagens: dailyActivity ? 'rastreados' : 'não_rastreados',
-          dados_movimentacao: dailyActivity?.leads_moved ? 'rastreados' : 'não_rastreados'
-        }
-      },
-
-      // Informações de contato incluindo WhatsApp
-      contato: {
-        whatsapp: settings.report_whatsapp_number || '',
-        sistema: settings.system_name || "Sistema CRM"
-      },
-
-      // Observações importantes
-      observacoes: {
-        diferenca_leads_novos_vs_movidos: "Os 'novos_leads_criados' são leads que foram adicionados hoje. A 'movimentacao_pipeline' mostra leads que mudaram de estágio (podem ser leads antigos ou novos).",
-        total_atividades_explicacao: "Soma de todos os tipos de atividades: criação de leads + movimentação + mensagens + eventos criados + eventos concluídos",
-        whatsapp_contato: `Contato do WhatsApp: ${settings.report_whatsapp_number || 'Não configurado'}`
-      },
-
-      // Dados técnicos (para compatibilidade)
-      _metadata: {
-        test: false,
-        version: "2.1",
-        whatsapp_included: true
+      system_info: {
+        report_generated_at: new Date().toISOString(),
+        system_name: settings?.system_name || 'CRM System'
       }
     };
 
-    console.log('Dados do relatório reorganizados:', JSON.stringify(reportData, null, 2));
+    console.log('Dados do relatório:', JSON.stringify(reportData, null, 2));
 
     // Enviar para o webhook
-    console.log('Enviando para webhook:', settings.report_webhook_url);
-    
-    const response = await fetch(settings.report_webhook_url, {
+    const webhookResponse = await fetch(settings.report_webhook_url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'User-Agent': 'CRM-System-Daily-Report/2.1'
       },
-      body: JSON.stringify(reportData)
+      body: JSON.stringify(reportData),
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Erro ao enviar relatório:', response.status, response.statusText, errorText);
-      return new Response(
-        JSON.stringify({ 
-          error: 'Erro ao enviar relatório para webhook',
-          status: response.status,
-          statusText: response.statusText,
-          details: errorText,
-          webhook_url: settings.report_webhook_url
-        }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    if (!webhookResponse.ok) {
+      console.error('Erro ao enviar webhook:', webhookResponse.status, webhookResponse.statusText);
+      const errorText = await webhookResponse.text();
+      console.error('Resposta do webhook:', errorText);
+      throw new Error(`Erro no webhook: ${webhookResponse.status}`);
     }
 
-    const responseText = await response.text();
-    console.log('Relatório enviado com sucesso para webhook. Resposta:', responseText);
+    console.log('Relatório enviado com sucesso para o webhook');
+
+    // Atualizar ou criar atividade diária
+    if (dailyActivity) {
+      await supabase
+        .from('daily_activities')
+        .update({
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', dailyActivity.id);
+    } else {
+      await supabase
+        .from('daily_activities')
+        .insert([{
+          date: todayStr,
+          leads_added: newLeadsToday,
+          events_created: eventsToday,
+          messages_sent: 0,
+          leads_moved: {}
+        }]);
+    }
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: 'Relatório diário reorganizado enviado com sucesso para webhook',
-        webhook_url: settings.report_webhook_url,
-        data: reportData,
-        webhook_response: responseText
+        report_data: reportData,
+        webhook_sent: true
       }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('Erro ao gerar relatório diário:', error);
+    console.error('Erro na geração do relatório:', error);
     return new Response(
       JSON.stringify({ 
-        error: 'Erro interno do servidor',
-        details: error.message
+        error: error.message,
+        timestamp: new Date().toISOString()
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

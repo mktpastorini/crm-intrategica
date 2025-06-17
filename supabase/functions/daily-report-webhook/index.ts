@@ -1,4 +1,5 @@
 
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -8,78 +9,94 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { webhookUrl, reportData } = await req.json();
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+    );
 
-    if (!webhookUrl) {
+    // Buscar configurações do sistema
+    const { data: settings } = await supabase
+      .from('system_settings')
+      .select('*')
+      .single();
+
+    if (!settings?.report_webhook_enabled || !settings?.report_webhook_url) {
+      console.log('Webhook do relatório não está habilitado ou configurado');
       return new Response(
-        JSON.stringify({ error: 'URL do webhook é obrigatória' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
+        JSON.stringify({ message: 'Webhook do relatório não está habilitado' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Enviando relatório para webhook:', webhookUrl);
-    console.log('Dados do relatório:', reportData);
+    // Verificar se é o horário correto para enviar o relatório
+    const now = new Date();
+    const currentTime = now.toTimeString().split(' ')[0].substring(0, 5); // HH:MM
+    const scheduledTime = settings.report_webhook_time || '18:00';
 
-    // Enviar dados para o webhook
-    const response = await fetch(webhookUrl, {
+    console.log(`Horário atual: ${currentTime}, Horário agendado: ${scheduledTime}`);
+
+    // Permitir uma margem de 5 minutos para execução
+    const currentMinutes = parseInt(currentTime.split(':')[0]) * 60 + parseInt(currentTime.split(':')[1]);
+    const scheduledMinutes = parseInt(scheduledTime.split(':')[0]) * 60 + parseInt(scheduledTime.split(':')[1]);
+    const timeDiff = Math.abs(currentMinutes - scheduledMinutes);
+
+    if (timeDiff > 5) {
+      console.log(`Não é o horário para enviar o relatório. Diferença: ${timeDiff} minutos`);
+      return new Response(
+        JSON.stringify({ message: 'Não é o horário para enviar o relatório' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Chamar a função de geração de relatório
+    const generateReportUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/generate-daily-report`;
+    
+    console.log('Chamando função de geração de relatório...');
+    
+    const response = await fetch(generateReportUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'User-Agent': 'CRM-System-Daily-Report/1.0'
+        'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`,
       },
-      body: JSON.stringify(reportData)
+      body: JSON.stringify({ 
+        date: now.toISOString().split('T')[0],
+        triggered_by: 'cron_job'
+      }),
     });
 
     if (!response.ok) {
-      console.error('Erro na resposta do webhook:', response.status, response.statusText);
-      return new Response(
-        JSON.stringify({ 
-          error: 'Erro ao enviar para webhook',
-          status: response.status,
-          statusText: response.statusText
-        }),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      );
+      const errorText = await response.text();
+      console.error('Erro ao chamar generate-daily-report:', response.status, errorText);
+      throw new Error(`Erro ao gerar relatório: ${response.status}`);
     }
 
-    const responseText = await response.text();
-    console.log('Resposta do webhook:', responseText);
+    const result = await response.json();
+    console.log('Relatório gerado e enviado com sucesso:', result);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: 'Relatório enviado com sucesso',
-        webhookResponse: responseText
+        message: 'Relatório diário enviado com sucesso',
+        timestamp: new Date().toISOString(),
+        report_data: result
       }),
-      { 
-        status: 200, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('Erro ao processar webhook do relatório:', error);
+    console.error('Erro no webhook do relatório diário:', error);
     return new Response(
       JSON.stringify({ 
-        error: 'Erro interno do servidor',
-        details: error.message
+        error: error.message,
+        timestamp: new Date().toISOString()
       }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

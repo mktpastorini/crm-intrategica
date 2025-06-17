@@ -4,36 +4,39 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Archive, Building, Phone, Mail, User, FileText, DollarSign } from 'lucide-react';
+import { Archive, Building, Phone, Mail, User, FileText, DollarSign, Edit } from 'lucide-react';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import type { Lead, PipelineStage } from './types';
 import { proposalService } from '@/services/proposalService';
+import { useCrm } from '@/contexts/CrmContext';
 
 interface Props {
   stage: PipelineStage;
   leads: Lead[];
+  onDeleteLead: (leadId: string) => void;
   onDragOver: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent, stageId: string) => void;
   onDragStart: (e: React.DragEvent, leadId: string) => void;
-  onLeadUpdate?: (leadId: string, updates: Partial<Lead>) => void;
-  allLeads?: Lead[]; // Adicionar todos os leads para busca
+  allLeads?: Lead[];
 }
 
 export default function PipelineColumn({
   stage,
   leads,
+  onDeleteLead,
   onDragOver,
   onDrop,
   onDragStart,
-  onLeadUpdate,
   allLeads = [],
 }: Props) {
   const [showProposalDialog, setShowProposalDialog] = useState(false);
+  const [showEditProposalDialog, setShowEditProposalDialog] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [selectedProposalId, setSelectedProposalId] = useState('');
   const { toast } = useToast();
+  const { updateLead } = useCrm();
 
   // Buscar propostas
   const { data: proposals = [] } = useQuery({
@@ -97,10 +100,8 @@ export default function PipelineColumn({
       // Vincular proposta ao lead
       await proposalService.linkToLead(selectedProposalId, selectedLead.id);
       
-      // Atualizar o lead localmente se callback disponível
-      if (onLeadUpdate) {
-        onLeadUpdate(selectedLead.id, { proposal_id: selectedProposalId });
-      }
+      // Atualizar o lead localmente
+      await updateLead(selectedLead.id, { proposal_id: selectedProposalId });
 
       // Executar o drop para mover o lead
       const mockEvent = {
@@ -126,6 +127,45 @@ export default function PipelineColumn({
       toast({
         title: "Erro",
         description: "Erro ao vincular proposta",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleEditProposal = (lead: Lead) => {
+    setSelectedLead(lead);
+    setSelectedProposalId(lead.proposal_id || '');
+    setShowEditProposalDialog(true);
+  };
+
+  const handleUpdateProposal = async () => {
+    if (!selectedLead || !selectedProposalId) {
+      toast({
+        title: "Erro",
+        description: "Selecione uma proposta para vincular",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Atualizar a proposta vinculada ao lead
+      await updateLead(selectedLead.id, { proposal_id: selectedProposalId });
+
+      toast({
+        title: "Sucesso",
+        description: "Proposta atualizada com sucesso",
+      });
+
+      // Reset
+      setSelectedLead(null);
+      setSelectedProposalId('');
+      setShowEditProposalDialog(false);
+    } catch (error) {
+      console.error('Erro ao atualizar proposta:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao atualizar proposta",
         variant: "destructive",
       });
     }
@@ -187,14 +227,29 @@ export default function PipelineColumn({
                 
                 {/* Mostrar proposta vinculada se existir */}
                 {lead.proposal_id && (
-                  <div className="bg-green-50 p-2 rounded border border-green-200">
-                    <div className="flex items-center text-xs text-green-700">
-                      <FileText className="w-3 h-3 mr-1" />
-                      {getProposalTitle(lead.proposal_id)}
-                    </div>
-                    <div className="flex items-center text-xs font-medium text-green-800">
-                      <DollarSign className="w-3 h-3 mr-1" />
-                      R$ {getProposalValue(lead.proposal_id).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  <div className="bg-green-50 p-2 rounded border border-green-200 relative">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center text-xs text-green-700">
+                          <FileText className="w-3 h-3 mr-1" />
+                          {getProposalTitle(lead.proposal_id)}
+                        </div>
+                        <div className="flex items-center text-xs font-medium text-green-800">
+                          <DollarSign className="w-3 h-3 mr-1" />
+                          R$ {getProposalValue(lead.proposal_id).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 text-green-600 hover:text-green-800"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditProposal(lead);
+                        }}
+                      >
+                        <Edit className="w-3 h-3" />
+                      </Button>
                     </div>
                   </div>
                 )}
@@ -209,7 +264,15 @@ export default function PipelineColumn({
                   </div>
                 </div>
                 <div className="flex justify-end pt-1">
-                  <Button variant="ghost" size="sm" className="text-slate-400 hover:text-slate-600 h-6 w-6 p-0">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="text-slate-400 hover:text-slate-600 h-6 w-6 p-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteLead(lead.id);
+                    }}
+                  >
                     <Archive className="w-3 h-3" />
                   </Button>
                 </div>
@@ -222,6 +285,7 @@ export default function PipelineColumn({
         </div>
       </div>
 
+      {/* Dialog para vincular proposta */}
       <Dialog open={showProposalDialog} onOpenChange={setShowProposalDialog}>
         <DialogContent>
           <DialogHeader>
@@ -260,6 +324,49 @@ export default function PipelineColumn({
               </Button>
               <Button onClick={handleProposalLink}>
                 Vincular e Mover
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para editar proposta vinculada */}
+      <Dialog open={showEditProposalDialog} onOpenChange={setShowEditProposalDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Alterar Proposta Vinculada</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm text-slate-600 mb-4">
+                Lead: <strong>{selectedLead?.name}</strong> - {selectedLead?.company}
+              </p>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">Selecionar Nova Proposta:</label>
+              <Select value={selectedProposalId} onValueChange={setSelectedProposalId}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Escolha uma proposta" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Remover proposta</SelectItem>
+                  {proposals.map((proposal) => (
+                    <SelectItem key={proposal.id} value={proposal.id}>
+                      {proposal.title} - R$ {proposal.total_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => setShowEditProposalDialog(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleUpdateProposal}>
+                Atualizar Proposta
               </Button>
             </div>
           </div>
