@@ -1,14 +1,16 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Building, Phone } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Building, Phone, Archive } from 'lucide-react';
 import type { Lead } from './types';
 
 interface Props {
   leads: Lead[];
+  onDeleteLead: (leadId: string) => void;
 }
 
-export default function UnknownStageColumn({ leads }: Props) {
+export default function UnknownStageColumn({ leads, onDeleteLead }: Props) {
   if (leads.length === 0) return null;
 
   return (
@@ -45,6 +47,19 @@ export default function UnknownStageColumn({ leads }: Props) {
               <div className="flex items-center text-xs text-slate-700">
                 <Phone className="w-3 h-3 mr-1" />
                 {lead.phone}
+              </div>
+              <div className="flex justify-end pt-1">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="text-slate-400 hover:text-slate-600 h-6 w-6 p-0"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteLead(lead.id);
+                  }}
+                >
+                  <Archive className="w-3 h-3" />
+                </Button>
               </div>
             </CardContent>
           </Card>
