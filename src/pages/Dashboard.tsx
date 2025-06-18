@@ -101,7 +101,7 @@ export default function Dashboard() {
         proposals: userProposals,
         totalLeads: userLeads.length,
         closedDeals: userProposals,
-        completedMeetings: userEvents.filter(event => event.status === 'completed').length,
+        completedMeetings: userEvents.filter(event => event.completed === true).length,
         scheduledMeetings: userEvents.length,
         score: userLeads.length + userEvents.length + (userProposals * 2)
       };
