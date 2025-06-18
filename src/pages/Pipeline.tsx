@@ -134,35 +134,23 @@ export default function Pipeline() {
   const checkSpecialStageConditions = async (lead: Lead, newStageId: string, stageName: string): Promise<boolean> => {
     console.log('Verificando condições especiais:', { leadName: lead.name, stageName });
 
-    // Condição especial para "Reunião" - deve ter evento agendado
+    // Condição especial para "Reunião" - deve ter evento agendado (obrigatório)
     if (stageName.toLowerCase().includes('reunião') || stageName.toLowerCase().includes('reuniao')) {
-      // Aqui você pode implementar a verificação se o lead tem reunião agendada
-      // Por enquanto, vou permitir o movimento mas com aviso
-      console.log('Estágio de reunião detectado - verificar se há evento agendado');
+      console.log('Estágio de reunião detectado - verificação obrigatória de evento agendado');
       
+      // Por enquanto, simular que não há evento agendado para forçar o diálogo
+      // Em implementação real, você verificaria se há um evento agendado para este lead
       toast({
-        title: "Atenção",
-        description: "Certifique-se de que há uma reunião agendada para este lead.",
+        title: "Evento necessário",
+        description: "Para mover para 'Reunião', é obrigatório ter um evento agendado para este lead.",
+        variant: "destructive",
       });
       
-      return true;
-    }
-
-    // Condição especial para "Proposta Enviada" - deve ter proposta vinculada
-    if (stageName.toLowerCase().includes('proposta') && stageName.toLowerCase().includes('enviada')) {
-      if (!lead.proposal_id) {
-        console.log('Lead sem proposta vinculada para estágio Proposta Enviada');
-        
-        toast({
-          title: "Proposta necessária",
-          description: "Para mover para 'Proposta Enviada', é necessário vincular uma proposta ao lead.",
-          variant: "destructive",
-        });
-        
-        return false;
-      }
+      // TODO: Implementar diálogo para agendar evento
+      // setSelectedLead(lead);
+      // setShowEventDialog(true);
       
-      console.log('Lead tem proposta vinculada, pode mover para Proposta Enviada');
+      return false;
     }
 
     return true;

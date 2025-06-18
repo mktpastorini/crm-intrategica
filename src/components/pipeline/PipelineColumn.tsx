@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Archive, Building, Phone, Mail, User, FileText, DollarSign, Edit } from 'lucide-react';
+import { Archive, Building, Phone, Mail, User, FileText, DollarSign, Edit, Calendar } from 'lucide-react';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
@@ -34,6 +34,7 @@ export default function PipelineColumn({
 }: Props) {
   const [showProposalDialog, setShowProposalDialog] = useState(false);
   const [showEditProposalDialog, setShowEditProposalDialog] = useState(false);
+  const [showEventDialog, setShowEventDialog] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [selectedProposalId, setSelectedProposalId] = useState('');
   const { toast } = useToast();
@@ -120,6 +121,27 @@ export default function PipelineColumn({
     }
   };
 
+  const handleScheduleEvent = async () => {
+    if (!selectedLead) {
+      toast({
+        title: "Erro",
+        description: "Lead não selecionado",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Por enquanto, simular o agendamento do evento
+    toast({
+      title: "Evento agendado",
+      description: `Reunião agendada para ${selectedLead.name}. Funcionalidade completa será implementada.`,
+    });
+
+    // Reset
+    setSelectedLead(null);
+    setShowEventDialog(false);
+  };
+
   const getProposalValue = (proposalId: string): number => {
     const proposal = proposals.find(p => p.id === proposalId);
     return proposal?.total_value || 0;
@@ -130,19 +152,30 @@ export default function PipelineColumn({
     return proposal?.title || 'Proposta';
   };
 
-  const checkProposalRequirement = (leadId: string): boolean => {
-    const isPropostaEnviadaStage = stage.name.toLowerCase().includes('proposta') && 
-                                   stage.name.toLowerCase().includes('enviada');
-    
-    if (isPropostaEnviadaStage) {
-      const lead = leads.find(l => l.id === leadId) || allLeads.find(l => l.id === leadId);
-      if (!lead?.proposal_id) {
-        setSelectedLead(lead || null);
+  const checkSpecialStageRequirements = (leadId: string, targetStageId: string): boolean => {
+    const lead = leads.find(l => l.id === leadId) || allLeads.find(l => l.id === leadId);
+    if (!lead) return false;
+
+    const targetStage = stage;
+    const stageName = targetStage.name.toLowerCase();
+
+    // Condição especial para "Reunião" - deve ter evento agendado
+    if (stageName.includes('reunião') || stageName.includes('reuniao')) {
+      // Por enquanto, sempre mostrar o diálogo para agendar
+      setSelectedLead(lead);
+      setShowEventDialog(true);
+      return false;
+    }
+
+    // Condição especial para "Proposta Enviada" - deve ter proposta vinculada
+    if (stageName.includes('proposta') && stageName.includes('enviada')) {
+      if (!lead.proposal_id) {
+        setSelectedLead(lead);
         setShowProposalDialog(true);
         return false;
       }
     }
-    
+
     return true;
   };
 
@@ -272,11 +305,11 @@ export default function PipelineColumn({
         )}
       </Droppable>
 
-      {/* Dialog para vincular proposta */}
+      {/* Dialog para vincular proposta (obrigatório para Proposta Enviada) */}
       <Dialog open={showProposalDialog} onOpenChange={setShowProposalDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Vincular Proposta ao Lead</DialogTitle>
+            <DialogTitle>Vincular Proposta Obrigatória</DialogTitle>
           </DialogHeader>
           
           <div className="space-y-4">
@@ -284,8 +317,8 @@ export default function PipelineColumn({
               <p className="text-sm text-slate-600 mb-2">
                 Lead: <strong>{selectedLead?.name}</strong> - {selectedLead?.company}
               </p>
-              <p className="text-sm text-slate-600 mb-4">
-                Para mover este lead para "Proposta Enviada", é necessário vincular uma proposta.
+              <p className="text-sm text-orange-600 mb-4 font-medium">
+                ⚠️ Para mover este lead para "Proposta Enviada", é OBRIGATÓRIO vincular uma proposta.
               </p>
             </div>
 
@@ -309,8 +342,47 @@ export default function PipelineColumn({
               <Button variant="outline" onClick={() => setShowProposalDialog(false)}>
                 Cancelar
               </Button>
-              <Button onClick={handleProposalLink}>
+              <Button onClick={handleProposalLink} disabled={!selectedProposalId}>
                 Vincular e Mover
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para agendar evento (obrigatório para Reunião) */}
+      <Dialog open={showEventDialog} onOpenChange={setShowEventDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Agendar Reunião Obrigatória</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm text-slate-600 mb-2">
+                Lead: <strong>{selectedLead?.name}</strong> - {selectedLead?.company}
+              </p>
+              <p className="text-sm text-orange-600 mb-4 font-medium">
+                ⚠️ Para mover este lead para "Reunião", é OBRIGATÓRIO agendar um evento/reunião.
+              </p>
+            </div>
+
+            <div className="bg-blue-50 p-4 rounded border border-blue-200">
+              <div className="flex items-center text-blue-700 mb-2">
+                <Calendar className="w-4 h-4 mr-2" />
+                <span className="font-medium">Agendar Reunião</span>
+              </div>
+              <p className="text-sm text-blue-600">
+                Funcionalidade de agendamento será implementada. Por enquanto, confirme para simular o agendamento.
+              </p>
+            </div>
+
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => setShowEventDialog(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleScheduleEvent}>
+                Agendar e Mover
               </Button>
             </div>
           </div>
