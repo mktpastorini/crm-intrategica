@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { Lead, PipelineStage } from './types';
 import { proposalService } from '@/services/proposalService';
 import { useCrm } from '@/contexts/CrmContext';
+import { Droppable, Draggable } from '@hello-pangea/dnd';
 
 interface Props {
   stage: PipelineStage;
@@ -27,7 +28,9 @@ export default function PipelineColumn({
   leads,
   onDeleteLead,
   onDragOver,
-  onDrop,
+  onD
+
+,
   onDragStart,
   allLeads = [],
 }: Props) {
@@ -44,48 +47,6 @@ export default function PipelineColumn({
     queryFn: proposalService.getAll,
   });
 
-  const handleDrop = async (e: React.DragEvent, stageId: string) => {
-    // Verificar se está tentando mover para "Proposta Enviada"
-    const isPropostaEnviadaStage = stage.name.toLowerCase().includes('proposta') && 
-                                   stage.name.toLowerCase().includes('enviada');
-    
-    if (isPropostaEnviadaStage) {
-      e.preventDefault();
-      const leadId = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('leadId');
-      
-      console.log('Tentando mover lead para Proposta Enviada:', leadId);
-      
-      // Buscar lead primeiro nos leads desta coluna, depois em todos os leads
-      let lead = leads.find(l => l.id === leadId);
-      
-      if (!lead && allLeads.length > 0) {
-        lead = allLeads.find(l => l.id === leadId);
-        console.log('Lead encontrado em allLeads:', lead?.name);
-      }
-
-      if (!lead) {
-        console.error('Lead não encontrado com ID:', leadId);
-        toast({
-          title: "Erro",
-          description: "Lead não encontrado. Verifique se o lead ainda existe no sistema.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Se o lead não tem proposta vinculada, mostrar dialog
-      if (!lead.proposal_id) {
-        console.log('Lead sem proposta vinculada, mostrando dialog:', lead.name);
-        setSelectedLead(lead);
-        setShowProposalDialog(true);
-        return;
-      }
-    }
-    
-    // Continuar com drop normal para outros estágios
-    onDrop(e, stageId);
-  };
-
   const handleProposalLink = async () => {
     if (!selectedLead || !selectedProposalId) {
       toast({
@@ -100,22 +61,12 @@ export default function PipelineColumn({
       // Vincular proposta ao lead
       await proposalService.linkToLead(selectedProposalId, selectedLead.id);
       
-      // Atualizar o lead localmente - cast to any to bypass TypeScript check
+      // Atualizar o lead localmente
       await updateLead(selectedLead.id, { proposal_id: selectedProposalId } as any);
-
-      // Executar o drop para mover o lead
-      const mockEvent = {
-        preventDefault: () => {},
-        dataTransfer: {
-          getData: () => selectedLead.id
-        }
-      } as any;
-      
-      onDrop(mockEvent, stage.id);
 
       toast({
         title: "Sucesso",
-        description: "Proposta vinculada e lead movido com sucesso",
+        description: "Proposta vinculada com sucesso",
       });
 
       // Reset
@@ -149,7 +100,7 @@ export default function PipelineColumn({
     }
 
     try {
-      // Atualizar a proposta vinculada ao lead - cast to any to bypass TypeScript check
+      // Atualizar a proposta vinculada ao lead
       await updateLead(selectedLead.id, { proposal_id: selectedProposalId || undefined } as any);
 
       toast({
@@ -181,109 +132,147 @@ export default function PipelineColumn({
     return proposal?.title || 'Proposta';
   };
 
+  const checkProposalRequirement = (leadId: string): boolean => {
+    const isPropostaEnviadaStage = stage.name.toLowerCase().includes('proposta') && 
+                                   stage.name.toLowerCase().includes('enviada');
+    
+    if (isPropostaEnviadaStage) {
+      const lead = leads.find(l => l.id === leadId) || allLeads.find(l => l.id === leadId);
+      if (!lead?.proposal_id) {
+        setSelectedLead(lead || null);
+        setShowProposalDialog(true);
+        return false;
+      }
+    }
+    
+    return true;
+  };
+
   return (
     <>
-      <div
-        className="flex-shrink-0 w-80 bg-white rounded-lg shadow-sm border border-slate-200 flex flex-col h-full"
-        onDragOver={onDragOver}
-        onDrop={(e) => handleDrop(e, stage.id)}
-      >
-        <div className="flex items-center justify-between p-4 border-b border-slate-100 flex-shrink-0">
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: stage.color }} />
-            <h3 className="font-semibold text-slate-900 text-sm">{stage.name}</h3>
-            <Badge variant="secondary" className="text-xs">
-              {leads.length}
-            </Badge>
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {leads.map(lead => (
-            <Card
-              key={lead.id}
-              className="cursor-move hover:shadow-md transition-shadow bg-white border border-slate-200"
-              draggable
-              onDragStart={(e) => onDragStart(e, lead.id)}
-              data-lead-id={lead.id}
-            >
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-slate-900 lead-name">{lead.name}</CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0 space-y-2">
-                <div className="flex items-center text-xs text-slate-600">
-                  <Building className="w-3 h-3 mr-1" />
-                  <span className="lead-company">{lead.company}</span>
-                </div>
-                <div className="flex items-center text-xs text-slate-600">
-                  <Phone className="w-3 h-3 mr-1" />
-                  <span className="lead-phone">{lead.phone}</span>
-                </div>
-                {lead.email && (
-                  <div className="flex items-center text-xs text-slate-600">
-                    <Mail className="w-3 h-3 mr-1" />
-                    <span className="lead-email">{lead.email}</span>
-                  </div>
-                )}
-                
-                {/* Mostrar proposta vinculada se existir */}
-                {lead.proposal_id && (
-                  <div className="bg-green-50 p-2 rounded border border-green-200 relative">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="flex items-center text-xs text-green-700">
-                          <FileText className="w-3 h-3 mr-1" />
-                          {getProposalTitle(lead.proposal_id)}
+      <Droppable droppableId={stage.id}>
+        {(provided, snapshot) => (
+          <div
+            ref={provided.innerRef}
+            {...provided.droppableProps}
+            className={`flex-shrink-0 w-80 bg-white rounded-lg shadow-sm border border-slate-200 flex flex-col h-full ${
+              snapshot.isDraggingOver ? 'bg-blue-50 border-blue-300' : ''
+            }`}
+          >
+            <div className="flex items-center justify-between p-4 border-b border-slate-100 flex-shrink-0">
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: stage.color }} />
+                <h3 className="font-semibold text-slate-900 text-sm">{stage.name}</h3>
+                <Badge variant="secondary" className="text-xs">
+                  {leads.length}
+                </Badge>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {leads.map((lead, index) => (
+                <Draggable key={lead.id} draggableId={lead.id} index={index}>
+                  {(provided, snapshot) => (
+                    <Card
+                      ref={provided.innerRef}
+                      {...provided.draggableProps}
+                      {...provided.dragHandleProps}
+                      className={`cursor-move transition-all duration-200 bg-white border border-slate-200 ${
+                        snapshot.isDragging 
+                          ? 'shadow-lg rotate-3 scale-105 ring-2 ring-blue-400' 
+                          : 'hover:shadow-md'
+                      }`}
+                      style={{
+                        ...provided.draggableProps.style,
+                        transform: provided.draggableProps.style?.transform || 'none'
+                      }}
+                    >
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-slate-900 lead-name">
+                          {lead.name}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-0 space-y-2">
+                        <div className="flex items-center text-xs text-slate-600">
+                          <Building className="w-3 h-3 mr-1" />
+                          <span className="lead-company">{lead.company}</span>
                         </div>
-                        <div className="flex items-center text-xs font-medium text-green-800">
-                          <DollarSign className="w-3 h-3 mr-1" />
-                          R$ {getProposalValue(lead.proposal_id).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        <div className="flex items-center text-xs text-slate-600">
+                          <Phone className="w-3 h-3 mr-1" />
+                          <span className="lead-phone">{lead.phone}</span>
                         </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0 text-green-600 hover:text-green-800"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEditProposal(lead);
-                        }}
-                      >
-                        <Edit className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
+                        {lead.email && (
+                          <div className="flex items-center text-xs text-slate-600">
+                            <Mail className="w-3 h-3 mr-1" />
+                            <span className="lead-email">{lead.email}</span>
+                          </div>
+                        )}
+                        
+                        {/* Mostrar proposta vinculada se existir */}
+                        {lead.proposal_id && (
+                          <div className="bg-green-50 p-2 rounded border border-green-200 relative">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <div className="flex items-center text-xs text-green-700">
+                                  <FileText className="w-3 h-3 mr-1" />
+                                  {getProposalTitle(lead.proposal_id)}
+                                </div>
+                                <div className="flex items-center text-xs font-medium text-green-800">
+                                  <DollarSign className="w-3 h-3 mr-1" />
+                                  R$ {getProposalValue(lead.proposal_id).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </div>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0 text-green-600 hover:text-green-800"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEditProposal(lead);
+                                }}
+                              >
+                                <Edit className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
 
-                <div className="flex items-center justify-between pt-2">
-                  <Badge variant="outline" className="text-xs">
-                    {lead.niche}
-                  </Badge>
-                  <div className="flex items-center text-xs text-slate-500">
-                    <User className="w-3 h-3 mr-1" />
-                    {lead.responsible_id}
-                  </div>
+                        <div className="flex items-center justify-between pt-2">
+                          <Badge variant="outline" className="text-xs">
+                            {lead.niche}
+                          </Badge>
+                          <div className="flex items-center text-xs text-slate-500">
+                            <User className="w-3 h-3 mr-1" />
+                            {lead.responsible_id}
+                          </div>
+                        </div>
+                        <div className="flex justify-end pt-1">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-slate-400 hover:text-slate-600 h-6 w-6 p-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeleteLead(lead.id);
+                            }}
+                          >
+                            <Archive className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </Draggable>
+              ))}
+              {provided.placeholder}
+              {leads.length === 0 && (
+                <div className="text-center py-8 text-slate-400 text-sm">
+                  Nenhum lead neste estágio
                 </div>
-                <div className="flex justify-end pt-1">
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="text-slate-400 hover:text-slate-600 h-6 w-6 p-0"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeleteLead(lead.id);
-                    }}
-                  >
-                    <Archive className="w-3 h-3" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-          {leads.length === 0 && (
-            <div className="text-center py-8 text-slate-400 text-sm">Nenhum lead neste estágio</div>
-          )}
-        </div>
-      </div>
+              )}
+            </div>
+          </div>
+        )}
+      </Droppable>
 
       {/* Dialog para vincular proposta */}
       <Dialog open={showProposalDialog} onOpenChange={setShowProposalDialog}>

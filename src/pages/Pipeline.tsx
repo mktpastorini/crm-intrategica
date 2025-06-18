@@ -25,7 +25,7 @@ export default function Pipeline() {
   // Convert CRM leads to pipeline leads format
   const pipelineLeads: Lead[] = leads.map(lead => ({
     ...lead,
-    pipeline_stage: lead.pipeline_stage || 'prospeccao' // Ensure pipeline_stage is always defined
+    pipeline_stage: lead.pipeline_stage || 'prospeccao'
   }));
 
   const filteredLeads = pipelineLeads.filter(lead => 
@@ -47,20 +47,26 @@ export default function Pipeline() {
   const onDragEnd = async (result: DropResult) => {
     const { destination, source, draggableId } = result;
 
-    if (!destination) return;
+    console.log('onDragEnd chamado:', { destination, source, draggableId });
+
+    if (!destination) {
+      console.log('Sem destino - cancelando');
+      return;
+    }
 
     if (
       destination.droppableId === source.droppableId &&
       destination.index === source.index
     ) {
+      console.log('Mesma posição - cancelando');
       return;
     }
 
     const leadId = draggableId;
-    const newStage = destination.droppableId;
-    const oldStage = source.droppableId;
+    const newStageId = destination.droppableId;
+    const oldStageId = source.droppableId;
 
-    console.log(`Movendo lead ${leadId} de ${oldStage} para ${newStage}`);
+    console.log(`Tentando mover lead ${leadId} de ${oldStageId} para ${newStageId}`);
 
     try {
       const lead = pipelineLeads.find(l => l.id === leadId);
@@ -74,24 +80,46 @@ export default function Pipeline() {
         return;
       }
 
-      // Atualizar o lead
-      await updateLead(leadId, { pipeline_stage: newStage });
+      const newStage = pipelineStages.find(s => s.id === newStageId);
+      const oldStage = pipelineStages.find(s => s.id === oldStageId);
+      
+      console.log('Informações dos estágios:', { 
+        newStage: newStage?.name, 
+        oldStage: oldStage?.name,
+        leadName: lead.name 
+      });
+
+      // Verificar condições especiais antes de mover
+      const canMove = await checkSpecialStageConditions(lead, newStageId, newStage?.name || '');
+      
+      if (!canMove) {
+        console.log('Movimento bloqueado pelas condições especiais');
+        return;
+      }
+
+      // Atualizar o lead no banco
+      console.log('Atualizando lead no banco...');
+      await updateLead(leadId, { pipeline_stage: newStageId });
+      console.log('Lead atualizado com sucesso');
 
       // Disparar mensagens da jornada do cliente
+      console.log('Disparando mensagens da jornada...');
       await triggerJourneyMessages({
         id: lead.id,
         name: lead.name,
         phone: lead.phone,
         email: lead.email,
-        pipeline_stage: newStage
-      }, newStage);
+        pipeline_stage: newStageId
+      }, newStageId);
 
-      const stageName = pipelineStages.find(s => s.id === newStage)?.name || newStage;
+      const stageName = newStage?.name || newStageId;
       
       toast({
         title: "Lead movido",
         description: `${lead.name} foi movido para ${stageName}`,
       });
+
+      console.log('Movimento concluído com sucesso');
     } catch (error) {
       console.error('Erro ao mover lead:', error);
       toast({
@@ -100,6 +128,44 @@ export default function Pipeline() {
         variant: "destructive",
       });
     }
+  };
+
+  // Função para verificar condições especiais dos estágios
+  const checkSpecialStageConditions = async (lead: Lead, newStageId: string, stageName: string): Promise<boolean> => {
+    console.log('Verificando condições especiais:', { leadName: lead.name, stageName });
+
+    // Condição especial para "Reunião" - deve ter evento agendado
+    if (stageName.toLowerCase().includes('reunião') || stageName.toLowerCase().includes('reuniao')) {
+      // Aqui você pode implementar a verificação se o lead tem reunião agendada
+      // Por enquanto, vou permitir o movimento mas com aviso
+      console.log('Estágio de reunião detectado - verificar se há evento agendado');
+      
+      toast({
+        title: "Atenção",
+        description: "Certifique-se de que há uma reunião agendada para este lead.",
+      });
+      
+      return true;
+    }
+
+    // Condição especial para "Proposta Enviada" - deve ter proposta vinculada
+    if (stageName.toLowerCase().includes('proposta') && stageName.toLowerCase().includes('enviada')) {
+      if (!lead.proposal_id) {
+        console.log('Lead sem proposta vinculada para estágio Proposta Enviada');
+        
+        toast({
+          title: "Proposta necessária",
+          description: "Para mover para 'Proposta Enviada', é necessário vincular uma proposta ao lead.",
+          variant: "destructive",
+        });
+        
+        return false;
+      }
+      
+      console.log('Lead tem proposta vinculada, pode mover para Proposta Enviada');
+    }
+
+    return true;
   };
 
   const handleAddLead = () => {
@@ -147,6 +213,15 @@ export default function Pipeline() {
     }
   };
 
+  // Log para debug
+  useEffect(() => {
+    console.log('Pipeline renderizado:', {
+      totalLeads: pipelineLeads.length,
+      totalStages: pipelineStages.length,
+      filteredLeads: filteredLeads.length
+    });
+  }, [pipelineLeads.length, pipelineStages.length, filteredLeads.length]);
+
   return (
     <div className="h-full flex flex-col bg-slate-50">
       <div className="flex-shrink-0 p-6 bg-white border-b shadow-sm">
@@ -192,9 +267,10 @@ export default function Pipeline() {
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e, stageId) => {
                     e.preventDefault();
-                    // Drag handling is managed by DragDropContext
+                    console.log('onDrop chamado mas será gerenciado pelo DragDropContext');
                   }}
                   onDragStart={(e, leadId) => {
+                    console.log('onDragStart chamado:', leadId);
                     e.dataTransfer.setData('text/plain', leadId);
                   }}
                   allLeads={pipelineLeads}
