@@ -28,9 +28,7 @@ export default function PipelineColumn({
   leads,
   onDeleteLead,
   onDragOver,
-  onD
-
-,
+  onDrop,
   onDragStart,
   allLeads = [],
 }: Props) {

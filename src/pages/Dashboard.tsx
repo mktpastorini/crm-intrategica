@@ -41,6 +41,12 @@ export default function Dashboard() {
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // Always call useQuery hook at the top level, regardless of user role
+  const { data: proposals = [] } = useQuery({
+    queryKey: ['proposals'],
+    queryFn: proposalService.getAll,
+  });
+
   // Se não for admin, mostrar dashboard personalizado
   if (profile?.role !== 'admin') {
     return (
@@ -51,11 +57,6 @@ export default function Dashboard() {
   }
 
   // Dashboard completo para administradores
-  const { data: proposals = [] } = useQuery({
-    queryKey: ['proposals'],
-    queryFn: proposalService.getAll,
-  });
-
   const metrics = useMemo(() => {
     // Pipeline Ativo: todos os leads exceto "Aguardando Contato" (primeiro) e "Perdidos" (último)
     const firstStageId = pipelineStages.find(s => s.order === 0)?.id || 'aguardando_contato';
