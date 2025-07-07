@@ -41,23 +41,25 @@ export default function Dashboard() {
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Always call useQuery hook at the top level, regardless of user role
+  // Always call all hooks at the top level, regardless of user role
   const { data: proposals = [] } = useQuery({
     queryKey: ['proposals'],
     queryFn: proposalService.getAll,
   });
 
-  // Se não for admin, mostrar dashboard personalizado
-  if (profile?.role !== 'admin') {
-    return (
-      <div className="p-6">
-        <UserDashboard />
-      </div>
-    );
-  }
-
-  // Dashboard completo para administradores
+  // Compute metrics for admin users (will be empty arrays for non-admin)
   const metrics = useMemo(() => {
+    if (profile?.role !== 'admin') {
+      return {
+        totalLeads: 0,
+        activeInPipeline: 0,
+        activeUsers: 0,
+        totalProposals: 0,
+        todayEvents: 0,
+        conversionRate: '0'
+      };
+    }
+
     // Pipeline Ativo: todos os leads exceto "Aguardando Contato" (primeiro) e "Perdidos" (último)
     const firstStageId = pipelineStages.find(s => s.order === 0)?.id || 'aguardando_contato';
     const lastStageId = pipelineStages.find(s => s.name.toLowerCase().includes('perdido'))?.id;
@@ -83,10 +85,14 @@ export default function Dashboard() {
       todayEvents: todayEvents.length,
       conversionRate: totalLeads > 0 ? ((activePipelineLeads.length / totalLeads) * 100).toFixed(1) : '0'
     };
-  }, [leads, users, proposals, events, pipelineStages]);
+  }, [leads, users, proposals, events, pipelineStages, profile?.role]);
 
   // Top performers - dados completos para admin
   const topPerformers = useMemo(() => {
+    if (profile?.role !== 'admin') {
+      return [];
+    }
+
     const performerStats = users.map(user => {
       const userLeads = leads.filter(lead => lead.responsible_id === user.id);
       const userEvents = events.filter(event => event.responsible_id === user.id);
@@ -109,10 +115,14 @@ export default function Dashboard() {
     }).sort((a, b) => b.score - a.score).slice(0, 5);
 
     return performerStats;
-  }, [users, leads, events]);
+  }, [users, leads, events, profile?.role]);
 
   // Distribuição por estágio para o gráfico de pizza
   const stageDistribution = useMemo(() => {
+    if (profile?.role !== 'admin') {
+      return [];
+    }
+
     return pipelineStages.map(stage => {
       const stageLeads = leads.filter(lead => lead.pipeline_stage === stage.id);
       return {
@@ -121,10 +131,14 @@ export default function Dashboard() {
         color: stage.color
       };
     }).filter(item => item.count > 0);
-  }, [leads, pipelineStages]);
+  }, [leads, pipelineStages, profile?.role]);
 
   // Dados para o gráfico de performance por período
   const performanceData = useMemo(() => {
+    if (profile?.role !== 'admin') {
+      return [];
+    }
+
     const last7Days = Array.from({ length: 7 }, (_, i) => {
       const date = new Date();
       date.setDate(date.getDate() - i);
@@ -141,7 +155,16 @@ export default function Dashboard() {
         events: dayEvents.length
       };
     });
-  }, [leads, events]);
+  }, [leads, events, profile?.role]);
+
+  // Se não for admin, mostrar dashboard personalizado
+  if (profile?.role !== 'admin') {
+    return (
+      <div className="p-6">
+        <UserDashboard />
+      </div>
+    );
+  }
 
   const handleUserClick = (user: any) => {
     setSelectedUser(user);
