@@ -169,8 +169,20 @@ export default function Leads() {
           });
         }
       } else {
-        const newLead = await createLead(submitData);
+        // Para criação, precisamos criar o lead diretamente no banco para obter o ID
+        const { data: newLead, error } = await supabase
+          .from('leads')
+          .insert([submitData])
+          .select()
+          .single();
+
+        if (error) throw error;
+        
         leadId = newLead.id;
+        
+        // Recarregar a lista de leads
+        await loadLeads();
+        
         toast({
           title: "Lead criado",
           description: "Lead foi criado com sucesso",
