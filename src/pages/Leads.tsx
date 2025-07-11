@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { UserPlus, Filter, Search, Users as UsersIcon, Upload, Download } from 'lucide-react';
@@ -16,8 +17,17 @@ import LeadsTable from '@/components/leads/LeadsTable';
 import UserSelector from '@/components/leads/UserSelector';
 import ImportLeadsDialog from '@/components/leads/ImportLeadsDialog';
 import ExportLeadsDialog from '@/components/leads/ExportLeadsDialog';
+import MultipleContacts from '@/components/leads/MultipleContacts';
 import { usePhoneMask } from '@/hooks/usePhoneMask';
 import { useIsMobile } from '@/hooks/use-mobile';
+
+interface Contact {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  position?: string;
+}
 
 export default function Leads() {
   const { leads, users, loading, actionLoading, createLead, updateLead, deleteLead, loadLeads, loadUsers, pipelineStages } = useCrm();
@@ -32,6 +42,7 @@ export default function Leads() {
   const [editingLead, setEditingLead] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -116,7 +127,9 @@ export default function Leads() {
         // Se o WhatsApp não foi preenchido, usa o telefone
         whatsapp: formData.whatsapp.trim() || formData.phone.trim(),
         // Se não há responsável selecionado, usa o usuário logado
-        responsible_id: formData.responsible_id || user?.id || ''
+        responsible_id: formData.responsible_id || user?.id || '',
+        // Adicionar contatos como JSON
+        additional_contacts: contacts.length > 0 ? JSON.stringify(contacts) : undefined
       };
 
       console.log('Dados que serão enviados:', submitData);
@@ -179,6 +192,22 @@ export default function Leads() {
       whatsapp: lead.whatsapp || '',
       instagram: lead.instagram || ''
     });
+
+    // Carregar contatos adicionais se existirem
+    if (lead.additional_contacts) {
+      try {
+        const parsedContacts = typeof lead.additional_contacts === 'string' 
+          ? JSON.parse(lead.additional_contacts) 
+          : lead.additional_contacts;
+        setContacts(Array.isArray(parsedContacts) ? parsedContacts : []);
+      } catch (error) {
+        console.error('Erro ao carregar contatos adicionais:', error);
+        setContacts([]);
+      }
+    } else {
+      setContacts([]);
+    }
+
     setShowAddDialog(true);
   };
 
@@ -205,6 +234,7 @@ export default function Leads() {
   const handleCloseDialog = () => {
     setShowAddDialog(false);
     setEditingLead(null);
+    setContacts([]);
     setFormData({
       name: '',
       email: '',
@@ -340,15 +370,15 @@ export default function Leads() {
                 Novo Lead
               </Button>
             </DialogTrigger>
-            <DialogContent className={`${isMobile ? 'w-[95vw] max-w-none mx-2' : 'max-w-lg'} max-h-[90vh] overflow-y-auto`}>
+            <DialogContent className={`${isMobile ? 'w-[95vw] max-w-none mx-2' : 'max-w-4xl'} max-h-[90vh] overflow-y-auto`}>
               <DialogHeader>
                 <DialogTitle>{editingLead ? 'Editar Lead' : 'Novo Lead'}</DialogTitle>
                 <DialogDescription>
                   {editingLead ? 'Edite as informações do lead' : 'Adicione um novo lead ao sistema'}
                 </DialogDescription>
               </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="name" className="text-sm font-medium">
                       Nome do Contato <span className="text-red-500">*</span>
@@ -377,7 +407,7 @@ export default function Leads() {
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="phone" className="text-sm font-medium">
                       Telefone <span className="text-red-500">*</span>
@@ -403,7 +433,7 @@ export default function Leads() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="email" className="text-sm font-medium">Email</Label>
                     <Input
@@ -451,7 +481,7 @@ export default function Leads() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="niche" className="text-sm font-medium">
                       Nicho <span className="text-red-500">*</span>
@@ -490,7 +520,14 @@ export default function Leads() {
                   placeholder="Selecionar responsável"
                 />
 
-                <div className="flex gap-2 pt-2">
+                <Separator className="my-6" />
+
+                <MultipleContacts
+                  contacts={contacts}
+                  onChange={setContacts}
+                />
+
+                <div className="flex gap-2 pt-4">
                   <Button type="submit" className="flex-1" disabled={actionLoading === 'create-lead' || actionLoading === 'submit'}>
                     {(actionLoading === 'create-lead' || actionLoading === 'submit') ? (
                       <LoadingSpinner size="sm" />
