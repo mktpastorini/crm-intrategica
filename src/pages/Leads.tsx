@@ -10,16 +10,17 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { UserPlus, Filter, Search, Users as UsersIcon, Upload } from 'lucide-react';
+import { UserPlus, Filter, Search, Users as UsersIcon, Upload, Download } from 'lucide-react';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import LeadsTable from '@/components/leads/LeadsTable';
 import UserSelector from '@/components/leads/UserSelector';
 import ImportLeadsDialog from '@/components/leads/ImportLeadsDialog';
+import ExportLeadsDialog from '@/components/leads/ExportLeadsDialog';
 import { usePhoneMask } from '@/hooks/usePhoneMask';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 export default function Leads() {
-  const { leads, users, loading, actionLoading, createLead, updateLead, deleteLead, loadLeads, loadUsers } = useCrm();
+  const { leads, users, loading, actionLoading, createLead, updateLead, deleteLead, loadLeads, loadUsers, pipelineStages } = useCrm();
   const { user, profile } = useAuth();
   const { toast } = useToast();
   const { handlePhoneChange } = usePhoneMask();
@@ -27,6 +28,7 @@ export default function Leads() {
   
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
   const [editingLead, setEditingLead] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -323,6 +325,14 @@ export default function Leads() {
             <Upload className="w-4 h-4 mr-2" />
             Importar em Massa
           </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => setShowExportDialog(true)}
+            className={isMobile ? 'w-full' : ''}
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Exportar CSV
+          </Button>
           <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
             <DialogTrigger asChild>
               <Button className={isMobile ? 'w-full' : ''}>
@@ -612,6 +622,14 @@ export default function Leads() {
         open={showImportDialog}
         onOpenChange={setShowImportDialog}
         onImport={handleImportLeads}
+      />
+
+      <ExportLeadsDialog
+        open={showExportDialog}
+        onOpenChange={setShowExportDialog}
+        leads={leads}
+        users={users}
+        pipelineStages={pipelineStages}
       />
     </div>
   );
