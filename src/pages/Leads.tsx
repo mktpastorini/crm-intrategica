@@ -18,8 +18,11 @@ import UserSelector from '@/components/leads/UserSelector';
 import ImportLeadsDialog from '@/components/leads/ImportLeadsDialog';
 import ExportLeadsDialog from '@/components/leads/ExportLeadsDialog';
 import MultipleContacts from '@/components/leads/MultipleContacts';
+import LeadsBulkActions from '@/components/leads/LeadsBulkActions';
 import { usePhoneMask } from '@/hooks/usePhoneMask';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useLeadContacts } from '@/hooks/useLeadContacts';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Contact {
   id: string;
@@ -43,6 +46,8 @@ export default function Leads() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
+  const { saveContacts } = useLeadContacts();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -71,6 +76,26 @@ export default function Leads() {
   const getUserName = (userId: string) => {
     const foundUser = users.find(u => u.id === userId);
     return foundUser?.name || 'Não atribuído';
+  };
+
+  const handleToggleSelectLead = (leadId: string) => {
+    setSelectedLeads(prev => 
+      prev.includes(leadId)
+        ? prev.filter(id => id !== leadId)
+        : [...prev, leadId]
+    );
+  };
+
+  const handleToggleSelectAll = () => {
+    if (selectedLeads.length === filteredLeads.length) {
+      setSelectedLeads([]);
+    } else {
+      setSelectedLeads(filteredLeads.map(lead => lead.id));
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedLeads([]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -124,21 +149,19 @@ export default function Leads() {
         website: formData.website.trim() || undefined,
         address: formData.address.trim() || undefined,
         instagram: formData.instagram.trim() || undefined,
-        // Se o WhatsApp não foi preenchido, usa o telefone
         whatsapp: formData.whatsapp.trim() || formData.phone.trim(),
-        // Se não há responsável selecionado, usa o usuário logado
         responsible_id: formData.responsible_id || user?.id || '',
-        // Adicionar contatos como JSON
-        additional_contacts: contacts.length > 0 ? JSON.stringify(contacts) : undefined
       };
 
       console.log('Dados que serão enviados:', submitData);
 
+      let leadId: string;
+
       if (editingLead) {
         console.log('Editando lead existente:', editingLead.id);
         await updateLead(editingLead.id, submitData);
+        leadId = editingLead.id;
         
-        // Se for usuário comercial, a notificação já foi enviada pelo contexto
         if (profile?.role !== 'comercial') {
           toast({
             title: "Lead atualizado",
@@ -146,18 +169,32 @@ export default function Leads() {
           });
         }
       } else {
-        await createLead(submitData);
+        const newLead = await createLead(submitData);
+        leadId = newLead.id;
         toast({
           title: "Lead criado",
           description: "Lead foi criado com sucesso",
         });
+      }
+
+      // Salvar contatos adicionais se houver
+      if (contacts.length > 0) {
+        try {
+          await saveContacts(leadId, contacts);
+        } catch (error) {
+          console.error('Erro ao salvar contatos:', error);
+          toast({
+            title: "Aviso",
+            description: "Lead salvo, mas houve erro ao salvar contatos adicionais",
+            variant: "destructive",
+          });
+        }
       }
       
       handleCloseDialog();
     } catch (error) {
       console.error('Erro ao salvar lead:', error);
       
-      // Extrair mensagem de erro mais específica
       let errorMessage = "Ocorreu um erro ao salvar o lead. Tente novamente.";
       
       if (error instanceof Error) {
@@ -176,7 +213,7 @@ export default function Leads() {
     }
   };
 
-  const handleEdit = (lead: any) => {
+  const handleEdit = async (lead: any) => {
     console.log('Editando lead:', lead.name, 'User role:', profile?.role);
     setEditingLead(lead);
     setFormData({
@@ -193,18 +230,26 @@ export default function Leads() {
       instagram: lead.instagram || ''
     });
 
-    // Carregar contatos adicionais se existirem
-    if (lead.additional_contacts) {
-      try {
-        const parsedContacts = typeof lead.additional_contacts === 'string' 
-          ? JSON.parse(lead.additional_contacts) 
-          : lead.additional_contacts;
-        setContacts(Array.isArray(parsedContacts) ? parsedContacts : []);
-      } catch (error) {
-        console.error('Erro ao carregar contatos adicionais:', error);
-        setContacts([]);
-      }
-    } else {
+    // Carregar contatos adicionais da nova tabela
+    try {
+      const { data, error } = await supabase
+        .from('lead_contacts')
+        .select('*')
+        .eq('lead_id', lead.id);
+
+      if (error) throw error;
+
+      const loadedContacts = (data || []).map(contact => ({
+        id: contact.id,
+        name: contact.name,
+        phone: contact.phone,
+        email: contact.email || '',
+        position: contact.position || ''
+      }));
+
+      setContacts(loadedContacts);
+    } catch (error) {
+      console.error('Erro ao carregar contatos adicionais:', error);
       setContacts([]);
     }
 
@@ -218,7 +263,9 @@ export default function Leads() {
     try {
       await deleteLead(leadId);
       
-      // Se for usuário comercial, a notificação já foi enviada pelo contexto
+      // Remover da seleção se estiver selecionado
+      setSelectedLeads(prev => prev.filter(id => id !== leadId));
+      
       if (profile?.role !== 'comercial') {
         toast({
           title: "Lead excluído",
@@ -227,7 +274,6 @@ export default function Leads() {
       }
     } catch (error) {
       console.error('Erro ao excluir lead:', error);
-      // Erro já tratado no contexto
     }
   };
 
@@ -280,7 +326,6 @@ export default function Leads() {
             place_id: lead.place_id || null,
             niche: lead.niche || 'Google Maps',
             status: lead.status || 'novo',
-            // GARANTIR que todos os leads importados sejam vinculados ao usuário logado
             responsible_id: user.id
           };
           
@@ -370,177 +415,6 @@ export default function Leads() {
                 Novo Lead
               </Button>
             </DialogTrigger>
-            <DialogContent className={`${isMobile ? 'w-[95vw] max-w-none mx-2' : 'max-w-4xl'} max-h-[90vh] overflow-y-auto`}>
-              <DialogHeader>
-                <DialogTitle>{editingLead ? 'Editar Lead' : 'Novo Lead'}</DialogTitle>
-                <DialogDescription>
-                  {editingLead ? 'Edite as informações do lead' : 'Adicione um novo lead ao sistema'}
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="name" className="text-sm font-medium">
-                      Nome do Contato <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      id="name"
-                      value={formData.name}
-                      onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                      required
-                      className="mt-1"
-                      placeholder="Nome completo"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="company" className="text-sm font-medium">
-                      Empresa <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      id="company"
-                      value={formData.company}
-                      onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
-                      required
-                      className="mt-1"
-                      placeholder="Nome da empresa"
-                    />
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="phone" className="text-sm font-medium">
-                      Telefone <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      id="phone"
-                      value={formData.phone}
-                      onChange={(e) => handlePhoneChange(e.target.value, (value) => setFormData(prev => ({ ...prev, phone: value })))}
-                      required
-                      placeholder="(11) 99999-9999"
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="whatsapp" className="text-sm font-medium">WhatsApp</Label>
-                    <Input
-                      id="whatsapp"
-                      value={formData.whatsapp}
-                      onChange={(e) => handlePhoneChange(e.target.value, (value) => setFormData(prev => ({ ...prev, whatsapp: value })))}
-                      placeholder="(11) 99999-9999"
-                      className="mt-1"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="email" className="text-sm font-medium">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                      className="mt-1"
-                      placeholder="email@exemplo.com"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="instagram" className="text-sm font-medium">Instagram</Label>
-                    <Input
-                      id="instagram"
-                      value={formData.instagram}
-                      onChange={(e) => setFormData(prev => ({ ...prev, instagram: e.target.value }))}
-                      placeholder="@usuario ou link"
-                      className="mt-1"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="website" className="text-sm font-medium">Website</Label>
-                  <Input
-                    id="website"
-                    type="url"
-                    value={formData.website}
-                    onChange={(e) => setFormData(prev => ({ ...prev, website: e.target.value }))}
-                    placeholder="https://exemplo.com"
-                    className="mt-1"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="address" className="text-sm font-medium">Endereço</Label>
-                  <Textarea
-                    id="address"
-                    value={formData.address}
-                    onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
-                    placeholder="Endereço completo da empresa"
-                    rows={2}
-                    className="mt-1"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="niche" className="text-sm font-medium">
-                      Nicho <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      id="niche"
-                      value={formData.niche}
-                      onChange={(e) => setFormData(prev => ({ ...prev, niche: e.target.value }))}
-                      required
-                      className="mt-1"
-                      placeholder="Ex: Saúde, Tecnologia..."
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="status" className="text-sm font-medium">Status</Label>
-                    <Select value={formData.status} onValueChange={(value) => setFormData(prev => ({ ...prev, status: value }))}>
-                      <SelectTrigger className="mt-1">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="novo">Novo</SelectItem>
-                        <SelectItem value="contatado">Contatado</SelectItem>
-                        <SelectItem value="qualificado">Qualificado</SelectItem>
-                        <SelectItem value="proposta">Proposta</SelectItem>
-                        <SelectItem value="fechado">Fechado</SelectItem>
-                        <SelectItem value="perdido">Perdido</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <UserSelector
-                  users={users}
-                  value={formData.responsible_id}
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, responsible_id: value }))}
-                  placeholder="Selecionar responsável"
-                />
-
-                <Separator className="my-6" />
-
-                <MultipleContacts
-                  contacts={contacts}
-                  onChange={setContacts}
-                />
-
-                <div className="flex gap-2 pt-4">
-                  <Button type="submit" className="flex-1" disabled={actionLoading === 'create-lead' || actionLoading === 'submit'}>
-                    {(actionLoading === 'create-lead' || actionLoading === 'submit') ? (
-                      <LoadingSpinner size="sm" />
-                    ) : (
-                      editingLead ? 'Atualizar' : 'Criar Lead'
-                    )}
-                  </Button>
-                  <Button type="button" variant="outline" onClick={handleCloseDialog} className="flex-1">
-                    Cancelar
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
           </Dialog>
         </div>
       </div>
@@ -629,6 +503,13 @@ export default function Leads() {
         </Card>
       </div>
 
+      {/* Ações em lote */}
+      <LeadsBulkActions
+        selectedLeads={selectedLeads}
+        onClearSelection={handleClearSelection}
+        users={users}
+      />
+
       {/* Tabela de Leads */}
       {filteredLeads.length > 0 ? (
         <LeadsTable
@@ -637,6 +518,9 @@ export default function Leads() {
           onDeleteLead={handleDelete}
           actionLoading={actionLoading}
           getUserName={getUserName}
+          selectedLeads={selectedLeads}
+          onToggleSelectLead={handleToggleSelectLead}
+          onToggleSelectAll={handleToggleSelectAll}
         />
       ) : (
         <Card>
@@ -668,6 +552,187 @@ export default function Leads() {
         users={users}
         pipelineStages={pipelineStages}
       />
+
+      {/* Dialog de criação/edição */}
+      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+        <DialogTrigger asChild>
+          <Button className={isMobile ? 'w-full' : ''}>
+            <UserPlus className="w-4 h-4 mr-2" />
+            Novo Lead
+          </Button>
+        </DialogTrigger>
+        <DialogContent className={`${isMobile ? 'w-[95vw] max-w-none mx-2' : 'max-w-4xl'} max-h-[90vh] overflow-y-auto`}>
+          <DialogHeader>
+            <DialogTitle>{editingLead ? 'Editar Lead' : 'Novo Lead'}</DialogTitle>
+            <DialogDescription>
+              {editingLead ? 'Edite as informações do lead' : 'Adicione um novo lead ao sistema'}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="name" className="text-sm font-medium">
+                  Nome do Contato <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                  required
+                  className="mt-1"
+                  placeholder="Nome completo"
+                />
+              </div>
+              <div>
+                <Label htmlFor="company" className="text-sm font-medium">
+                  Empresa <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="company"
+                  value={formData.company}
+                  onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
+                  required
+                  className="mt-1"
+                  placeholder="Nome da empresa"
+                />
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="phone" className="text-sm font-medium">
+                  Telefone <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="phone"
+                  value={formData.phone}
+                  onChange={(e) => handlePhoneChange(e.target.value, (value) => setFormData(prev => ({ ...prev, phone: value })))}
+                  required
+                  placeholder="(11) 99999-9999"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="whatsapp" className="text-sm font-medium">WhatsApp</Label>
+                <Input
+                  id="whatsapp"
+                  value={formData.whatsapp}
+                  onChange={(e) => handlePhoneChange(e.target.value, (value) => setFormData(prev => ({ ...prev, whatsapp: value })))}
+                  placeholder="(11) 99999-9999"
+                  className="mt-1"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="email" className="text-sm font-medium">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                  className="mt-1"
+                  placeholder="email@exemplo.com"
+                />
+              </div>
+              <div>
+                <Label htmlFor="instagram" className="text-sm font-medium">Instagram</Label>
+                <Input
+                  id="instagram"
+                  value={formData.instagram}
+                  onChange={(e) => setFormData(prev => ({ ...prev, instagram: e.target.value }))}
+                  placeholder="@usuario ou link"
+                  className="mt-1"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="website" className="text-sm font-medium">Website</Label>
+              <Input
+                id="website"
+                type="url"
+                value={formData.website}
+                onChange={(e) => setFormData(prev => ({ ...prev, website: e.target.value }))}
+                placeholder="https://exemplo.com"
+                className="mt-1"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="address" className="text-sm font-medium">Endereço</Label>
+              <Textarea
+                id="address"
+                value={formData.address}
+                onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
+                placeholder="Endereço completo da empresa"
+                rows={2}
+                className="mt-1"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="niche" className="text-sm font-medium">
+                  Nicho <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="niche"
+                  value={formData.niche}
+                  onChange={(e) => setFormData(prev => ({ ...prev, niche: e.target.value }))}
+                  required
+                  className="mt-1"
+                  placeholder="Ex: Saúde, Tecnologia..."
+                />
+              </div>
+              <div>
+                <Label htmlFor="status" className="text-sm font-medium">Status</Label>
+                <Select value={formData.status} onValueChange={(value) => setFormData(prev => ({ ...prev, status: value }))}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="novo">Novo</SelectItem>
+                    <SelectItem value="contatado">Contatado</SelectItem>
+                    <SelectItem value="qualificado">Qualificado</SelectItem>
+                    <SelectItem value="proposta">Proposta</SelectItem>
+                    <SelectItem value="fechado">Fechado</SelectItem>
+                    <SelectItem value="perdido">Perdido</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <UserSelector
+              users={users}
+              value={formData.responsible_id}
+              onValueChange={(value) => setFormData(prev => ({ ...prev, responsible_id: value }))}
+              placeholder="Selecionar responsável"
+            />
+
+            <Separator className="my-6" />
+
+            <MultipleContacts
+              contacts={contacts}
+              onChange={setContacts}
+            />
+
+            <div className="flex gap-2 pt-4">
+              <Button type="submit" className="flex-1" disabled={actionLoading === 'create-lead' || actionLoading === 'submit'}>
+                {(actionLoading === 'create-lead' || actionLoading === 'submit') ? (
+                  <LoadingSpinner size="sm" />
+                ) : (
+                  editingLead ? 'Atualizar' : 'Criar Lead'
+                )}
+              </Button>
+              <Button type="button" variant="outline" onClick={handleCloseDialog} className="flex-1">
+                Cancelar
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

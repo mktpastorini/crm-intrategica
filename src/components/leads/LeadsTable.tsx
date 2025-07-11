@@ -2,6 +2,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Edit, Trash2, Phone, Mail, Globe, MapPin, Star } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -30,9 +31,21 @@ interface LeadsTableProps {
   onDeleteLead: (leadId: string) => void;
   actionLoading: string | null;
   getUserName: (userId: string) => string;
+  selectedLeads: string[];
+  onToggleSelectLead: (leadId: string) => void;
+  onToggleSelectAll: () => void;
 }
 
-export default function LeadsTable({ leads, onEditLead, onDeleteLead, actionLoading, getUserName }: LeadsTableProps) {
+export default function LeadsTable({ 
+  leads, 
+  onEditLead, 
+  onDeleteLead, 
+  actionLoading, 
+  getUserName, 
+  selectedLeads, 
+  onToggleSelectLead, 
+  onToggleSelectAll 
+}: LeadsTableProps) {
   const { profile } = useAuth();
   
   const getStatusBadgeColor = (status: string) => {
@@ -77,15 +90,16 @@ export default function LeadsTable({ leads, onEditLead, onDeleteLead, actionLoad
     console.log('Clicando em excluir lead:', lead?.name, 'User role:', profile?.role);
     
     if (profile?.role === 'comercial') {
-      // Para usuários comerciais, não mostrar confirmação, apenas enviar solicitação
       console.log('Enviando solicitação de exclusão para aprovação');
       onDeleteLead(leadId);
     } else {
-      // Para admins e supervisores, mostrar confirmação antes de excluir
       if (!confirm('Tem certeza que deseja excluir este lead?')) return;
       onDeleteLead(leadId);
     }
   };
+
+  const isAllSelected = leads.length > 0 && selectedLeads.length === leads.length;
+  const isIndeterminate = selectedLeads.length > 0 && selectedLeads.length < leads.length;
 
   return (
     <Card>
@@ -94,6 +108,14 @@ export default function LeadsTable({ leads, onEditLead, onDeleteLead, actionLoad
           <table className="w-full">
             <thead className="bg-slate-50 border-b">
               <tr>
+                <th className="px-6 py-3 text-left">
+                  <Checkbox
+                    checked={isAllSelected}
+                    onCheckedChange={onToggleSelectAll}
+                    aria-label="Selecionar todos os leads"
+                    className={isIndeterminate ? "data-[state=checked]:bg-primary/50" : ""}
+                  />
+                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                   Empresa/Contato
                 </th>
@@ -120,6 +142,13 @@ export default function LeadsTable({ leads, onEditLead, onDeleteLead, actionLoad
             <tbody className="bg-white divide-y divide-slate-200">
               {leads.map((lead) => (
                 <tr key={lead.id} className="hover:bg-slate-50">
+                  <td className="px-6 py-4">
+                    <Checkbox
+                      checked={selectedLeads.includes(lead.id)}
+                      onCheckedChange={() => onToggleSelectLead(lead.id)}
+                      aria-label={`Selecionar lead ${lead.company}`}
+                    />
+                  </td>
                   <td className="px-6 py-4">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">

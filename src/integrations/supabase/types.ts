@@ -225,6 +225,44 @@ export type Database = {
         }
         Relationships: []
       }
+      lead_contacts: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          lead_id: string
+          name: string
+          phone: string
+          position: string | null
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          lead_id: string
+          name: string
+          phone: string
+          position?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          lead_id?: string
+          name?: string
+          phone?: string
+          position?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_contacts_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           address: string | null
