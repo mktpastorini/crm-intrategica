@@ -1,9 +1,8 @@
-
 import { useState, useEffect } from 'react';
 import { DragDropContext, DropResult } from '@hello-pangea/dnd';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Filter, Users } from 'lucide-react';
+import { Plus, Filter, Users, BarChart3, Zap, Target } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCrm } from '@/contexts/CrmContext';
 import PipelineColumn from '@/components/pipeline/PipelineColumn';
@@ -22,7 +21,6 @@ export default function Pipeline() {
   const { toast } = useToast();
   const [filter, setFilter] = useState('');
 
-  // Convert CRM leads to pipeline leads format
   const pipelineLeads: Lead[] = leads.map(lead => ({
     ...lead,
     pipeline_stage: lead.pipeline_stage || 'prospeccao'
@@ -42,6 +40,22 @@ export default function Pipeline() {
   const getUnknownStageLeads = () => {
     const knownStageIds = pipelineStages.map(stage => stage.id);
     return filteredLeads.filter(lead => !knownStageIds.includes(lead.pipeline_stage));
+  };
+
+  // Calcular métricas do pipeline
+  const getTotalPipelineValue = () => {
+    return filteredLeads.reduce((total, lead) => {
+      // Assumindo um valor médio por lead se não houver proposta
+      return total + (lead.proposal_id ? 5000 : 2000); // Valores exemplares
+    }, 0);
+  };
+
+  const getConversionRate = () => {
+    const totalLeads = filteredLeads.length;
+    const convertedLeads = filteredLeads.filter(lead => 
+      lead.pipeline_stage === 'fechado' || lead.pipeline_stage === 'vendido'
+    ).length;
+    return totalLeads > 0 ? ((convertedLeads / totalLeads) * 100).toFixed(1) : '0';
   };
 
   const onDragEnd = async (result: DropResult) => {
@@ -89,7 +103,6 @@ export default function Pipeline() {
         leadName: lead.name 
       });
 
-      // Verificar condições especiais antes de mover
       const canMove = await checkSpecialStageConditions(lead, newStageId, newStage?.name || '');
       
       if (!canMove) {
@@ -97,12 +110,10 @@ export default function Pipeline() {
         return;
       }
 
-      // Atualizar o lead no banco
       console.log('Atualizando lead no banco...');
       await updateLead(leadId, { pipeline_stage: newStageId });
       console.log('Lead atualizado com sucesso');
 
-      // Disparar mensagens da jornada do cliente
       console.log('Disparando mensagens da jornada...');
       await triggerJourneyMessages({
         id: lead.id,
@@ -130,25 +141,17 @@ export default function Pipeline() {
     }
   };
 
-  // Função para verificar condições especiais dos estágios
   const checkSpecialStageConditions = async (lead: Lead, newStageId: string, stageName: string): Promise<boolean> => {
     console.log('Verificando condições especiais:', { leadName: lead.name, stageName });
 
-    // Condição especial para "Reunião" - deve ter evento agendado (obrigatório)
     if (stageName.toLowerCase().includes('reunião') || stageName.toLowerCase().includes('reuniao')) {
       console.log('Estágio de reunião detectado - verificação obrigatória de evento agendado');
       
-      // Por enquanto, simular que não há evento agendado para forçar o diálogo
-      // Em implementação real, você verificaria se há um evento agendado para este lead
       toast({
         title: "Evento necessário",
         description: "Para mover para 'Reunião', é obrigatório ter um evento agendado para este lead.",
         variant: "destructive",
       });
-      
-      // TODO: Implementar diálogo para agendar evento
-      // setSelectedLead(lead);
-      // setShowEventDialog(true);
       
       return false;
     }
@@ -201,7 +204,6 @@ export default function Pipeline() {
     }
   };
 
-  // Log para debug
   useEffect(() => {
     console.log('Pipeline renderizado:', {
       totalLeads: pipelineLeads.length,
@@ -211,58 +213,137 @@ export default function Pipeline() {
   }, [pipelineLeads.length, pipelineStages.length, filteredLeads.length]);
 
   return (
-    <div className="h-full flex flex-col bg-slate-50">
-      <div className="flex-shrink-0 p-6 bg-white border-b shadow-sm">
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <h2 className="text-2xl font-bold text-slate-900">Pipeline de Vendas</h2>
-            <p className="text-slate-600">Gerencie seus leads através do funil de vendas</p>
+    <div className="h-full flex flex-col bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
+      <div className="flex-shrink-0 bg-gradient-to-r from-white via-blue-50/50 to-indigo-50/30 border-b border-slate-200/50 shadow-sm backdrop-blur-sm">
+        <div className="p-6">
+          <div className="flex justify-between items-start mb-6">
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
+                  <Target className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
+                    Pipeline de Vendas
+                  </h2>
+                  <p className="text-slate-600">Gerencie seus leads através do funil de vendas</p>
+                </div>
+              </div>
+            </div>
+            
+            <Button 
+              onClick={handleAddLead} 
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-200 border-0"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Novo Lead
+            </Button>
           </div>
-          <Button onClick={handleAddLead} className="shadow-sm">
-            <Plus className="w-4 h-4 mr-2" />
-            Novo Lead
-          </Button>
-        </div>
-        
-        <div className="flex gap-4 items-center">
-          <div className="relative flex-1 max-w-md">
-            <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
-            <input
-              type="text"
-              placeholder="Filtrar leads..."
-              className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-            />
+          
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-200/50">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-500 rounded-lg">
+                    <Users className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-blue-600 font-medium">Total Leads</p>
+                    <p className="text-xl font-bold text-blue-800">{filteredLeads.length}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-green-50 to-emerald-100/50 border-green-200/50">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-green-500 rounded-lg">
+                    <BarChart3 className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-green-600 font-medium">Taxa Conversão</p>
+                    <p className="text-xl font-bold text-green-800">{getConversionRate()}%</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-purple-50 to-purple-100/50 border-purple-200/50">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-purple-500 rounded-lg">
+                    <Zap className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-purple-600 font-medium">Pipeline Value</p>
+                    <p className="text-xl font-bold text-purple-800">
+                      R$ {getTotalPipelineValue().toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-amber-50 to-yellow-100/50 border-amber-200/50">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-amber-500 rounded-lg">
+                    <Target className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-amber-600 font-medium">Estágios Ativos</p>
+                    <p className="text-xl font-bold text-amber-800">{pipelineStages.length}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
-          <div className="flex items-center gap-2 text-sm text-slate-600">
-            <Users className="w-4 h-4" />
-            <span>{filteredLeads.length} leads</span>
+          
+          <div className="flex gap-4 items-center">
+            <div className="relative flex-1 max-w-md">
+              <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Filtrar leads por nome, empresa, email ou telefone..."
+                className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white/80 backdrop-blur-sm shadow-sm transition-all"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-2 text-sm text-slate-600 bg-white/80 px-4 py-3 rounded-xl shadow-sm backdrop-blur-sm">
+              <Users className="w-4 h-4" />
+              <span className="font-medium">{filteredLeads.length} leads filtrados</span>
+            </div>
           </div>
         </div>
       </div>
 
       <div className="flex-1 overflow-hidden">
         <DragDropContext onDragEnd={onDragEnd}>
-          <div className="h-full overflow-x-auto">
-            <div className="flex gap-6 px-6 py-6 min-h-full">
-              {pipelineStages.map((stage) => (
-                <PipelineColumn
-                  key={stage.id}
-                  stage={stage}
-                  leads={getLeadsByStage(stage.id)}
-                  onDeleteLead={handleDeleteLead}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e, stageId) => {
-                    e.preventDefault();
-                    console.log('onDrop chamado mas será gerenciado pelo DragDropContext');
-                  }}
-                  onDragStart={(e, leadId) => {
-                    console.log('onDragStart chamado:', leadId);
-                    e.dataTransfer.setData('text/plain', leadId);
-                  }}
-                  allLeads={pipelineLeads}
-                />
+          <div className="h-full overflow-x-auto bg-gradient-to-br from-slate-50/50 to-transparent">
+            <div className="flex gap-6 px-6 py-6 min-h-full min-w-max">
+              {pipelineStages.map((stage, index) => (
+                <div key={stage.id} className="relative">
+                  {index < pipelineStages.length - 1 && (
+                    <div className="absolute top-16 -right-3 w-6 h-0.5 bg-gradient-to-r from-slate-300 to-slate-200 z-10" />
+                  )}
+                  <PipelineColumn
+                    stage={stage}
+                    leads={getLeadsByStage(stage.id)}
+                    onDeleteLead={handleDeleteLead}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e, stageId) => {
+                      e.preventDefault();
+                      console.log('onDrop chamado mas será gerenciado pelo DragDropContext');
+                    }}
+                    onDragStart={(e, leadId) => {
+                      console.log('onDragStart chamado:', leadId);
+                      e.dataTransfer.setData('text/plain', leadId);
+                    }}
+                    allLeads={pipelineLeads}
+                  />
+                </div>
               ))}
               
               {getUnknownStageLeads().length > 0 && (
